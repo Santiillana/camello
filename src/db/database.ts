@@ -30,7 +30,7 @@ class Database {
 
   /** Inicializa la conexión (llamar una sola vez, al arrancar la app). */
   init(): Promise<void> {
-    if (!this.ready) this.ready = this._init();
+    if (!this.ready) this.ready = this._init().catch((error) => { this.ready = null; throw error; });
     return this.ready;
   }
 
@@ -42,16 +42,15 @@ class Database {
       // que a su vez guarda los datos en IndexedDB del navegador.
       // La app Android real usa SQLite nativo vía Capacitor, no esto.
       const jeepEl = document.querySelector('jeep-sqlite');
-      if (jeepEl) {
-        await customElements.whenDefined('jeep-sqlite');
-        await this.sqlite.initWebStore();
-      }
+      if (!jeepEl) throw new Error('No se encontró jeep-sqlite para la versión web.');
+      await customElements.whenDefined('jeep-sqlite');
+      await this.sqlite.initWebStore();
     }
 
     const isConn = (await this.sqlite.isConnection(DB_NAME, false)).result;
     this.db = isConn
       ? await this.sqlite.retrieveConnection(DB_NAME, false)
-      : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false);
+      : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
 
     await this.db.open();
     await this.db.execute('PRAGMA foreign_keys = ON;');
@@ -197,16 +196,23 @@ class Database {
       ultima_compra,
       total_comprado: row.total ?? 0,
       pendiente: row.pendiente ?? 0,
-      seguimiento: this.calcularSeguimiento(ultima_compra),
+      seguimiento: this.calcularSeguimiento(ultima_compra, c.ultimo_contacto ?? null),
     };
   }
 
-  private calcularSeguimiento(ultimaCompraISO: string | null): EstadoSeguimiento {
-    if (!ultimaCompraISO) return 'POR_CONTACTAR';
-    const dias = Math.floor((Date.now() - new Date(ultimaCompraISO).getTime()) / 86_400_000);
-    if (dias <= UMBRAL_POR_CONTACTAR_DIAS) return 'ACTIVO';
+  private calcularSeguimiento(ultimaCompraISO: string | null, ultimoContactoISO: string | null): EstadoSeguimiento {
+    const referencias = [ultimaCompraISO, ultimoContactoISO].filter(Boolean) as string[];
+    if (referencias.length === 0) return 'POR_CONTACTAR';
+    const referencia = referencias.sort().at(-1) ?? null;
+    const dias = diasDesdeFecha(referencia);
+    if (dias == null || dias <= UMBRAL_POR_CONTACTAR_DIAS) return 'ACTIVO';
     if (dias <= UMBRAL_INACTIVO_DIAS) return 'POR_CONTACTAR';
     return 'INACTIVO';
+  }
+
+  async registrarContacto(id: number): Promise<void> {
+    await this.conn().run('UPDATE clientes SET ultimo_contacto = ? WHERE id = ?;', [fechaLocal(), id]);
+    await this.persist();
   }
 
   // ---------------------------------------------------------------------
@@ -288,8 +294,8 @@ class Database {
   async resumenRuta(ruta: Ruta): Promise<RutaConResumen> {
     const r = await this.conn().query(
       `SELECT COALESCE(SUM(cantidad),0) as vendidos, COALESCE(SUM(total),0) as total_vendido,
-              COALESCE(SUM(CASE WHEN estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as total_pendiente,
-              COUNT(DISTINCT cliente_id) as clientes
+              COALESCE(SUM(CASE WHEN anulada = 0 AND estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as total_pendiente,
+              COUNT(DISTINCT CASE WHEN anulada = 0 THEN cliente_id END) as clientes
        FROM ventas WHERE ruta_id = ? AND anulada = 0;`,
       [ruta.id]
     );
@@ -346,10 +352,10 @@ class Database {
         v.costo_aplicado,
         total,
         utilidad,
-        ahora.toISOString().slice(0, 10),
-        ahora.toTimeString().slice(0, 5),
+        fechaLocal(ahora),
+        horaLocal(ahora),
         estado,
-        estado === 'PAGADA' ? ahora.toISOString().slice(0, 10) : null,
+        estado === 'PAGADA' ? fechaLocal(ahora) : null,
       ]
     );
     await this.persist();
@@ -414,12 +420,13 @@ class Database {
       pendiente: row.pendiente ?? 0,
       clientes_nuevos,
       numero_ventas,
+      clientes_recurrentes: 0,
       ticket_promedio: numero_ventas > 0 ? ventas / numero_ventas : 0,
     };
   }
 
   async resumenHoy(): Promise<ResumenPeriodo> {
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = fechaLocal();
     return this.resumenPeriodo(hoy, hoy);
   }
 
@@ -435,8 +442,34 @@ class Database {
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
-    const data = JSON.parse(jsonTexto);
-    await this.sqlite!.importFromJson(JSON.stringify(data));
+    const texto = jsonTexto.trim();
+    if (!texto) throw new Error('El respaldo está vacío.');
+    const data = JSON.parse(texto) as Record<string, unknown>;
+    if (data.database !== DB_NAME) throw new Error('El archivo no pertenece a CAMELLO.');
+    if (Number(data.version ?? 0) < DB_VERSION) throw new Error('El respaldo es de una versión anterior de CAMELLO.');
+    if (!this.sqlite || !this.db) throw new Error('La base de datos no está inicializada.');
+
+    const valido = await this.sqlite.isJsonValid(texto);
+    if (!valido.result) throw new Error('El archivo no es un respaldo SQLite válido.');
+
+    await this.persist();
+    await this.db.close();
+    await this.sqlite.closeConnection(DB_NAME, false);
+    this.db = null;
+
+    try {
+      await this.sqlite.importFromJson(texto);
+    } catch (error) {
+      this.db = await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
+      await this.db.open();
+      await this.db.execute('PRAGMA foreign_keys = ON;');
+      throw new Error(`No se pudo restaurar el respaldo: ${String((error as Error)?.message ?? error)}`);
+    }
+
+    this.db = await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
+    await this.db.open();
+    await this.db.execute('PRAGMA foreign_keys = ON;');
+    await this.ejecutarMigraciones();
     await this.persist();
   }
 }
