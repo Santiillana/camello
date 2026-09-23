@@ -155,22 +155,59 @@ class Database {
   }
 
   async listarClientes(opts?: { soloActivos?: boolean; texto?: string }): Promise<ClienteConResumen[]> {
-    let sql = 'SELECT * FROM clientes';
+    let sql = 'SELECT c.* FROM clientes c';
     const cond: string[] = [];
     const params: unknown[] = [];
-    if (opts?.soloActivos) cond.push(`estado = 'activo'`);
+    if (opts?.soloActivos) cond.push(`c.estado = 'activo'`);
     if (opts?.texto?.trim()) {
       const like = `%${opts.texto.trim()}%`;
-      cond.push(`(nombre LIKE ? COLLATE NOCASE OR telefono1 LIKE ? OR telefono2 LIKE ? OR EXISTS (
-        SELECT 1 FROM mascotas m2 WHERE m2.cliente_id = clientes.id AND m2.estado = 'activo' AND m2.nombre LIKE ? COLLATE NOCASE
+      cond.push(`(c.nombre LIKE ? COLLATE NOCASE OR c.telefono1 LIKE ? OR c.telefono2 LIKE ? OR EXISTS (
+        SELECT 1 FROM mascotas m2 WHERE m2.cliente_id = c.id AND m2.estado = 'activo' AND m2.nombre LIKE ? COLLATE NOCASE
       ))`);
       params.push(like, like, like, like);
     }
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
-    sql += ' ORDER BY nombre ASC;';
+    sql += ' ORDER BY c.nombre COLLATE NOCASE ASC;';
+
     const r = await this.conn().query(sql, params);
     const clientes = (r.values ?? []) as Cliente[];
-    return Promise.all(clientes.map((c) => this.enriquecerCliente(c)));
+    if (clientes.length === 0) return [];
+
+    const ids = clientes.map((c) => c.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const [mascotasR, resumenR] = await Promise.all([
+      this.conn().query(`SELECT * FROM mascotas WHERE cliente_id IN (${placeholders}) AND estado = 'activo' ORDER BY nombre COLLATE NOCASE;`, ids),
+      this.conn().query(
+        `SELECT cliente_id, MAX(fecha) AS ultima,
+                COALESCE(SUM(CASE WHEN anulada = 0 THEN total ELSE 0 END),0) AS total,
+                COALESCE(SUM(CASE WHEN anulada = 0 AND estado_pago = 'PENDIENTE' THEN total ELSE 0 END),0) AS pendiente
+         FROM ventas WHERE cliente_id IN (${placeholders}) GROUP BY cliente_id;`,
+        ids,
+      ),
+    ]);
+
+    const mascotasPorCliente = new Map<number, Mascota[]>();
+    for (const mascota of (mascotasR.values ?? []) as Mascota[]) {
+      const lista = mascotasPorCliente.get(mascota.cliente_id) ?? [];
+      lista.push(mascota);
+      mascotasPorCliente.set(mascota.cliente_id, lista);
+    }
+
+    const resumenPorCliente = new Map<number, Record<string, unknown>>();
+    for (const row of resumenR.values ?? []) resumenPorCliente.set(Number(row.cliente_id), row);
+
+    return clientes.map((c) => {
+      const row = resumenPorCliente.get(c.id) ?? {};
+      const ultima = (row.ultima as string | null) ?? null;
+      return {
+        ...c,
+        mascotas: mascotasPorCliente.get(c.id) ?? [],
+        ultima_compra: ultima,
+        total_comprado: Number(row.total ?? 0),
+        pendiente: Number(row.pendiente ?? 0),
+        seguimiento: this.calcularSeguimiento(ultima, c.ultimo_contacto ?? null),
+      };
+    });
   }
 
   async obtenerCliente(id: number): Promise<ClienteConResumen | null> {
