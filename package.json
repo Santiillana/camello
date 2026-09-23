@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "node scripts/copy-sql-wasm.mjs",
     "build": "tsc -b && vite build",
+    "prebuild": "node scripts/copy-sql-wasm.mjs",
+    "postinstall": "node scripts/copy-sql-wasm.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -18,7 +21,8 @@
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "sql.js": "^1.14.2"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",

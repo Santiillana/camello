@@ -11,9 +11,14 @@ async function bootstrap() {
   if (Capacitor.getPlatform() === 'web') {
     const { defineCustomElements } = await import('jeep-sqlite/loader');
     defineCustomElements(window);
-    const jeepEl = document.createElement('jeep-sqlite');
-    document.body.appendChild(jeepEl);
     await customElements.whenDefined('jeep-sqlite');
+
+    const base = import.meta.env.BASE_URL.endsWith('/')
+      ? import.meta.env.BASE_URL
+      : import.meta.env.BASE_URL + '/';
+    const jeepEl = document.createElement('jeep-sqlite');
+    jeepEl.setAttribute('wasm-path', base + 'assets');
+    document.body.appendChild(jeepEl);
   }
 
   createRoot(document.getElementById('root')!).render(
