@@ -61,12 +61,17 @@ export default function RutaDetalle() {
   if (!ruta) return <div className="pantalla"><p className="texto-error">{error}</p><button className="enlace-volver" onClick={() => navigate('/rutas')}>← Volver a rutas</button></div>;
 
   const enCurso = ruta.estado === 'EN_CURSO';
+  const programada = ruta.estado === 'PROGRAMADA';
 
   return (
     <div className="pantalla">
       <button className="enlace-volver" onClick={() => navigate(-1)}>← Volver</button>
       <header className="encabezado">
-        <h1>{ruta.tipo}</h1>
+        <div>
+          <p className="texto-kicker">Ruta</p>
+          <h1>{ruta.nombre || ruta.tipo}</h1>
+          <div className="detalle-cliente">{ruta.tipo} · {ruta.fecha_planificada || ruta.fecha}</div>
+        </div>
         <span className={'etiqueta-seguimiento ' + (enCurso ? 'activo' : 'inactivo')}>
           {enCurso ? 'En curso' : ruta.estado}
         </span>
@@ -82,6 +87,35 @@ export default function RutaDetalle() {
         <StatCard etiqueta="Pendiente" valor={formatoMoneda(ruta.total_pendiente)} alerta={ruta.total_pendiente > 0} />
         <StatCard etiqueta="Clientes atendidos" valor={String(ruta.clientes_atendidos)} />
       </section>
+
+      {programada && (
+        <button
+          className="boton-primario boton-grande"
+          onClick={async () => {
+            try {
+              let lat: number | undefined;
+              let lng: number | undefined;
+              if (navigator.geolocation) {
+                try {
+                  const pos = await new Promise<GeolocationPosition>((res, rej) =>
+                    navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 30000 }),
+                  );
+                  lat = pos.coords.latitude;
+                  lng = pos.coords.longitude;
+                } catch {
+                  // La ubicación es opcional.
+                }
+              }
+              await database.iniciarRutaProgramada(rutaId, { lat_inicio: lat, lng_inicio: lng });
+              await cargar();
+            } catch (e: unknown) {
+              setError(e instanceof Error ? e.message : String(e));
+            }
+          }}
+        >
+          ▶ Iniciar ruta
+        </button>
+      )}
 
       {enCurso && <Link to="/venta-nueva" className="boton-primario boton-grande">➕ Registrar venta</Link>}
 
