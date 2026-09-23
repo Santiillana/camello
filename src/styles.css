@@ -254,3 +254,37 @@ input, select {
 .chip-filtro { flex: none; border-radius: 999px; border: 1px solid var(--color-borde); background: var(--color-superficie); padding: 6px 12px; font-size: 12px; }
 .chip-filtro.activo { background: var(--color-primario); color: #fff; border-color: var(--color-primario); }
 .contenedor-mapa { height: 55vh; min-height: 320px; border-radius: var(--radio); overflow: hidden; border: 1px solid var(--color-borde); }
+
+.banner-error {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff0f0;
+  color: var(--color-peligro);
+  border: 1px solid #ffc9c9;
+  font-weight: 600;
+}
+.etiqueta-anulada {
+  color: var(--color-peligro);
+  font-size: 12px;
+  font-weight: 700;
+}
+.acciones-venta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.boton-chip.peligro {
+  color: var(--color-peligro);
+  background: #fff0f0;
+}
+.lista-productos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.detalle-producto {
+  margin: 0;
+  color: var(--color-texto-suave);
+  font-size: 13px;
+}
