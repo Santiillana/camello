@@ -45,7 +45,7 @@ export default function Cartera() {
           {items.map((item) => (
             <li key={item.cliente_id} className="fila-cartera tarjeta">
               <div>
-                <Link to={\`/clientes/\${item.cliente_id}\`} className="enlace-principal">
+                <Link to={`/clientes/${item.cliente_id}`} className="enlace-principal">
                   <strong>{item.nombre}</strong>
                 </Link>
                 <span className="detalle-cliente">{item.ventas_pendientes} venta(s) pendiente(s)</span>

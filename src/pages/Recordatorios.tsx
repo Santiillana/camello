@@ -35,11 +35,11 @@ export default function Recordatorios() {
             <li key={cliente.id} className="tarjeta">
               <div className="fila-titulo-boton">
                 <div>
-                  <Link to={\`/clientes/\${cliente.id}\`} className="enlace-principal">
+                  <Link to={`/clientes/${cliente.id}`} className="enlace-principal">
                     <strong>{cliente.nombre}</strong>
                   </Link>
                   <div className="detalle-cliente">
-                    {cliente.ultima_compra ? \`Última compra: \${cliente.ultima_compra}\` : 'Sin compras'}
+                    {cliente.ultima_compra ? `Última compra: ${cliente.ultima_compra}` : 'Sin compras'}
                   </div>
                 </div>
                 <span className="etiqueta-pendiente">
@@ -57,7 +57,7 @@ export default function Recordatorios() {
                     💬 Escribirle
                   </a>
                 )}
-                <Link className="boton-secundario" to={\`/clientes/\${cliente.id}\`}>Ver ficha</Link>
+                <Link className="boton-secundario" to={`/clientes/${cliente.id}`}>Ver ficha</Link>
               </div>
             </li>
           ))}

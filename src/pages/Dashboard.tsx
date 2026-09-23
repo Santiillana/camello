@@ -66,7 +66,7 @@ export default function Dashboard({ config }: Props) {
       </header>
 
       {rutaActivaId && (
-        <Link to={\`/rutas/\${rutaActivaId}\`} className="banner-ruta-activa">
+        <Link to={`/rutas/${rutaActivaId}`} className="banner-ruta-activa">
           🧭 Hay una ruta en curso — continuar
         </Link>
       )}
@@ -140,7 +140,7 @@ export default function Dashboard({ config }: Props) {
           <ul className="lista-cartera compacta">
             {cartera.slice(0, 5).map((item) => (
               <li key={item.cliente_id} className="fila-cartera">
-                <Link to={\`/clientes/\${item.cliente_id}\`}>
+                <Link to={`/clientes/${item.cliente_id}`}>
                   <strong>{item.nombre}</strong>
                   <span>{item.ventas_pendientes} pendiente(s)</span>
                 </Link>
