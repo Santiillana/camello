@@ -54,7 +54,8 @@ export default function NuevaVenta() {
     if (!clienteId || !productoId) return;
     setGuardando(true);
     const producto = productos.find((p) => p.id === productoId)!;
-    await database.registrarVenta({
+    try {
+      await database.registrarVenta({
       cliente_id: Number(clienteId),
       ruta_id: rutaActiva?.id ?? null,
       producto_nombre: producto.nombre,
@@ -62,13 +63,17 @@ export default function NuevaVenta() {
       precio_aplicado: precio,
       costo_aplicado: costo,
       estado_pago: pagada ? 'PAGADA' : 'PENDIENTE',
-    });
-    setGuardando(false);
-    setConfirmacion(`✓ Venta registrada por ${formatoMoneda(precio * cantidad)}`);
+      });
+      setGuardando(false);
+      setConfirmacion(`✓ Venta registrada por ${formatoMoneda(precio * cantidad)}`);
     setTimeout(() => {
       if (rutaActiva) navigate(`/rutas/${rutaActiva.id}`);
       else navigate(`/clientes/${clienteId}`);
-    }, 900);
+      }, 900);
+    } catch (e) {
+      setGuardando(false);
+      setConfirmacion(`Error: ${String(e instanceof Error ? e.message : e)}`);
+    }
   }
 
   return (
