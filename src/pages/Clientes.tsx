@@ -15,20 +15,23 @@ export default function Clientes() {
   const [busqueda, setBusqueda] = useState('');
   const [params] = useSearchParams();
   const [mostrarForm, setMostrarForm] = useState(params.get('nuevo') === '1');
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   async function cargar(texto?: string) {
-    const lista = await database.listarClientes({ soloActivos: true, texto });
-    setClientes(lista);
+    try {
+      setClientes(await database.listarClientes({ soloActivos: true, texto }));
+      setError(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  useEffect(() => {
-    cargar();
-  }, []);
+  useEffect(() => { void cargar(); }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => cargar(busqueda || undefined), 250);
-    return () => clearTimeout(t);
+    const t = window.setTimeout(() => { void cargar(busqueda || undefined); }, 250);
+    return () => window.clearTimeout(t);
   }, [busqueda]);
 
   return (
@@ -40,11 +43,13 @@ export default function Clientes() {
         </button>
       </header>
 
+      {error && <p className="texto-error">{error}</p>}
+
       {mostrarForm && (
         <FormNuevoCliente
           onCreado={(id) => {
             setMostrarForm(false);
-            cargar();
+            void cargar();
             navigate(`/clientes/${id}`);
           }}
         />
@@ -77,7 +82,7 @@ export default function Clientes() {
             </Link>
           </li>
         ))}
-        {clientes.length === 0 && <p className="texto-vacio">Todavía no hay clientes registrados.</p>}
+        {clientes.length === 0 && !error && <p className="texto-vacio">Todavía no hay clientes registrados.</p>}
       </ul>
     </div>
   );
@@ -87,14 +92,23 @@ function FormNuevoCliente({ onCreado }: { onCreado: (id: number) => void }) {
   const [nombre, setNombre] = useState('');
   const [telefono1, setTelefono1] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
-    if (!nombre.trim()) return;
     setGuardando(true);
-    const id = await database.crearCliente({ nombre: nombre.trim(), telefono1: telefono1.trim() || undefined });
-    setGuardando(false);
-    onCreado(id);
+    setError(null);
+    try {
+      const id = await database.crearCliente({
+        nombre: nombre.trim(),
+        telefono1: telefono1.trim() || undefined,
+      });
+      onCreado(id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGuardando(false);
+    }
   }
 
   return (
@@ -107,7 +121,8 @@ function FormNuevoCliente({ onCreado }: { onCreado: (id: number) => void }) {
         Teléfono
         <input value={telefono1} onChange={(e) => setTelefono1(e.target.value)} inputMode="tel" />
       </label>
-      <button type="submit" className="boton-primario" disabled={guardando}>
+      {error && <p className="texto-error">{error}</p>}
+      <button type="submit" className="boton-primario" disabled={guardando || !nombre.trim()}>
         {guardando ? 'Guardando…' : 'Guardar cliente'}
       </button>
     </form>
