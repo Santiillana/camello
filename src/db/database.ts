@@ -207,6 +207,15 @@ class Database {
   // ---------------------------------------------------------------------
 
   async iniciarRuta(r: { tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
+    if (!Number.isInteger(r.paquetes_llevados) || r.paquetes_llevados < 1) {
+      throw new Error('La cantidad de paquetes debe ser un número entero mayor que cero.');
+    }
+
+    const activa = await this.obtenerRutaActiva();
+    if (activa) {
+      throw new Error('Ya existe una ruta en curso. Finalízala antes de iniciar otra.');
+    }
+
     const ahora = new Date();
     const res = await this.conn().run(
       `INSERT INTO rutas (tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, notas)
@@ -275,6 +284,32 @@ class Database {
     costo_aplicado: number;
     estado_pago?: 'PAGADA' | 'PENDIENTE';
   }): Promise<number> {
+    if (!Number.isInteger(v.cantidad) || v.cantidad < 1) {
+      throw new Error('La cantidad debe ser un número entero mayor que cero.');
+    }
+    if (!Number.isFinite(v.precio_aplicado) || v.precio_aplicado < 0) {
+      throw new Error('El precio aplicado no es válido.');
+    }
+    if (!Number.isFinite(v.costo_aplicado) || v.costo_aplicado < 0) {
+      throw new Error('El costo aplicado no es válido.');
+    }
+
+    if (v.ruta_id != null) {
+      const ruta = await this.conn().query('SELECT estado, paquetes_llevados FROM rutas WHERE id = ?;', [v.ruta_id]);
+      const rutaRow = ruta.values?.[0] as { estado?: string; paquetes_llevados?: number } | undefined;
+      if (!rutaRow) throw new Error('La ruta seleccionada no existe.');
+      if (rutaRow.estado !== 'EN_CURSO') throw new Error('Solo puedes registrar ventas en una ruta en curso.');
+
+      const vendidos = await this.conn().query(
+        'SELECT COALESCE(SUM(cantidad), 0) as vendidos FROM ventas WHERE ruta_id = ?;',
+        [v.ruta_id]
+      );
+      const yaVendidos = Number(vendidos.values?.[0]?.vendidos ?? 0);
+      if (yaVendidos + v.cantidad > Number(rutaRow.paquetes_llevados ?? 0)) {
+        throw new Error('No hay suficientes paquetes disponibles en esta ruta.');
+      }
+    }
+
     const ahora = new Date();
     const total = v.precio_aplicado * v.cantidad;
     const utilidad = (v.precio_aplicado - v.costo_aplicado) * v.cantidad;
@@ -366,8 +401,26 @@ class Database {
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
-    const data = JSON.parse(jsonTexto);
-    await this.sqlite!.importFromJson(JSON.stringify(data));
+    if (!this.sqlite) throw new Error('La base de datos no está inicializada.');
+
+    let data: unknown;
+    try {
+      data = JSON.parse(jsonTexto);
+    } catch {
+      throw new Error('El archivo de respaldo no contiene JSON válido.');
+    }
+
+    const texto = JSON.stringify(data);
+    const valido = await this.sqlite.isJsonValid(texto);
+    if (!valido.result) {
+      throw new Error('El archivo no es un respaldo SQLite válido de CAMELLO.');
+    }
+
+    const resultado = await this.sqlite.importFromJson(texto);
+    if ((resultado.changes?.changes ?? 0) < 0) {
+      throw new Error('SQLite no pudo restaurar el respaldo.');
+    }
+
     await this.persist();
   }
 }
