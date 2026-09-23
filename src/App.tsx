@@ -1,22 +1,23 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { database } from './db/database';
 import BottomNav from './components/BottomNav';
 import ConfiguracionInicial from './pages/ConfiguracionInicial';
-import Configuracion from './pages/Configuracion';
-import Dashboard from './pages/Dashboard';
-import Clientes from './pages/Clientes';
-import ClienteDetalle from './pages/ClienteDetalle';
-import NuevaVenta from './pages/NuevaVenta';
-import Rutas from './pages/Rutas';
-import RutaDetalle from './pages/RutaDetalle';
-import Mapa from './pages/Mapa';
-import Informes from './pages/Informes';
-import Cartera from './pages/Cartera';
-import Respaldo from './pages/Respaldo';
-import Recordatorios from './pages/Recordatorios';
 import { aplicarTema } from './utils/theme';
 import type { ConfiguracionApp } from './types';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Clientes = lazy(() => import('./pages/Clientes'));
+const ClienteDetalle = lazy(() => import('./pages/ClienteDetalle'));
+const NuevaVenta = lazy(() => import('./pages/NuevaVenta'));
+const Rutas = lazy(() => import('./pages/Rutas'));
+const RutaDetalle = lazy(() => import('./pages/RutaDetalle'));
+const Mapa = lazy(() => import('./pages/Mapa'));
+const Informes = lazy(() => import('./pages/Informes'));
+const Cartera = lazy(() => import('./pages/Cartera'));
+const Respaldo = lazy(() => import('./pages/Respaldo'));
+const Recordatorios = lazy(() => import('./pages/Recordatorios'));
+const Configuracion = lazy(() => import('./pages/Configuracion'));
 
 const DB_INIT_TIMEOUT_MS = 15_000;
 
@@ -33,6 +34,10 @@ function inicializarBaseDeDatosConTimeout(): Promise<void> {
   return Promise.race([database.init(), timeout]).finally(() => {
     if (timer !== undefined) window.clearTimeout(timer);
   });
+}
+
+function CargandoPagina() {
+  return <div className="pantalla"><p className="texto-vacio">Cargando…</p></div>;
 }
 
 export default function App() {
@@ -94,24 +99,26 @@ export default function App() {
     <HashRouter>
       <div className="app-shell">
         <main className="app-contenido">
-          <Routes>
-            <Route path="/" element={<Dashboard config={config} />} />
-            <Route path="/clientes" element={<Clientes />} />
-            <Route path="/clientes/:id" element={<ClienteDetalle />} />
-            <Route path="/venta-nueva" element={<NuevaVenta />} />
-            <Route path="/rutas" element={<Rutas />} />
-            <Route path="/rutas/:id" element={<RutaDetalle />} />
-            <Route path="/mapa" element={<Mapa />} />
-            <Route path="/informes" element={<Informes />} />
-            <Route path="/cartera" element={<Cartera />} />
-            <Route path="/recordatorios" element={<Recordatorios />} />
-            <Route path="/configuracion" element={<Configuracion onConfigChanged={(resultado) => {
-              setConfig(resultado);
-              aplicarTema(resultado.color_acento);
-            }} />} />
-            <Route path="/respaldo" element={<Respaldo />} />
-            <Route path="*" element={<Dashboard config={config} />} />
-          </Routes>
+          <Suspense fallback={<CargandoPagina />}>
+            <Routes>
+              <Route path="/" element={<Dashboard config={config} />} />
+              <Route path="/clientes" element={<Clientes />} />
+              <Route path="/clientes/:id" element={<ClienteDetalle />} />
+              <Route path="/venta-nueva" element={<NuevaVenta />} />
+              <Route path="/rutas" element={<Rutas />} />
+              <Route path="/rutas/:id" element={<RutaDetalle />} />
+              <Route path="/mapa" element={<Mapa />} />
+              <Route path="/informes" element={<Informes />} />
+              <Route path="/cartera" element={<Cartera />} />
+              <Route path="/recordatorios" element={<Recordatorios />} />
+              <Route path="/configuracion" element={<Configuracion onConfigChanged={(resultado) => {
+                setConfig(resultado);
+                aplicarTema(resultado.color_acento);
+              }} />} />
+              <Route path="/respaldo" element={<Respaldo />} />
+              <Route path="*" element={<Dashboard config={config} />} />
+            </Routes>
+          </Suspense>
         </main>
         <BottomNav />
       </div>
