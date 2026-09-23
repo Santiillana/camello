@@ -4,7 +4,8 @@ import {
   SQLiteConnection,
   SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
-import { DB_NAME, SCHEMA_STATEMENTS } from './schema';
+import { DB_NAME, SCHEMA_STATEMENTS, MIGRACIONES, DB_VERSION } from './schema';
+import { fechaLocal, horaLocal, diasDesdeFecha } from '../utils/format';
 import type {
   Cliente,
   Mascota,
@@ -53,11 +54,13 @@ class Database {
       : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false);
 
     await this.db.open();
+    await this.db.execute('PRAGMA foreign_keys = ON;');
 
     for (const stmt of SCHEMA_STATEMENTS) {
       await this.db.execute(stmt);
     }
 
+    await this.ejecutarMigraciones();
     await this.seedProductosSiVacio();
 
     if (Capacitor.getPlatform() === 'web') {
@@ -77,6 +80,41 @@ class Database {
     }
   }
 
+
+
+  private async ejecutarMigraciones(): Promise<void> {
+    const conn = this.conn();
+    const versionResult = await conn.query('PRAGMA user_version;');
+    const versionActual = Number(versionResult.values?.[0]?.user_version ?? 0);
+
+    for (const migracion of MIGRACIONES) {
+      if (migracion.version <= versionActual) continue;
+      await conn.beginTransaction();
+      try {
+        for (const cambio of migracion.columns) {
+          const info = await conn.query(`PRAGMA table_info(${cambio.table});`);
+          const existe = (info.values ?? []).some((row) => row.name === cambio.column);
+          if (!existe) await conn.execute(cambio.sql, false);
+        }
+        await conn.execute(`PRAGMA user_version = ${migracion.version};`, false);
+        await conn.commitTransaction();
+      } catch (error) {
+        try { await conn.rollbackTransaction(); } catch {}
+        throw new Error(`No se pudo migrar la base de datos a v${migracion.version}: ${String((error as Error)?.message ?? error)}`);
+      }
+    }
+
+    if (!(await this.columnaExiste('clientes', 'ultimo_contacto')) || !(await this.columnaExiste('ventas', 'anulada'))) {
+      throw new Error('La estructura de CAMELLO está incompleta después de la migración.');
+    }
+    if (versionActual < DB_VERSION) await conn.execute(`PRAGMA user_version = ${DB_VERSION};`);
+  }
+
+  private async columnaExiste(tabla: string, columna: string): Promise<boolean> {
+    const r = await this.conn().query(`PRAGMA table_info(${tabla});`);
+    return (r.values ?? []).some((row) => row.name === columna);
+  }
+
   private async seedProductosSiVacio(): Promise<void> {
     const r = await this.conn().query('SELECT COUNT(*) as n FROM productos;');
     const n = r.values?.[0]?.n ?? 0;
@@ -93,7 +131,7 @@ class Database {
   // ---------------------------------------------------------------------
 
   async crearCliente(c: Omit<Cliente, 'id' | 'fecha_registro' | 'estado'> & { fecha_registro?: string }): Promise<number> {
-    const fecha = c.fecha_registro ?? new Date().toISOString().slice(0, 10);
+    const fecha = c.fecha_registro ?? fechaLocal();
     const res = await this.conn().run(
       `INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
@@ -122,9 +160,12 @@ class Database {
     const cond: string[] = [];
     const params: unknown[] = [];
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
-    if (opts?.texto) {
-      cond.push('(nombre LIKE ? OR telefono1 LIKE ?)');
-      params.push(`%${opts.texto}%`, `%${opts.texto}%`);
+    if (opts?.texto?.trim()) {
+      const like = `%${opts.texto.trim()}%`;
+      cond.push(`(nombre LIKE ? COLLATE NOCASE OR telefono1 LIKE ? OR telefono2 LIKE ? OR EXISTS (
+        SELECT 1 FROM mascotas m2 WHERE m2.cliente_id = clientes.id AND m2.estado = 'activo' AND m2.nombre LIKE ? COLLATE NOCASE
+      ))`);
+      params.push(like, like, like, like);
     }
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
     sql += ' ORDER BY nombre ASC;';
@@ -145,7 +186,7 @@ class Database {
     const r = await this.conn().query(
       `SELECT MAX(fecha) as ultima, COALESCE(SUM(total),0) as total,
               COALESCE(SUM(CASE WHEN estado_pago = 'PENDIENTE' THEN total ELSE 0 END),0) as pendiente
-       FROM ventas WHERE cliente_id = ?;`,
+       FROM ventas WHERE cliente_id = ? AND anulada = 0;`,
       [c.id]
     );
     const row = r.values?.[0] ?? {};
@@ -207,11 +248,13 @@ class Database {
   // ---------------------------------------------------------------------
 
   async iniciarRuta(r: { tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
+    if (await this.obtenerRutaActiva()) throw new Error('Ya existe una ruta en curso. Finalízala o cancélala antes de iniciar otra.');
+    if (!Number.isInteger(r.paquetes_llevados) || r.paquetes_llevados <= 0) throw new Error('Los paquetes llevados deben ser mayores que cero.');
     const ahora = new Date();
     const res = await this.conn().run(
       `INSERT INTO rutas (tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, notas)
        VALUES (?, 'EN_CURSO', ?, ?, ?, ?, ?, ?);`,
-      [r.tipo, ahora.toISOString().slice(0, 10), ahora.toTimeString().slice(0, 5), r.lat_inicio ?? null, r.lng_inicio ?? null, r.paquetes_llevados, r.notas ?? null]
+      [r.tipo, fechaLocal(ahora), horaLocal(ahora), r.lat_inicio ?? null, r.lng_inicio ?? null, r.paquetes_llevados, r.notas ?? null]
     );
     await this.persist();
     return res.changes?.lastId ?? 0;
@@ -247,7 +290,7 @@ class Database {
       `SELECT COALESCE(SUM(cantidad),0) as vendidos, COALESCE(SUM(total),0) as total_vendido,
               COALESCE(SUM(CASE WHEN estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as total_pendiente,
               COUNT(DISTINCT cliente_id) as clientes
-       FROM ventas WHERE ruta_id = ?;`,
+       FROM ventas WHERE ruta_id = ? AND anulada = 0;`,
       [ruta.id]
     );
     const row = r.values?.[0] ?? {};
@@ -276,12 +319,24 @@ class Database {
     estado_pago?: 'PAGADA' | 'PENDIENTE';
   }): Promise<number> {
     const ahora = new Date();
+    if (!Number.isInteger(v.cantidad) || v.cantidad <= 0) throw new Error('La cantidad debe ser mayor que cero.');
+    if (!Number.isFinite(v.precio_aplicado) || v.precio_aplicado < 0) throw new Error('El precio aplicado no es válido.');
+    if (!Number.isFinite(v.costo_aplicado) || v.costo_aplicado < 0) throw new Error('El costo aplicado no es válido.');
+    if (v.ruta_id != null) {
+      const ruta = await this.conn().query('SELECT * FROM rutas WHERE id = ?;', [v.ruta_id]);
+      const rr = ruta.values?.[0] as Ruta | undefined;
+      if (!rr) throw new Error('La ruta asociada no existe.');
+      if (rr.estado !== 'EN_CURSO') throw new Error('La ruta asociada ya no está en curso.');
+      const vendidosR = await this.conn().query('SELECT COALESCE(SUM(cantidad),0) AS vendidos FROM ventas WHERE ruta_id = ? AND anulada = 0;', [v.ruta_id]);
+      const vendidos = Number(vendidosR.values?.[0]?.vendidos ?? 0);
+      if (vendidos + v.cantidad > rr.paquetes_llevados) throw new Error(`No hay suficientes paquetes en la ruta. Disponibles: ${Math.max(rr.paquetes_llevados - vendidos, 0)}.`);
+    }
     const total = v.precio_aplicado * v.cantidad;
     const utilidad = (v.precio_aplicado - v.costo_aplicado) * v.cantidad;
     const estado = v.estado_pago ?? 'PENDIENTE';
     const res = await this.conn().run(
-      `INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, anulada)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);`,
       [
         v.cliente_id,
         v.ruta_id ?? null,
@@ -301,8 +356,21 @@ class Database {
     return res.changes?.lastId ?? 0;
   }
 
+
+
+  async anularVenta(id: number): Promise<void> {
+    const r = await this.conn().query('SELECT id, anulada FROM ventas WHERE id = ?;', [id]);
+    const venta = r.values?.[0];
+    if (!venta) throw new Error('La venta no existe.');
+    if (Number(venta.anulada) === 1) throw new Error('La venta ya está anulada.');
+    await this.conn().run('UPDATE ventas SET anulada = 1 WHERE id = ?;', [id]);
+    await this.persist();
+  }
+
   async marcarVentaPagada(id: number): Promise<void> {
-    await this.conn().run(`UPDATE ventas SET estado_pago = 'PAGADA', fecha_pago = ? WHERE id = ?;`, [new Date().toISOString().slice(0, 10), id]);
+    const venta = await this.conn().query('SELECT anulada FROM ventas WHERE id = ?;', [id]);
+    if (Number(venta.values?.[0]?.anulada ?? 0) === 1) throw new Error('Una venta anulada no puede marcarse como pagada.');
+    await this.conn().run(`UPDATE ventas SET estado_pago = 'PAGADA', fecha_pago = ? WHERE id = ?;`, [fechaLocal(), id]);
     await this.persist();
   }
 
@@ -327,7 +395,7 @@ class Database {
               COALESCE(SUM(CASE WHEN estado_pago='PAGADA' THEN total ELSE 0 END),0) as pagado,
               COALESCE(SUM(CASE WHEN estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as pendiente,
               COUNT(*) as numero_ventas
-       FROM ventas WHERE fecha BETWEEN ? AND ?;`,
+       FROM ventas WHERE fecha BETWEEN ? AND ? AND anulada = 0;`,
       [desde, hasta]
     );
     const row = r.values?.[0] ?? {};
@@ -362,7 +430,8 @@ class Database {
   /** Exporta toda la base de datos como JSON (para IMPORTAR/EXPORTAR RESPALDO). */
   async exportarRespaldo(): Promise<string> {
     const json = await this.conn().exportToJson('full');
-    return JSON.stringify(json.export ?? {}, null, 2);
+    if (!json.export) throw new Error('No se pudo generar un respaldo válido.');
+    return JSON.stringify(json.export, null, 2);
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
