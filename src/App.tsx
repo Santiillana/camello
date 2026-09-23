@@ -12,6 +12,23 @@ import Mapa from './pages/Mapa';
 import Informes from './pages/Informes';
 import Respaldo from './pages/Respaldo';
 
+const DB_INIT_TIMEOUT_MS = 15_000;
+
+function inicializarBaseDeDatosConTimeout(): Promise<void> {
+  let timer: number | undefined;
+  const timeout = new Promise<void>((_, reject) => {
+    timer = window.setTimeout(() => {
+      reject(new Error(
+        'La base de datos tardó más de ' + (DB_INIT_TIMEOUT_MS / 1000) + ' segundos en inicializarse.',
+      ));
+    }, DB_INIT_TIMEOUT_MS);
+  });
+
+  return Promise.race([database.init(), timeout]).finally(() => {
+    if (timer !== undefined) window.clearTimeout(timer);
+  });
+}
+
 export default function App() {
   const [listo, setListo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +36,7 @@ export default function App() {
   useEffect(() => {
     let activo = true;
 
-    database.init().then(
+    inicializarBaseDeDatosConTimeout().then(
       () => { if (activo) setListo(true); },
       (e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); }
     );
