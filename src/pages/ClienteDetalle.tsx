@@ -46,7 +46,7 @@ export default function ClienteDetalle() {
         )}
         <p>🧾 Total comprado: {formatoMoneda(cliente.total_comprado)}</p>
         {cliente.pendiente > 0 && <p className="texto-alerta">⚠️ Pendiente por cobrar: {formatoMoneda(cliente.pendiente)}</p>}
-        {cliente.lat && cliente.lng ? (
+        {cliente.lat != null && cliente.lng != null ? (
           <p>📍 Ubicación guardada ({cliente.lat.toFixed(5)}, {cliente.lng.toFixed(5)})</p>
         ) : (
           <button className="boton-secundario" onClick={() => setMostrarUbicacion(true)}>📍 Guardar ubicación</button>
@@ -139,8 +139,12 @@ function FormMascota({ clienteId, onCreada }: { clienteId: number; onCreada: () 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre.trim()) return;
-    await database.crearMascota({ cliente_id: clienteId, nombre: nombre.trim(), raza: raza.trim() || undefined, tamano });
-    onCreada();
+    try {
+      await database.crearMascota({ cliente_id: clienteId, nombre: nombre.trim(), raza: raza.trim() || undefined, tamano });
+      onCreada();
+    } catch (e) {
+      alert(String(e instanceof Error ? e.message : e));
+    }
   }
 
   return (
@@ -191,8 +195,18 @@ function FormUbicacion({ clienteId, onGuardado, onCancelar }: { clienteId: numbe
 
   async function guardar() {
     if (!lat || !lng) return;
-    await database.actualizarCliente(clienteId, { lat: parseFloat(lat), lng: parseFloat(lng) });
-    onGuardado();
+    const latitud = Number.parseFloat(lat);
+    const longitud = Number.parseFloat(lng);
+    if (!Number.isFinite(latitud) || !Number.isFinite(longitud) || latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
+      setErrorGps('Las coordenadas no son válidas.');
+      return;
+    }
+    try {
+      await database.actualizarCliente(clienteId, { lat: latitud, lng: longitud });
+      onGuardado();
+    } catch (e) {
+      setErrorGps(String(e instanceof Error ? e.message : e));
+    }
   }
 
   return (

@@ -92,9 +92,14 @@ function FormNuevoCliente({ onCreado }: { onCreado: (id: number) => void }) {
     e.preventDefault();
     if (!nombre.trim()) return;
     setGuardando(true);
-    const id = await database.crearCliente({ nombre: nombre.trim(), telefono1: telefono1.trim() || undefined });
-    setGuardando(false);
-    onCreado(id);
+    try {
+      const id = await database.crearCliente({ nombre: nombre.trim(), telefono1: telefono1.trim() || undefined });
+      setGuardando(false);
+      onCreado(id);
+    } catch (e) {
+      setGuardando(false);
+      alert(String(e instanceof Error ? e.message : e));
+    }
   }
 
   return (

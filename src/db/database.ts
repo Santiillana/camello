@@ -54,6 +54,10 @@ class Database {
 
     await this.db.open();
 
+    // SQLite no aplica FOREIGN KEY por defecto en todas las plataformas.
+    // Activarlo evita ventas/mascotas huérfanas y hace cumplir las relaciones del modelo.
+    await this.db.execute('PRAGMA foreign_keys = ON;');
+
     for (const stmt of SCHEMA_STATEMENTS) {
       await this.db.execute(stmt);
     }
@@ -93,21 +97,30 @@ class Database {
   // ---------------------------------------------------------------------
 
   async crearCliente(c: Omit<Cliente, 'id' | 'fecha_registro' | 'estado'> & { fecha_registro?: string }): Promise<number> {
+    const nombre = c.nombre.trim();
+    if (!nombre) throw new Error('El nombre del cliente es obligatorio.');
     const fecha = c.fecha_registro ?? new Date().toISOString().slice(0, 10);
     const res = await this.conn().run(
       `INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
-      [c.nombre, c.telefono1 ?? null, c.telefono2 ?? null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones ?? null]
+      [nombre, c.telefono1?.trim() || null, c.telefono2 ?? null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones ?? null]
     );
     await this.persist();
     return res.changes?.lastId ?? 0;
   }
 
   async actualizarCliente(id: number, c: Partial<Cliente>): Promise<void> {
-    const campos = Object.keys(c).filter((k) => k !== 'id');
+    const permitidos = new Set(['nombre', 'telefono1', 'telefono2', 'cumple_dia', 'cumple_mes', 'fecha_registro', 'lat', 'lng', 'observaciones', 'estado']);
+    const campos = Object.keys(c).filter((k) => permitidos.has(k));
     if (campos.length === 0) return;
     const sets = campos.map((k) => `${k} = ?`).join(', ');
-    const valores = campos.map((k) => (c as Record<string, unknown>)[k] ?? null);
+    const valores = campos.map((k) => {
+      const value = (c as Record<string, unknown>)[k];
+      return typeof value === 'string' ? (value.trim() || null) : (value ?? null);
+    });
+    if (campos.includes('nombre') && !String((c as Record<string, unknown>).nombre ?? '').trim()) {
+      throw new Error('El nombre del cliente es obligatorio.');
+    }
     await this.conn().run(`UPDATE clientes SET ${sets} WHERE id = ?;`, [...valores, id]);
     await this.persist();
   }
@@ -123,8 +136,8 @@ class Database {
     const params: unknown[] = [];
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
     if (opts?.texto) {
-      cond.push('(nombre LIKE ? OR telefono1 LIKE ?)');
-      params.push(`%${opts.texto}%`, `%${opts.texto}%`);
+      cond.push('(nombre LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ?)');
+      params.push(`%${opts.texto}%`, `%${opts.texto}%`, `%${opts.texto}%`);
     }
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
     sql += ' ORDER BY nombre ASC;';
@@ -173,10 +186,12 @@ class Database {
   // ---------------------------------------------------------------------
 
   async crearMascota(m: Omit<Mascota, 'id' | 'estado'>): Promise<number> {
+    if (!Number.isInteger(m.cliente_id) || m.cliente_id < 1) throw new Error('El cliente de la mascota no es válido.');
+    if (!m.nombre.trim()) throw new Error('El nombre de la mascota es obligatorio.');
     const res = await this.conn().run(
       `INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
-      [m.cliente_id, m.nombre, m.cumple_dia ?? null, m.cumple_mes ?? null, m.sexo ?? null, m.raza ?? null, m.tamano ?? null, m.preferencias ?? null, m.observaciones ?? null]
+      [m.cliente_id, m.nombre.trim(), m.cumple_dia ?? null, m.cumple_mes ?? null, m.sexo ?? null, m.raza ?? null, m.tamano ?? null, m.preferencias ?? null, m.observaciones ?? null]
     );
     await this.persist();
     return res.changes?.lastId ?? 0;
@@ -207,6 +222,15 @@ class Database {
   // ---------------------------------------------------------------------
 
   async iniciarRuta(r: { tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
+    if (!Number.isInteger(r.paquetes_llevados) || r.paquetes_llevados < 1) {
+      throw new Error('La cantidad de paquetes debe ser un número entero mayor que cero.');
+    }
+
+    const activa = await this.obtenerRutaActiva();
+    if (activa) {
+      throw new Error('Ya existe una ruta en curso. Finalízala antes de iniciar otra.');
+    }
+
     const ahora = new Date();
     const res = await this.conn().run(
       `INSERT INTO rutas (tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, notas)
@@ -218,16 +242,24 @@ class Database {
   }
 
   async finalizarRuta(id: number, fin?: { lat_fin?: number; lng_fin?: number }): Promise<void> {
+    const actual = await this.conn().query('SELECT estado FROM rutas WHERE id = ?;', [id]);
+    const estado = actual.values?.[0]?.estado;
+    if (!estado) throw new Error('La ruta no existe.');
+    if (estado !== 'EN_CURSO') throw new Error('Solo puedes finalizar una ruta que está en curso.');
     const ahora = new Date();
     await this.conn().run(
-      `UPDATE rutas SET estado = 'FINALIZADA', hora_fin = ?, lat_fin = ?, lng_fin = ? WHERE id = ?;`,
+      `UPDATE rutas SET estado = 'FINALIZADA', hora_fin = ?, lat_fin = ?, lng_fin = ? WHERE id = ? AND estado = 'EN_CURSO';`,
       [ahora.toTimeString().slice(0, 5), fin?.lat_fin ?? null, fin?.lng_fin ?? null, id]
     );
     await this.persist();
   }
 
   async cancelarRuta(id: number): Promise<void> {
-    await this.conn().run(`UPDATE rutas SET estado = 'CANCELADA' WHERE id = ?;`, [id]);
+    const actual = await this.conn().query('SELECT estado FROM rutas WHERE id = ?;', [id]);
+    const estado = actual.values?.[0]?.estado;
+    if (!estado) throw new Error('La ruta no existe.');
+    if (estado !== 'EN_CURSO' && estado !== 'PROGRAMADA') throw new Error('Esta ruta ya terminó y no se puede cancelar.');
+    await this.conn().run(`UPDATE rutas SET estado = 'CANCELADA' WHERE id = ? AND estado IN ('EN_CURSO','PROGRAMADA');`, [id]);
     await this.persist();
   }
 
@@ -275,6 +307,37 @@ class Database {
     costo_aplicado: number;
     estado_pago?: 'PAGADA' | 'PENDIENTE';
   }): Promise<number> {
+    if (!Number.isInteger(v.cantidad) || v.cantidad < 1) {
+      throw new Error('La cantidad debe ser un número entero mayor que cero.');
+    }
+    if (!Number.isFinite(v.precio_aplicado) || v.precio_aplicado < 0) {
+      throw new Error('El precio aplicado no es válido.');
+    }
+    if (!Number.isFinite(v.costo_aplicado) || v.costo_aplicado < 0) {
+      throw new Error('El costo aplicado no es válido.');
+    }
+    if (!v.producto_nombre.trim()) throw new Error('El producto de la venta es obligatorio.');
+
+    const cliente = await this.conn().query('SELECT estado FROM clientes WHERE id = ?;', [v.cliente_id]);
+    if (!cliente.values?.[0]) throw new Error('El cliente seleccionado no existe.');
+    if (cliente.values[0].estado !== 'activo') throw new Error('No puedes registrar ventas para un cliente archivado.');
+
+    if (v.ruta_id != null) {
+      const ruta = await this.conn().query('SELECT estado, paquetes_llevados FROM rutas WHERE id = ?;', [v.ruta_id]);
+      const rutaRow = ruta.values?.[0] as { estado?: string; paquetes_llevados?: number } | undefined;
+      if (!rutaRow) throw new Error('La ruta seleccionada no existe.');
+      if (rutaRow.estado !== 'EN_CURSO') throw new Error('Solo puedes registrar ventas en una ruta en curso.');
+
+      const vendidos = await this.conn().query(
+        'SELECT COALESCE(SUM(cantidad), 0) as vendidos FROM ventas WHERE ruta_id = ?;',
+        [v.ruta_id]
+      );
+      const yaVendidos = Number(vendidos.values?.[0]?.vendidos ?? 0);
+      if (yaVendidos + v.cantidad > Number(rutaRow.paquetes_llevados ?? 0)) {
+        throw new Error('No hay suficientes paquetes disponibles en esta ruta.');
+      }
+    }
+
     const ahora = new Date();
     const total = v.precio_aplicado * v.cantidad;
     const utilidad = (v.precio_aplicado - v.costo_aplicado) * v.cantidad;
@@ -302,7 +365,10 @@ class Database {
   }
 
   async marcarVentaPagada(id: number): Promise<void> {
-    await this.conn().run(`UPDATE ventas SET estado_pago = 'PAGADA', fecha_pago = ? WHERE id = ?;`, [new Date().toISOString().slice(0, 10), id]);
+    const actual = await this.conn().query('SELECT estado_pago FROM ventas WHERE id = ?;', [id]);
+    if (!actual.values?.[0]) throw new Error('La venta no existe.');
+    if (actual.values[0].estado_pago === 'PAGADA') return;
+    await this.conn().run(`UPDATE ventas SET estado_pago = 'PAGADA', fecha_pago = ? WHERE id = ? AND estado_pago = 'PENDIENTE';`, [new Date().toISOString().slice(0, 10), id]);
     await this.persist();
   }
 
@@ -366,8 +432,39 @@ class Database {
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
-    const data = JSON.parse(jsonTexto);
-    await this.sqlite!.importFromJson(JSON.stringify(data));
+    if (!this.sqlite) throw new Error('La base de datos no está inicializada.');
+
+    let data: unknown;
+    try {
+      data = JSON.parse(jsonTexto);
+    } catch {
+      throw new Error('El archivo de respaldo no contiene JSON válido.');
+    }
+
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('El respaldo tiene un formato inválido.');
+    }
+
+    const respaldo = data as { database?: unknown; overwrite?: unknown };
+    if (respaldo.database !== DB_NAME) {
+      throw new Error('El respaldo no pertenece a la base de datos de CAMELLO.');
+    }
+
+    // La pantalla advierte que la restauración reemplaza los datos actuales.
+    // El plugin conserva los datos existentes por defecto, por eso activamos overwrite.
+    respaldo.overwrite = true;
+
+    const texto = JSON.stringify(respaldo);
+    const valido = await this.sqlite.isJsonValid(texto);
+    if (!valido.result) {
+      throw new Error('El archivo no es un respaldo SQLite válido de CAMELLO.');
+    }
+
+    const resultado = await this.sqlite.importFromJson(texto);
+    if ((resultado.changes?.changes ?? 0) < 0) {
+      throw new Error('SQLite no pudo restaurar el respaldo.');
+    }
+
     await this.persist();
   }
 }

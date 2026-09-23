@@ -40,8 +40,12 @@ export default function RutaDetalle() {
         // sin ubicación de cierre si no hay permiso/señal
       }
     }
-    await database.finalizarRuta(rutaId, { lat_fin: lat, lng_fin: lng });
-    cargar();
+    try {
+      await database.finalizarRuta(rutaId, { lat_fin: lat, lng_fin: lng });
+      await cargar();
+    } catch (e) {
+      alert(String(e instanceof Error ? e.message : e));
+    }
   }
 
   return (

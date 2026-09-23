@@ -42,11 +42,18 @@ export default function Mapa() {
 
   useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
-    mapaRef.current = L.map(contenedorRef.current).setView(VILLAVICENCIO, 13);
+    const mapa = L.map(contenedorRef.current).setView(VILLAVICENCIO, 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; colaboradores de OpenStreetMap',
-    }).addTo(mapaRef.current);
-    capaMarcadoresRef.current = L.layerGroup().addTo(mapaRef.current);
+    }).addTo(mapa);
+    capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
+    mapaRef.current = mapa;
+
+    return () => {
+      mapa.remove();
+      mapaRef.current = null;
+      capaMarcadoresRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -61,9 +68,17 @@ export default function Mapa() {
         fillOpacity: 0.85,
         weight: 2,
       });
-      marcador.bindPopup(
-        `<strong>${c.nombre}</strong><br/>${c.telefono1 ?? ''}<br/>${c.ultima_compra ? 'Última compra: ' + c.ultima_compra : 'Sin compras'}`
+      const popup = document.createElement('div');
+      const nombre = document.createElement('strong');
+      nombre.textContent = c.nombre;
+      popup.appendChild(nombre);
+      popup.appendChild(document.createElement('br'));
+      popup.appendChild(document.createTextNode(c.telefono1 ?? ''));
+      popup.appendChild(document.createElement('br'));
+      popup.appendChild(
+        document.createTextNode(c.ultima_compra ? 'Última compra: ' + c.ultima_compra : 'Sin compras')
       );
+      marcador.bindPopup(popup);
       marcador.addTo(capaMarcadoresRef.current!);
     });
   }, [clientesFiltrados]);
