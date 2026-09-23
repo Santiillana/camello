@@ -410,7 +410,20 @@ class Database {
       throw new Error('El archivo de respaldo no contiene JSON válido.');
     }
 
-    const texto = JSON.stringify(data);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('El respaldo tiene un formato inválido.');
+    }
+
+    const respaldo = data as { database?: unknown; overwrite?: unknown };
+    if (respaldo.database !== DB_NAME) {
+      throw new Error('El respaldo no pertenece a la base de datos de CAMELLO.');
+    }
+
+    // La pantalla advierte que la restauración reemplaza los datos actuales.
+    // El plugin conserva los datos existentes por defecto, por eso activamos overwrite.
+    respaldo.overwrite = true;
+
+    const texto = JSON.stringify(respaldo);
     const valido = await this.sqlite.isJsonValid(texto);
     if (!valido.result) {
       throw new Error('El archivo no es un respaldo SQLite válido de CAMELLO.');
