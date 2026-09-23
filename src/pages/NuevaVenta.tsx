@@ -75,7 +75,6 @@ export default function NuevaVenta() {
     });
     setConfirmacion(`✓ Venta registrada por ${formatoMoneda(precio * cantidad)}`);
     setGuardando(false);
-    setConfirmacion(`✓ Venta registrada por ${formatoMoneda(precio * cantidad)}`);
     setTimeout(() => {
       if (rutaActiva) navigate(`/rutas/${rutaActiva.id}`);
       else navigate(`/clientes/${clienteId}`);
