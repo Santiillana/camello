@@ -1,0 +1,10 @@
+{
+	"appId": "co.combopitt.camello",
+	"appName": "CAMELLO",
+	"webDir": "dist",
+	"plugins": {
+		"CapacitorSQLite": {
+			"androidIsEncryption": false
+		}
+	}
+}

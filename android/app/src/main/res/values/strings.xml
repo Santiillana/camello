@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CAMELLO</string>
+    <string name="title_activity_main">CAMELLO</string>
+    <string name="package_name">co.combopitt.camello</string>
+    <string name="custom_url_scheme">co.combopitt.camello</string>
+</resources>

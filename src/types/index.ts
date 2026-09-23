@@ -1,0 +1,108 @@
+// Tipos centrales del dominio de CAMELLO.
+// Reflejan 1:1 las tablas de la base de datos (ver src/db/schema.ts)
+
+export type EstadoCliente = 'activo' | 'archivado';
+export type EstadoMascota = 'activo' | 'archivado';
+export type EstadoPago = 'PAGADA' | 'PENDIENTE';
+export type EstadoRuta = 'PROGRAMADA' | 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
+export type TipoRuta = 'Puerta a puerta' | 'Barrio' | 'Vereda' | 'Sector' | 'Visita comercial';
+export type SexoMascota = 'M' | 'H' | 'Desconocido';
+export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
+export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
+
+export interface Cliente {
+  id: number;
+  nombre: string;
+  telefono1?: string;
+  telefono2?: string;
+  cumple_dia?: number;
+  cumple_mes?: number;
+  fecha_registro: string; // ISO date
+  lat?: number;
+  lng?: number;
+  observaciones?: string;
+  estado: EstadoCliente;
+}
+
+export interface Mascota {
+  id: number;
+  cliente_id: number;
+  nombre: string;
+  cumple_dia?: number;
+  cumple_mes?: number;
+  sexo?: SexoMascota;
+  raza?: string;
+  tamano?: TamanoMascota;
+  preferencias?: string;
+  observaciones?: string;
+  estado: EstadoMascota;
+}
+
+export interface Producto {
+  id: number;
+  nombre: string;
+  precio: number;
+  costo: number;
+  activo: 0 | 1;
+}
+
+export interface Ruta {
+  id: number;
+  tipo: TipoRuta;
+  estado: EstadoRuta;
+  fecha: string;
+  hora_inicio?: string;
+  hora_fin?: string;
+  lat_inicio?: number;
+  lng_inicio?: number;
+  lat_fin?: number;
+  lng_fin?: number;
+  paquetes_llevados: number;
+  notas?: string;
+}
+
+export interface Venta {
+  id: number;
+  cliente_id: number;
+  ruta_id?: number | null;
+  producto_nombre: string;
+  cantidad: number;
+  precio_aplicado: number; // snapshot histórico — nunca se recalcula
+  costo_aplicado: number;  // snapshot histórico — nunca se recalcula
+  total: number;
+  utilidad: number;
+  fecha: string; // ISO date
+  hora: string;  // HH:MM
+  estado_pago: EstadoPago;
+  fecha_pago?: string | null;
+}
+
+// Vistas compuestas usadas en la UI (no son tablas)
+
+export interface ClienteConResumen extends Cliente {
+  mascotas: Mascota[];
+  ultima_compra?: string | null;
+  total_comprado: number;
+  pendiente: number;
+  seguimiento: EstadoSeguimiento;
+}
+
+export interface RutaConResumen extends Ruta {
+  vendidos: number;
+  disponibles: number;
+  total_vendido: number;
+  total_pendiente: number;
+  clientes_atendidos: number;
+}
+
+export interface ResumenPeriodo {
+  ventas: number;
+  paquetes: number;
+  utilidad: number;
+  pagado: number;
+  pendiente: number;
+  clientes_nuevos: number;
+  clientes_recurrentes?: number;
+  numero_ventas?: number;
+  ticket_promedio?: number;
+}
