@@ -2,48 +2,22 @@ name: Verificar CAMELLO
 
 on:
   push:
-    branches: ["main", "codex/**"]
+    branches: ["**"]
   pull_request:
-    branches: ["main"]
+    branches: ["**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - run: npm run lint
-
-  android:
-    runs-on: ubuntu-latest
-    needs: web
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      PATH: /usr/local/lib/android/sdk/cmdline-tools/latest/bin:/usr/local/lib/android/sdk/platform-tools:/usr/local/lib/android/sdk/emulator:${{ env.PATH }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npx cap sync android
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: Prepare Android SDK
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - run: chmod +x android/gradlew
-      - run: cd android && ./gradlew assembleDebug --no-daemon
+      - run: npm run verify
