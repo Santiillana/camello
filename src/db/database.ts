@@ -85,8 +85,9 @@ class Database {
   private async abrirConexion(): Promise<void> {
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
 
+    const consistency = await this.sqlite.checkConnectionsConsistency();
     const isConn = (await this.sqlite.isConnection(DB_NAME, false)).result;
-    this.db = isConn
+    this.db = consistency.result && isConn
       ? await this.sqlite.retrieveConnection(DB_NAME, false)
       : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
 
@@ -526,7 +527,10 @@ class Database {
       throw e;
     }
 
-    if (data.database !== DB_NAME) throw new Error('Este respaldo no pertenece a CAMELLO.');
+    if (data.database !== DB_NAME && data.database !== DB_NAME + '.db') {
+      throw new Error('Este respaldo no pertenece a CAMELLO.');
+    }
+    data.database = DB_NAME;
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
     if (data.encrypted !== false) throw new Error('No se admiten respaldos cifrados en esta versión.');
     if (!Array.isArray(data.tables)) throw new Error('El respaldo está incompleto.');

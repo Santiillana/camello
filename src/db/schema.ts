@@ -3,7 +3,7 @@
 // Los precios y costos de una venta se guardan como snapshot histórico: NUNCA se recalculan
 // si el producto cambia de precio después.
 
-export const DB_NAME = 'camello.db';
+export const DB_NAME = 'camello';
 export const DB_VERSION = 1;
 
 export const SCHEMA_STATEMENTS: string[] = [
