@@ -249,6 +249,28 @@ class Database {
     return res.changes?.lastId ?? 0;
   }
 
+  async actualizarProducto(id: number, p: Partial<Producto>): Promise<void> {
+    const permitidos: (keyof Producto)[] = ['nombre', 'precio', 'costo', 'activo'];
+    const campos = Object.keys(p).filter((k): k is keyof Producto => permitidos.includes(k as keyof Producto));
+    if (campos.length === 0) return;
+    if (p.nombre !== undefined && !p.nombre.trim()) throw new Error('El nombre del producto es obligatorio.');
+    if (p.precio !== undefined && (!Number.isFinite(p.precio) || p.precio < 0)) throw new Error('El precio no es válido.');
+    if (p.costo !== undefined && (!Number.isFinite(p.costo) || p.costo < 0)) throw new Error('El costo no es válido.');
+    const sets = campos.map((k) => `${k} = ?`).join(', ');
+    const valores = campos.map((k) => typeof p[k] === 'string' ? String(p[k]).trim() : p[k] ?? null);
+    const res = await this.conn().run(`UPDATE productos SET ${sets} WHERE id = ?;`, [...valores, id]);
+    if (!res.changes?.changes) throw new Error('El producto no existe.');
+    await this.persist();
+  }
+
+  async archivarProducto(id: number): Promise<void> {
+    const r = await this.conn().query('SELECT id FROM productos WHERE id = ? AND activo = 1;', [id]);
+    if (!r.values?.length) throw new Error('El producto no existe o ya está archivado.');
+    await this.conn().run('UPDATE productos SET activo = 0 WHERE id = ?;', [id]);
+    await this.seedProductosSiVacio();
+    await this.persist();
+  }
+
   // ---------------------------------------------------------------------
   // RUTAS
   // ---------------------------------------------------------------------
