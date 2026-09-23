@@ -5,7 +5,6 @@ import type { RutaConResumen, TipoRuta } from '../types';
 import { formatoMoneda, formatoFecha } from '../utils/format';
 
 const TIPOS: TipoRuta[] = ['Puerta a puerta', 'Barrio', 'Vereda', 'Sector', 'Visita comercial'];
-
 const ETIQUETA_ESTADO: Record<string, string> = {
   PROGRAMADA: 'Programada',
   EN_CURSO: 'En curso',
@@ -16,15 +15,19 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 export default function Rutas() {
   const [rutas, setRutas] = useState<RutaConResumen[]>([]);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   async function cargar() {
-    setRutas(await database.listarRutas());
+    try {
+      setRutas(await database.listarRutas());
+      setError(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  useEffect(() => {
-    cargar();
-  }, []);
+  useEffect(() => { void cargar(); }, []);
 
   const hayRutaActiva = rutas.some((r) => r.estado === 'EN_CURSO');
 
@@ -38,6 +41,8 @@ export default function Rutas() {
           </button>
         )}
       </header>
+
+      {error && <p className="texto-error">{error}</p>}
 
       {mostrarForm && (
         <FormIniciarRuta
@@ -74,26 +79,40 @@ function FormIniciarRuta({ onIniciada }: { onIniciada: (id: number) => void }) {
   const [paquetes, setPaquetes] = useState(20);
   const [usarGps, setUsarGps] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function iniciar(e: React.FormEvent) {
     e.preventDefault();
     setGuardando(true);
-    let lat: number | undefined;
-    let lng: number | undefined;
-    if (usarGps && navigator.geolocation) {
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-        );
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
-        // seguimos sin ubicación si el usuario no da permiso o falla el GPS
+    setError(null);
+    try {
+      let lat: number | undefined;
+      let lng: number | undefined;
+
+      if (usarGps && navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 30000 })
+          );
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        } catch {
+          // GPS es opcional: la ruta puede iniciar sin ubicación.
+        }
       }
+
+      const id = await database.iniciarRuta({
+        tipo,
+        paquetes_llevados: paquetes,
+        lat_inicio: lat,
+        lng_inicio: lng,
+      });
+      onIniciada(id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGuardando(false);
     }
-    const id = await database.iniciarRuta({ tipo, paquetes_llevados: paquetes, lat_inicio: lat, lng_inicio: lng });
-    setGuardando(false);
-    onIniciada(id);
   }
 
   return (
@@ -101,19 +120,18 @@ function FormIniciarRuta({ onIniciada }: { onIniciada: (id: number) => void }) {
       <label>
         Tipo de ruta
         <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoRuta)}>
-          {TIPOS.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
+          {TIPOS.map((t) => <option key={t}>{t}</option>)}
         </select>
       </label>
       <label>
         ¿Cuántos paquetes llevas?
-        <input type="number" min={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} />
+        <input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} required />
       </label>
       <label className="fila-checkbox">
         <input type="checkbox" checked={usarGps} onChange={(e) => setUsarGps(e.target.checked)} />
-        Registrar mi ubicación de inicio con GPS
+        Registrar ubicación de inicio con GPS
       </label>
+      {error && <p className="texto-error">{error}</p>}
       <button type="submit" className="boton-primario" disabled={guardando}>
         {guardando ? 'Iniciando…' : '🧭 Iniciar ruta'}
       </button>

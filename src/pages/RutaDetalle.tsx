@@ -10,50 +10,69 @@ export default function RutaDetalle() {
   const navigate = useNavigate();
   const [ruta, setRuta] = useState<RutaConResumen | null>(null);
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [procesando, setProcesando] = useState(false);
 
   async function cargar() {
-    const rutas = await database.listarRutas();
-    const r = rutas.find((x) => x.id === rutaId) ?? null;
-    setRuta(r);
-    setVentas(await database.listarVentasPorRuta(rutaId));
+    if (!Number.isInteger(rutaId) || rutaId <= 0) {
+      setError('Ruta inválida.');
+      return;
+    }
+    try {
+      const rutas = await database.listarRutas();
+      const r = rutas.find((x) => x.id === rutaId) ?? null;
+      setRuta(r);
+      setVentas(await database.listarVentasPorRuta(rutaId));
+      if (!r) setError('No se encontró la ruta.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  useEffect(() => {
-    cargar();
-  }, [rutaId]);
-
-  if (!ruta) return <div className="pantalla">Cargando…</div>;
-
-  const enCurso = ruta.estado === 'EN_CURSO';
+  useEffect(() => { void cargar(); }, [rutaId]);
 
   async function finalizar() {
-    let lat: number | undefined;
-    let lng: number | undefined;
-    if (navigator.geolocation) {
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-        );
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
-        // sin ubicación de cierre si no hay permiso/señal
+    setProcesando(true);
+    setError(null);
+    try {
+      let lat: number | undefined;
+      let lng: number | undefined;
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 30000 })
+          );
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        } catch {
+          // La ubicación de cierre es opcional.
+        }
       }
+      await database.finalizarRuta(rutaId, { lat_fin: lat, lng_fin: lng });
+      await cargar();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setProcesando(false);
     }
-    await database.finalizarRuta(rutaId, { lat_fin: lat, lng_fin: lng });
-    cargar();
   }
+
+  if (!ruta && !error) return <div className="pantalla">Cargando…</div>;
+  if (!ruta) return <div className="pantalla"><p className="texto-error">{error}</p><button className="enlace-volver" onClick={() => navigate('/rutas')}>← Volver a rutas</button></div>;
+
+  const enCurso = ruta.estado === 'EN_CURSO';
 
   return (
     <div className="pantalla">
       <button className="enlace-volver" onClick={() => navigate(-1)}>← Volver</button>
-
       <header className="encabezado">
         <h1>{ruta.tipo}</h1>
         <span className={'etiqueta-seguimiento ' + (enCurso ? 'activo' : 'inactivo')}>
           {enCurso ? 'En curso' : ruta.estado}
         </span>
       </header>
+
+      {error && <p className="texto-error">{error}</p>}
 
       <section className="grid-stats">
         <StatCard etiqueta="Llevados" valor={String(ruta.paquetes_llevados)} />
@@ -64,9 +83,7 @@ export default function RutaDetalle() {
         <StatCard etiqueta="Clientes atendidos" valor={String(ruta.clientes_atendidos)} />
       </section>
 
-      {enCurso && (
-        <Link to="/venta-nueva" className="boton-primario boton-grande">➕ Registrar venta</Link>
-      )}
+      {enCurso && <Link to="/venta-nueva" className="boton-primario boton-grande">➕ Registrar venta</Link>}
 
       <section>
         <h2>Ventas de esta ruta</h2>
@@ -74,10 +91,7 @@ export default function RutaDetalle() {
         <ul className="lista-ventas">
           {ventas.map((v) => (
             <li key={v.id} className="fila-venta">
-              <div>
-                <strong>{v.producto_nombre}</strong> × {v.cantidad}
-                <div className="detalle-cliente">{v.hora}</div>
-              </div>
+              <div><strong>{v.producto_nombre}</strong> × {v.cantidad}<div className="detalle-cliente">{v.hora}</div></div>
               <span>{formatoMoneda(v.total)}</span>
             </li>
           ))}
@@ -85,8 +99,8 @@ export default function RutaDetalle() {
       </section>
 
       {enCurso && (
-        <button className="boton-peligro" onClick={finalizar}>
-          Finalizar ruta
+        <button className="boton-peligro" onClick={() => void finalizar()} disabled={procesando}>
+          {procesando ? 'Finalizando…' : 'Finalizar ruta'}
         </button>
       )}
     </div>
@@ -94,10 +108,5 @@ export default function RutaDetalle() {
 }
 
 function StatCard({ etiqueta, valor, alerta }: { etiqueta: string; valor: string; alerta?: boolean }) {
-  return (
-    <div className={'stat-card' + (alerta ? ' alerta' : '')}>
-      <span className="stat-valor">{valor}</span>
-      <span className="stat-etiqueta">{etiqueta}</span>
-    </div>
-  );
+  return <div className={'stat-card' + (alerta ? ' alerta' : '')}><span className="stat-valor">{valor}</span><span className="stat-etiqueta">{etiqueta}</span></div>;
 }

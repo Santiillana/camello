@@ -17,17 +17,24 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    database
-      .init()
-      .then(() => setListo(true))
-      .catch((e) => setError(String(e?.message ?? e)));
+    let activo = true;
+
+    database.init().then(
+      () => { if (activo) setListo(true); },
+      (e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); }
+    );
+
+    return () => { activo = false; };
   }, []);
 
   if (error) {
     return (
       <div className="pantalla-carga">
-        <p>No se pudo abrir la base de datos.</p>
+        <strong>No se pudo abrir la base de datos.</strong>
         <p className="texto-error">{error}</p>
+        <button className="boton-secundario" onClick={() => window.location.reload()}>
+          Reintentar
+        </button>
       </div>
     );
   }
@@ -35,7 +42,8 @@ export default function App() {
   if (!listo) {
     return (
       <div className="pantalla-carga">
-        <p>Cargando CAMELLO…</p>
+        <strong>Cargando CAMELLO…</strong>
+        <p>Preparando la base de datos local.</p>
       </div>
     );
   }
@@ -54,6 +62,7 @@ export default function App() {
             <Route path="/mapa" element={<Mapa />} />
             <Route path="/informes" element={<Informes />} />
             <Route path="/respaldo" element={<Respaldo />} />
+            <Route path="*" element={<Dashboard />} />
           </Routes>
         </main>
         <BottomNav />
