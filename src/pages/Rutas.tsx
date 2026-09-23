@@ -91,9 +91,14 @@ function FormIniciarRuta({ onIniciada }: { onIniciada: (id: number) => void }) {
         // seguimos sin ubicación si el usuario no da permiso o falla el GPS
       }
     }
-    const id = await database.iniciarRuta({ tipo, paquetes_llevados: paquetes, lat_inicio: lat, lng_inicio: lng });
-    setGuardando(false);
-    onIniciada(id);
+    try {
+      const id = await database.iniciarRuta({ tipo, paquetes_llevados: paquetes, lat_inicio: lat, lng_inicio: lng });
+      setGuardando(false);
+      onIniciada(id);
+    } catch (e) {
+      setGuardando(false);
+      alert(String(e instanceof Error ? e.message : e));
+    }
   }
 
   return (
