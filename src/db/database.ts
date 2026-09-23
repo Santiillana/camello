@@ -17,6 +17,7 @@ import type {
   EstadoSeguimiento,
 } from '../types';
 import { diasDesdeISO, fechaLocalISO, horaLocalHHMM } from '../utils/format';
+import { initWebSqlite } from './initWebSqlite';
 
 export const UMBRAL_POR_CONTACTAR_DIAS = 20;
 export const UMBRAL_INACTIVO_DIAS = 45;
@@ -72,11 +73,8 @@ class Database {
     this.sqlite = new SQLiteConnection(CapacitorSQLite);
 
     if (Capacitor.getPlatform() === 'web') {
-      const jeepEl = document.querySelector('jeep-sqlite');
-      if (jeepEl) {
-        await customElements.whenDefined('jeep-sqlite');
-        await this.sqlite.initWebStore();
-      }
+      await initWebSqlite();
+      await this.sqlite.initWebStore();
     }
 
     await this.abrirConexion();
