@@ -19,6 +19,37 @@ import type {
 import { diasDesdeISO, fechaLocalISO, horaLocalHHMM } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
 
+const DEFAULT_CONFIG: ConfiguracionApp = {
+  negocio_nombre: '',
+  usuario_nombre: '',
+  color_acento: '#c2642b',
+  moneda: 'COP',
+};
+
+function normalizarTelefono(valor?: string): string {
+  return (valor ?? '').replace(/\\D/g, '');
+}
+
+function validarMesDia(mes: number | undefined, dia: number | undefined, campo: string): void {
+  if (mes == null && dia == null) return;
+  if (mes == null || dia == null || !Number.isInteger(mes) || !Number.isInteger(dia)) {
+    throw new Error(`${campo}: indica día y mes válidos.`);
+  }
+  const limite = new Date(2000, mes, 0).getDate();
+  if (mes < 1 || mes > 12 || dia < 1 || dia > limite) throw new Error(`${campo}: la fecha no es válida.`);
+}
+
+function minutosEntre(horaInicio?: string, horaFin?: string): number | null {
+  if (!horaInicio || !horaFin) return null;
+  const inicioPartes = horaInicio.split(':').map(Number);
+  const finPartes = horaFin.split(':').map(Number);
+  if (![...inicioPartes, ...finPartes].every(Number.isInteger)) return null;
+  let inicio = inicioPartes[0] * 60 + inicioPartes[1];
+  let fin = finPartes[0] * 60 + finPartes[1];
+  if (fin < inicio) fin += 24 * 60;
+  return fin - inicio;
+}
+
 export const UMBRAL_POR_CONTACTAR_DIAS = 20;
 export const UMBRAL_INACTIVO_DIAS = 45;
 
@@ -78,6 +109,7 @@ class Database {
     }
 
     await this.abrirConexion();
+    await this.prepararEsquema();
     await this.seedProductosSiVacio();
     await this.persist();
   }
@@ -97,6 +129,14 @@ class Database {
     for (const stmt of SCHEMA_STATEMENTS) {
       await this.db.execute(stmt);
     }
+  }
+
+  private async prepararEsquema(): Promise<void> {
+    const columnas = await this.conn().query('PRAGMA table_info(rutas);');
+    const nombres = new Set((columnas.values ?? []).map((row) => String(row.name)));
+    if (!nombres.has('nombre')) await this.conn().execute("ALTER TABLE rutas ADD COLUMN nombre TEXT NOT NULL DEFAULT '';");
+    if (!nombres.has('fecha_planificada')) await this.conn().execute('ALTER TABLE rutas ADD COLUMN fecha_planificada TEXT;');
+    if (!nombres.has('hora_planificada')) await this.conn().execute('ALTER TABLE rutas ADD COLUMN hora_planificada TEXT;');
   }
 
   private async cerrarConexion(): Promise<void> {
@@ -136,7 +176,7 @@ class Database {
     if (n === 0) {
       await this.conn().run(
         'INSERT INTO productos (nombre, precio, costo, activo) VALUES (?, ?, ?, 1);',
-        ['Galletas naturales para mascota', 13000, 7000]
+        ['Galletas carnívoras', 13000, 7000]
       );
     }
   }
@@ -152,6 +192,8 @@ class Database {
       throw new Error('La latitud y longitud deben venir juntas.');
     }
 
+    validarMesDia(c.cumple_mes, c.cumple_dia, 'Cumpleaños');
+    await this.comprobarTelefonoDuplicado(c.telefono1);
     const fecha = c.fecha_registro ?? fechaLocalISO();
     const res = await this.conn().run(
       `INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado)
@@ -172,8 +214,62 @@ class Database {
     return Number(res.changes?.lastId ?? 0);
   }
 
+  private async comprobarTelefonoDuplicado(telefono?: string, excluirClienteId?: number): Promise<void> {
+    const normalizado = normalizarTelefono(telefono);
+    if (!normalizado) return;
+    const r = await this.conn().query("SELECT id, telefono1, telefono2 FROM clientes WHERE estado = 'activo';");
+    for (const row of r.values ?? []) {
+      const id = Number(row.id);
+      if (excluirClienteId != null && id === excluirClienteId) continue;
+      const telefono1 = normalizarTelefono(row.telefono1 ? String(row.telefono1) : undefined);
+      const telefono2 = normalizarTelefono(row.telefono2 ? String(row.telefono2) : undefined);
+      if (telefono1 === normalizado || telefono2 === normalizado) {
+        throw new Error('Ese teléfono ya está registrado en otro cliente.');
+      }
+    }
+  }
+
+  async crearClienteConMascotas(
+    c: Omit<Cliente, 'id' | 'fecha_registro' | 'estado'> & { fecha_registro?: string },
+    mascotas: Array<Omit<Mascota, 'id' | 'estado'>>,
+  ): Promise<number> {
+    const nombre = textoObligatorio(c.nombre, 'El nombre');
+    validarMesDia(c.cumple_mes, c.cumple_dia, 'Cumpleaños');
+    await this.comprobarTelefonoDuplicado(c.telefono1);
+    if (!coordenadaValida(c.lat, -90, 90) || !coordenadaValida(c.lng, -180, 180)) throw new Error('La ubicación del cliente no es válida.');
+    if ((c.lat == null) !== (c.lng == null)) throw new Error('La latitud y longitud deben venir juntas.');
+    const fecha = c.fecha_registro ?? fechaLocalISO();
+    for (const mascota of mascotas) {
+      textoObligatorio(mascota.nombre, 'El nombre de la mascota');
+      validarMesDia(mascota.cumple_mes, mascota.cumple_dia, 'Cumpleaños de la mascota');
+    }
+
+    await this.conn().execute('BEGIN TRANSACTION;');
+    try {
+      const res = await this.conn().run(
+        "INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
+        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones?.trim() || null]
+      );
+      const clienteId = Number(res.changes?.lastId ?? 0);
+      for (const mascota of mascotas) {
+        await this.conn().run(
+          "INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
+          [clienteId, mascota.nombre.trim(), mascota.cumple_dia ?? null, mascota.cumple_mes ?? null, mascota.sexo ?? null, mascota.raza?.trim() || null, mascota.tamano ?? null, mascota.preferencias?.trim() || null, mascota.observaciones?.trim() || null]
+        );
+      }
+      await this.conn().execute('COMMIT;');
+      await this.persist();
+      return clienteId;
+    } catch (error) {
+      try { await this.conn().execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      throw error;
+    }
+  }
+
   async actualizarCliente(id: number, c: Partial<Cliente>): Promise<void> {
     if (!Number.isInteger(id) || id <= 0) throw new Error('Cliente inválido.');
+    validarMesDia(c.cumple_mes, c.cumple_dia, 'Cumpleaños');
+    if (c.telefono1 !== undefined) await this.comprobarTelefonoDuplicado(c.telefono1, id);
 
     const campos = Object.keys(c).filter((k) => k !== 'id' && CAMPOS_CLIENTE_EDITABLES.has(k));
     if (campos.length === 0) return;
@@ -199,8 +295,8 @@ class Database {
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
     if (opts?.texto?.trim()) {
       const texto = opts.texto.trim();
-      cond.push('(nombre LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ?)');
-      params.push(`%${texto}%`, `%${texto}%`, `%${texto}%`);
+      cond.push(`(nombre LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ? OR id IN (SELECT cliente_id FROM mascotas WHERE estado = 'activo' AND nombre LIKE ?))`);
+      params.push(`%${texto}%`, `%${texto}%`, `%${texto}%`, `%${texto}%`);
     }
 
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
@@ -280,11 +376,73 @@ class Database {
     return (r.values ?? []) as Mascota[];
   }
 
+  async actualizarMascota(id: number, m: Partial<Mascota>): Promise<void> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error('Mascota inválida.');
+    validarMesDia(m.cumple_mes, m.cumple_dia, 'Cumpleaños de la mascota');
+    const camposPermitidos = new Set(['nombre', 'cumple_dia', 'cumple_mes', 'sexo', 'raza', 'tamano', 'preferencias', 'observaciones']);
+    const campos = Object.keys(m).filter((k) => camposPermitidos.has(k));
+    if (!campos.length) return;
+    if (m.nombre !== undefined) textoObligatorio(m.nombre, 'El nombre de la mascota');
+    const sets = campos.map((k) => `${k} = ?`).join(', ');
+    const valores = campos.map((k) => (m as Record<string, unknown>)[k] ?? null);
+    const res = await this.conn().run(`UPDATE mascotas SET ${sets} WHERE id = ? AND estado = 'activo';`, [...valores, id]);
+    if (!res.changes?.changes) throw new Error('La mascota no existe o está archivada.');
+    await this.persist();
+  }
+
+  async transferirMascota(id: number, nuevoClienteId: number): Promise<void> {
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(nuevoClienteId) || nuevoClienteId <= 0) throw new Error('Mascota o cliente inválido.');
+    const cliente = await this.conn().query("SELECT id FROM clientes WHERE id = ? AND estado = 'activo';", [nuevoClienteId]);
+    if (!cliente.values?.length) throw new Error('El nuevo dueño no existe o está archivado.');
+    const res = await this.conn().run("UPDATE mascotas SET cliente_id = ? WHERE id = ? AND estado = 'activo';", [nuevoClienteId, id]);
+    if (!res.changes?.changes) throw new Error('La mascota no existe o está archivada.');
+    await this.persist();
+  }
+
+  async archivarMascota(id: number): Promise<void> {
+    const res = await this.conn().run("UPDATE mascotas SET estado = 'archivado' WHERE id = ? AND estado = 'activo';", [id]);
+    if (!res.changes?.changes) throw new Error('La mascota no existe o ya está archivada.');
+    await this.persist();
+  }
+
+  async listarMascotasTodas(opts?: { texto?: string }): Promise<MascotaConCliente[]> {
+    let sql = "SELECT m.*, c.nombre as cliente_nombre FROM mascotas m JOIN clientes c ON c.id = m.cliente_id WHERE m.estado = 'activo' AND c.estado = 'activo'";
+    const params: unknown[] = [];
+    if (opts?.texto?.trim()) {
+      sql += ' AND (m.nombre LIKE ? OR c.nombre LIKE ?)';
+      const t = opts.texto.trim();
+      params.push(`%${t}%`, `%${t}%`);
+    }
+    sql += ' ORDER BY m.nombre ASC;';
+    const r = await this.conn().query(sql, params);
+    return (r.values ?? []) as MascotaConCliente[];
+  }
+
   // PRODUCTOS
 
-  async listarProductos(): Promise<Producto[]> {
-    const r = await this.conn().query('SELECT * FROM productos WHERE activo = 1 ORDER BY nombre;');
+  async listarProductos(opts?: { incluirInactivos?: boolean }): Promise<Producto[]> {
+    const r = await this.conn().query(opts?.incluirInactivos ? 'SELECT * FROM productos ORDER BY activo DESC, nombre;' : 'SELECT * FROM productos WHERE activo = 1 ORDER BY nombre;');
     return (r.values ?? []) as Producto[];
+  }
+
+  async actualizarProducto(id: number, p: Partial<Omit<Producto, 'id'>>): Promise<void> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error('Producto inválido.');
+    if (p.nombre !== undefined) textoObligatorio(p.nombre, 'El nombre del producto');
+    if (p.precio !== undefined) numeroNoNegativo(p.precio, 'El precio');
+    if (p.costo !== undefined) numeroNoNegativo(p.costo, 'El costo');
+    const campos = Object.keys(p).filter((k) => ['nombre', 'precio', 'costo'].includes(k));
+    if (!campos.length) return;
+    const sets = campos.map((k) => `${k} = ?`).join(', ');
+    const valores = campos.map((k) => (p as Record<string, unknown>)[k] ?? null);
+    const res = await this.conn().run(`UPDATE productos SET ${sets} WHERE id = ?;`, [...valores, id]);
+    if (!res.changes?.changes) throw new Error('El producto no existe.');
+    await this.persist();
+  }
+
+  async archivarProducto(id: number): Promise<void> {
+    const res = await this.conn().run("UPDATE productos SET activo = 0 WHERE id = ? AND activo = 1;", [id]);
+    if (!res.changes?.changes) throw new Error('El producto no existe o ya está archivado.');
+    await this.persist();
   }
 
   async crearProducto(p: Omit<Producto, 'id' | 'activo'>): Promise<number> {
@@ -302,7 +460,31 @@ class Database {
 
   // RUTAS
 
-  async iniciarRuta(r: { tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
+  async crearRuta(r: { nombre: string; tipo: Ruta['tipo']; fecha_planificada: string; hora_planificada?: string; paquetes_llevados: number; notas?: string }): Promise<number> {
+    const nombre = textoObligatorio(r.nombre, 'El nombre de la ruta');
+    const paquetes = enteroPositivo(r.paquetes_llevados, 'Los paquetes llevados');
+    if (!r.fecha_planificada) throw new Error('La fecha planificada es obligatoria.');
+    const res = await this.conn().run(
+      "INSERT INTO rutas (nombre, tipo, estado, fecha, fecha_planificada, hora_planificada, paquetes_llevados, notas) VALUES (?, ?, 'PROGRAMADA', ?, ?, ?, ?, ?);",
+      [nombre, r.tipo, r.fecha_planificada, r.fecha_planificada, r.hora_planificada || null, paquetes, r.notas?.trim() || null]
+    );
+    await this.persist();
+    return Number(res.changes?.lastId ?? 0);
+  }
+
+  async iniciarRutaProgramada(id: number, ubicacion?: { lat_inicio?: number; lng_inicio?: number }): Promise<void> {
+    if (await this.obtenerRutaActiva()) throw new Error('Ya existe una ruta en curso.');
+    if (!coordenadaValida(ubicacion?.lat_inicio, -90, 90) || !coordenadaValida(ubicacion?.lng_inicio, -180, 180)) throw new Error('La ubicación de inicio no es válida.');
+    const ahora = new Date();
+    const res = await this.conn().run(
+      "UPDATE rutas SET estado = 'EN_CURSO', fecha = ?, hora_inicio = ?, lat_inicio = ?, lng_inicio = ? WHERE id = ? AND estado = 'PROGRAMADA';",
+      [fechaLocalISO(ahora), horaLocalHHMM(ahora), ubicacion?.lat_inicio ?? null, ubicacion?.lng_inicio ?? null, id]
+    );
+    if (!res.changes?.changes) throw new Error('La ruta no existe o ya comenzó.');
+    await this.persist();
+  }
+
+  async iniciarRuta(r: { nombre?: string; tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
     const paquetes = enteroPositivo(r.paquetes_llevados, 'Los paquetes llevados');
 
     const activa = await this.obtenerRutaActiva();
@@ -314,10 +496,12 @@ class Database {
 
     const ahora = new Date();
     const res = await this.conn().run(
-      `INSERT INTO rutas (tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, notas)
-       VALUES (?, 'EN_CURSO', ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO rutas (nombre, tipo, estado, fecha, fecha_planificada, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, notas)
+       VALUES (?, ?, 'EN_CURSO', ?, ?, ?, ?, ?, ?, ?);`,
       [
+        r.nombre?.trim() || r.tipo,
         r.tipo,
+        fechaLocalISO(ahora),
         fechaLocalISO(ahora),
         horaLocalHHMM(ahora),
         r.lat_inicio ?? null,
@@ -365,22 +549,37 @@ class Database {
 
   async resumenRuta(ruta: Ruta): Promise<RutaConResumen> {
     const r = await this.conn().query(
-      `SELECT COALESCE(SUM(cantidad),0) as vendidos, COALESCE(SUM(total),0) as total_vendido,
-              COALESCE(SUM(CASE WHEN estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as total_pendiente,
-              COUNT(DISTINCT cliente_id) as clientes
-       FROM ventas WHERE ruta_id = ?;`,
+      `SELECT COALESCE(SUM(v.cantidad),0) as vendidos,
+              COALESCE(SUM(v.total),0) as total_vendido,
+              COALESCE(SUM(v.costo_aplicado * v.cantidad),0) as costos,
+              COALESCE(SUM(v.utilidad),0) as utilidad,
+              COALESCE(SUM(CASE WHEN v.estado_pago='PENDIENTE' THEN v.total ELSE 0 END),0) as total_pendiente,
+              COUNT(v.id) as numero_ventas,
+              COUNT(DISTINCT v.cliente_id) as clientes,
+              COUNT(DISTINCT CASE WHEN c.fecha_registro = r.fecha THEN c.id END) as clientes_nuevos
+       FROM ventas v
+       JOIN clientes c ON c.id = v.cliente_id
+       JOIN rutas r ON r.id = v.ruta_id
+       WHERE v.ruta_id = ?;`,
       [ruta.id]
     );
     const row = r.values?.[0] ?? {};
     const vendidos = Number(row.vendidos ?? 0);
+    const costos = Number(row.costos ?? 0);
 
     return {
       ...ruta,
       vendidos,
       disponibles: Math.max(ruta.paquetes_llevados - vendidos, 0),
+      sobrantes: Math.max(ruta.paquetes_llevados - vendidos, 0),
       total_vendido: Number(row.total_vendido ?? 0),
       total_pendiente: Number(row.total_pendiente ?? 0),
+      costos,
+      utilidad: Number(row.utilidad ?? 0),
+      numero_ventas: Number(row.numero_ventas ?? 0),
       clientes_atendidos: Number(row.clientes ?? 0),
+      clientes_nuevos: Number(row.clientes_nuevos ?? 0),
+      duracion_minutos: minutosEntre(ruta.hora_inicio, ruta.hora_fin),
     };
   }
 
@@ -469,7 +668,9 @@ class Database {
 
   async resumenPeriodo(desde: string, hasta: string): Promise<ResumenPeriodo> {
     const r = await this.conn().query(
-      `SELECT COALESCE(SUM(total),0) as ventas, COALESCE(SUM(cantidad),0) as paquetes,
+      `SELECT COALESCE(SUM(total),0) as ventas,
+              COALESCE(SUM(costo_aplicado * cantidad),0) as costos,
+              COALESCE(SUM(cantidad),0) as paquetes,
               COALESCE(SUM(utilidad),0) as utilidad,
               COALESCE(SUM(CASE WHEN estado_pago='PAGADA' THEN total ELSE 0 END),0) as pagado,
               COALESCE(SUM(CASE WHEN estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as pendiente,
@@ -487,8 +688,24 @@ class Database {
     const numero_ventas = Number(row.numero_ventas ?? 0);
     const ventas = Number(row.ventas ?? 0);
 
+    const recurrentes = await this.conn().query(
+      'SELECT COUNT(*) as n FROM (SELECT cliente_id FROM ventas WHERE fecha BETWEEN ? AND ? GROUP BY cliente_id HAVING COUNT(*) > 1);',
+      [desde, hasta]
+    );
+    const clientesActivos = await this.conn().query("SELECT COUNT(*) as n FROM clientes WHERE estado = 'activo';");
+    const clientesPorContactar = await this.conn().query(
+      'SELECT COUNT(*) as n FROM clientes WHERE estado = \'activo\' AND id IN (SELECT cliente_id FROM ventas GROUP BY cliente_id HAVING julianday(?) - julianday(MAX(fecha)) > ? AND julianday(?) - julianday(MAX(fecha)) <= ?);',
+      [fechaLocalISO(), UMBRAL_POR_CONTACTAR_DIAS, fechaLocalISO(), UMBRAL_INACTIVO_DIAS]
+    );
+    const rutasRealizadas = await this.conn().query(
+      "SELECT COUNT(*) as n FROM rutas WHERE estado = 'FINALIZADA' AND fecha BETWEEN ? AND ?;",
+      [desde, hasta]
+    );
+    const cartera = await this.conn().query("SELECT COALESCE(SUM(total),0) as n FROM ventas WHERE estado_pago = 'PENDIENTE';");
+
     return {
       ventas,
+      costos: Number(row.costos ?? 0),
       paquetes: Number(row.paquetes ?? 0),
       utilidad: Number(row.utilidad ?? 0),
       pagado: Number(row.pagado ?? 0),
@@ -496,7 +713,76 @@ class Database {
       clientes_nuevos,
       numero_ventas,
       ticket_promedio: numero_ventas > 0 ? ventas / numero_ventas : 0,
+      clientes_recurrentes: Number(recurrentes.values?.[0]?.n ?? 0),
+      rutas_realizadas: Number(rutasRealizadas.values?.[0]?.n ?? 0),
+      clientes_activos: Number(clientesActivos.values?.[0]?.n ?? 0),
+      clientes_por_contactar: Number(clientesPorContactar.values?.[0]?.n ?? 0),
+      cartera_pendiente: Number(cartera.values?.[0]?.n ?? 0),
     };
+  }
+
+  async listarCartera(): Promise<CarteraItem[]> {
+    const r = await this.conn().query(
+      `SELECT c.id as cliente_id, c.nombre, c.telefono1,
+              COALESCE(SUM(v.total),0) as pendiente,
+              COUNT(v.id) as ventas_pendientes
+       FROM clientes c
+       JOIN ventas v ON v.cliente_id = c.id AND v.estado_pago = 'PENDIENTE'
+       WHERE c.estado = 'activo'
+       GROUP BY c.id, c.nombre, c.telefono1
+       ORDER BY pendiente DESC, c.nombre ASC;`
+    );
+    return (r.values ?? []).map((row) => ({
+      cliente_id: Number(row.cliente_id),
+      nombre: String(row.nombre),
+      telefono1: row.telefono1 ? String(row.telefono1) : undefined,
+      pendiente: Number(row.pendiente ?? 0),
+      ventas_pendientes: Number(row.ventas_pendientes ?? 0),
+    }));
+  }
+
+  async obtenerConfiguracion(): Promise<ConfiguracionApp> {
+    const r = await this.conn().query('SELECT clave, valor FROM configuracion_app;');
+    const valores = new Map((r.values ?? []).map((row) => [String(row.clave), String(row.valor)]));
+    return {
+      negocio_nombre: valores.get('negocio_nombre') ?? DEFAULT_CONFIG.negocio_nombre,
+      usuario_nombre: valores.get('usuario_nombre') ?? DEFAULT_CONFIG.usuario_nombre,
+      color_acento: valores.get('color_acento') ?? DEFAULT_CONFIG.color_acento,
+      moneda: 'COP',
+    };
+  }
+
+  async guardarConfiguracion(config: Partial<ConfiguracionApp>): Promise<void> {
+    for (const [clave, valor] of Object.entries(config)) {
+      if (valor === undefined || clave === 'moneda') continue;
+      await this.conn().run(
+        'INSERT INTO configuracion_app (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor;',
+        [clave, String(valor)]
+      );
+    }
+    await this.persist();
+  }
+
+  async guardarConfiguracionInicial(
+    config: Pick<ConfiguracionApp, 'negocio_nombre' | 'usuario_nombre' | 'color_acento'>,
+    producto: { nombre: string; precio: number; costo: number },
+  ): Promise<void> {
+    textoObligatorio(config.negocio_nombre, 'El nombre del negocio');
+    textoObligatorio(config.usuario_nombre, 'El nombre del usuario');
+    textoObligatorio(producto.nombre, 'El nombre del producto');
+    numeroNoNegativo(producto.precio, 'El precio');
+    numeroNoNegativo(producto.costo, 'El costo');
+    await this.guardarConfiguracion(config);
+    const productos = await this.listarProductos({ incluirInactivos: true });
+    if (productos[0]) {
+      await this.actualizarProducto(productos[0].id, producto);
+      if (productos[0].activo !== 1) {
+        await this.conn().run('UPDATE productos SET activo = 1 WHERE id = ?;', [productos[0].id]);
+        await this.persist();
+      }
+    } else {
+      await this.crearProducto(producto);
+    }
   }
 
   async resumenHoy(): Promise<ResumenPeriodo> {
