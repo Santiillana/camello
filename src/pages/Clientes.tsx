@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import ClienteForm from '../components/ClienteForm';
 import { database } from '../db/database';
 import type { ClienteConResumen } from '../types';
 import { formatoMoneda } from '../utils/format';
@@ -46,12 +47,14 @@ export default function Clientes() {
       {error && <p className="texto-error">{error}</p>}
 
       {mostrarForm && (
-        <FormNuevoCliente
-          onCreado={(id) => {
+        <ClienteForm
+          textoBoton="Guardar cliente"
+          onGuardado={(id) => {
             setMostrarForm(false);
             void cargar();
             navigate(`/clientes/${id}`);
           }}
+          onCancelar={() => setMostrarForm(false)}
         />
       )}
 
@@ -88,43 +91,3 @@ export default function Clientes() {
   );
 }
 
-function FormNuevoCliente({ onCreado }: { onCreado: (id: number) => void }) {
-  const [nombre, setNombre] = useState('');
-  const [telefono1, setTelefono1] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
-    setGuardando(true);
-    setError(null);
-    try {
-      const id = await database.crearCliente({
-        nombre: nombre.trim(),
-        telefono1: telefono1.trim() || undefined,
-      });
-      onCreado(id);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  return (
-    <form className="formulario-tarjeta" onSubmit={guardar}>
-      <label>
-        Nombre completo
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus required />
-      </label>
-      <label>
-        Teléfono
-        <input value={telefono1} onChange={(e) => setTelefono1(e.target.value)} inputMode="tel" />
-      </label>
-      {error && <p className="texto-error">{error}</p>}
-      <button type="submit" className="boton-primario" disabled={guardando || !nombre.trim()}>
-        {guardando ? 'Guardando…' : 'Guardar cliente'}
-      </button>
-    </form>
-  );
-}
