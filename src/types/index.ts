@@ -10,6 +10,25 @@ export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
 export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
 
+export interface ConfiguracionApp {
+  negocio_nombre: string;
+  usuario_nombre: string;
+  color_acento: string;
+  moneda: 'COP';
+}
+
+export interface CarteraItem {
+  cliente_id: number;
+  nombre: string;
+  telefono1?: string;
+  pendiente: number;
+  ventas_pendientes: number;
+}
+
+export interface MascotaConCliente extends Mascota {
+  cliente_nombre: string;
+}
+
 export interface Cliente {
   id: number;
   nombre: string;
@@ -48,9 +67,12 @@ export interface Producto {
 
 export interface Ruta {
   id: number;
+  nombre: string;
   tipo: TipoRuta;
   estado: EstadoRuta;
   fecha: string;
+  fecha_planificada?: string;
+  hora_planificada?: string;
   hora_inicio?: string;
   hora_fin?: string;
   lat_inicio?: number;
@@ -90,6 +112,12 @@ export interface ClienteConResumen extends Cliente {
 export interface RutaConResumen extends Ruta {
   vendidos: number;
   disponibles: number;
+  sobrantes: number;
+  costos: number;
+  utilidad: number;
+  numero_ventas: number;
+  clientes_nuevos: number;
+  duracion_minutos?: number | null;
   total_vendido: number;
   total_pendiente: number;
   clientes_atendidos: number;
@@ -97,6 +125,7 @@ export interface RutaConResumen extends Ruta {
 
 export interface ResumenPeriodo {
   ventas: number;
+  costos: number;
   paquetes: number;
   utilidad: number;
   pagado: number;
@@ -105,4 +134,8 @@ export interface ResumenPeriodo {
   clientes_recurrentes?: number;
   numero_ventas?: number;
   ticket_promedio?: number;
+  rutas_realizadas?: number;
+  clientes_activos?: number;
+  clientes_por_contactar?: number;
+  cartera_pendiente?: number;
 }

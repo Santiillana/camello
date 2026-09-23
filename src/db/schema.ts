@@ -46,9 +46,12 @@ export const SCHEMA_STATEMENTS: string[] = [
 
   `CREATE TABLE IF NOT EXISTS rutas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL DEFAULT '',
     tipo TEXT NOT NULL,
     estado TEXT NOT NULL DEFAULT 'PROGRAMADA',
     fecha TEXT NOT NULL,
+    fecha_planificada TEXT,
+    hora_planificada TEXT,
     hora_inicio TEXT,
     hora_fin TEXT,
     lat_inicio REAL,
