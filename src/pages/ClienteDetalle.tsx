@@ -103,12 +103,24 @@ export default function ClienteDetalle() {
               </div>
               <div className="lado-derecho-cliente">
                 <span>{formatoMoneda(v.total)}</span>
-                {v.estado_pago === 'PENDIENTE' ? (
-                  <button className="boton-chip" onClick={async () => { await database.marcarVentaPagada(v.id); cargar(); }}>
-                    Marcar pagada
-                  </button>
+                {v.anulada ? (
+                  <span className="etiqueta-anulada">Anulada</span>
+                ) : v.estado_pago === 'PENDIENTE' ? (
+                  <div className="acciones-venta">
+                    <button className="boton-chip" onClick={async () => { try { await database.marcarVentaPagada(v.id); await cargar(); } catch (e) { alert(String((e as Error)?.message ?? e)); } }}>
+                      Marcar pagada
+                    </button>
+                    <button className="boton-chip peligro" onClick={async () => { if (confirm('¿Anular esta venta? No se borrará del historial.')) { try { await database.anularVenta(v.id); await cargar(); } catch (e) { alert(String((e as Error)?.message ?? e)); } } }}>
+                      Anular
+                    </button>
+                  </div>
                 ) : (
-                  <span className="etiqueta-pagada">Pagada</span>
+                  <div className="acciones-venta">
+                    <span className="etiqueta-pagada">Pagada</span>
+                    <button className="boton-chip peligro" onClick={async () => { if (confirm('¿Anular esta venta? No se borrará del historial.')) { try { await database.anularVenta(v.id); await cargar(); } catch (e) { alert(String((e as Error)?.message ?? e)); } } }}>
+                      Anular
+                    </button>
+                  </div>
                 )}
               </div>
             </li>
