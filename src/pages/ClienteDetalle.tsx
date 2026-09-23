@@ -264,14 +264,17 @@ export default function ClienteDetalle() {
         </div>
 
         <div className="grid-stats">
-          <div className="stat-card">
-            <span className="stat-valor">{formatoMoneda(cliente.total_comprado)}</span>
-            <span className="stat-etiqueta">Total comprado</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-valor">{formatoMoneda(cliente.pendiente)}</span>
-            <span className="stat-etiqueta">Pendiente</span>
-          </div>
+          <div className="stat-card"><span className="stat-valor">{formatoMoneda(cliente.total_comprado)}</span><span className="stat-etiqueta">Total comprado</span></div>
+          <div className="stat-card"><span className="stat-valor">{formatoMoneda(cliente.total_pagado)}</span><span className="stat-etiqueta">Total pagado</span></div>
+          <div className="stat-card"><span className="stat-valor">{String(cliente.paquetes_comprados)}</span><span className="stat-etiqueta">Paquetes</span></div>
+          <div className="stat-card"><span className="stat-valor">{String(cliente.numero_compras)}</span><span className="stat-etiqueta">Compras</span></div>
+          <div className="stat-card"><span className="stat-valor">{formatoMoneda(cliente.ticket_promedio)}</span><span className="stat-etiqueta">Ticket promedio</span></div>
+          <div className="stat-card"><span className="stat-valor">{cliente.dias_desde_ultima_compra == null ? '—' : cliente.dias_desde_ultima_compra + ' d'}</span><span className="stat-etiqueta">Desde última compra</span></div>
+        </div>
+        <div className="lista-resumen">
+          <div><span>Primera compra</span><strong>{cliente.primera_compra ? formatoFecha(cliente.primera_compra) : '—'}</strong></div>
+          <div><span>Última compra</span><strong>{cliente.ultima_compra ? formatoFecha(cliente.ultima_compra) : '—'}</strong></div>
+          <div><span>Ventas pendientes</span><strong>{cliente.ventas_pendientes}</strong></div>
         </div>
       </section>
 

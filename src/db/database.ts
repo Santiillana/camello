@@ -320,22 +320,38 @@ class Database {
     const [mascotas, r] = await Promise.all([
       this.listarMascotasPorCliente(c.id),
       this.conn().query(
-        `SELECT MAX(fecha) as ultima, COALESCE(SUM(total),0) as total,
-                COALESCE(SUM(CASE WHEN estado_pago = 'PENDIENTE' THEN total ELSE 0 END),0) as pendiente
+        `SELECT MIN(fecha) as primera,
+                MAX(fecha) as ultima,
+                COALESCE(SUM(total),0) as total,
+                COALESCE(SUM(CASE WHEN estado_pago = 'PAGADA' THEN total ELSE 0 END),0) as pagado,
+                COALESCE(SUM(CASE WHEN estado_pago = 'PENDIENTE' THEN total ELSE 0 END),0) as pendiente,
+                COALESCE(SUM(cantidad),0) as paquetes,
+                COUNT(*) as compras,
+                COUNT(CASE WHEN estado_pago = 'PENDIENTE' THEN 1 END) as ventas_pendientes
          FROM ventas WHERE cliente_id = ?;`,
         [c.id]
       ),
     ]);
 
     const row = r.values?.[0] ?? {};
+    const primera_compra = row.primera ?? null;
     const ultima_compra = row.ultima ?? null;
+    const numero_compras = Number(row.compras ?? 0);
+    const total_comprado = Number(row.total ?? 0);
 
     return {
       ...c,
       mascotas,
+      primera_compra,
       ultima_compra,
-      total_comprado: Number(row.total ?? 0),
+      dias_desde_ultima_compra: ultima_compra ? diasDesdeISO(ultima_compra) : undefined,
+      total_comprado,
+      total_pagado: Number(row.pagado ?? 0),
       pendiente: Number(row.pendiente ?? 0),
+      paquetes_comprados: Number(row.paquetes ?? 0),
+      numero_compras,
+      ventas_pendientes: Number(row.ventas_pendientes ?? 0),
+      ticket_promedio: numero_compras > 0 ? total_comprado / numero_compras : 0,
       seguimiento: this.calcularSeguimiento(ultima_compra),
     };
   }

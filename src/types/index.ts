@@ -103,9 +103,16 @@ export interface Venta {
 
 export interface ClienteConResumen extends Cliente {
   mascotas: Mascota[];
+  primera_compra?: string | null;
   ultima_compra?: string | null;
+  dias_desde_ultima_compra?: number;
   total_comprado: number;
+  total_pagado: number;
   pendiente: number;
+  paquetes_comprados: number;
+  numero_compras: number;
+  ventas_pendientes: number;
+  ticket_promedio: number;
   seguimiento: EstadoSeguimiento;
 }
 
