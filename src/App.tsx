@@ -11,6 +11,7 @@ import RutaDetalle from './pages/RutaDetalle';
 import Mapa from './pages/Mapa';
 import Informes from './pages/Informes';
 import Respaldo from './pages/Respaldo';
+import Productos from './pages/Productos';
 
 export default function App() {
   const [listo, setListo] = useState(false);
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="/mapa" element={<Mapa />} />
             <Route path="/informes" element={<Informes />} />
             <Route path="/respaldo" element={<Respaldo />} />
+            <Route path="/productos" element={<Productos />} />
           </Routes>
         </main>
         <BottomNav />

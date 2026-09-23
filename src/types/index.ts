@@ -22,6 +22,7 @@ export interface Cliente {
   lng?: number;
   observaciones?: string;
   estado: EstadoCliente;
+  ultimo_contacto?: string | null;
 }
 
 export interface Mascota {
@@ -75,6 +76,7 @@ export interface Venta {
   hora: string;  // HH:MM
   estado_pago: EstadoPago;
   fecha_pago?: string | null;
+  anulada: 0 | 1;
 }
 
 // Vistas compuestas usadas en la UI (no son tablas)
@@ -102,7 +104,7 @@ export interface ResumenPeriodo {
   pagado: number;
   pendiente: number;
   clientes_nuevos: number;
-  clientes_recurrentes?: number;
-  numero_ventas?: number;
-  ticket_promedio?: number;
+  clientes_recurrentes: number;
+  numero_ventas: number;
+  ticket_promedio: number;
 }

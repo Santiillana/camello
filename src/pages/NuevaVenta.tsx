@@ -22,6 +22,7 @@ export default function NuevaVenta() {
   const [pagada, setPagada] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [confirmacion, setConfirmacion] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     database.listarClientes({ soloActivos: true }).then(setClientes);
@@ -46,14 +47,23 @@ export default function NuevaVenta() {
   }
 
   const clientesFiltrados = busquedaCliente
-    ? clientes.filter((c) => c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase()))
+    ? clientes.filter((c) => {
+        const q = busquedaCliente.toLowerCase();
+        return c.nombre.toLowerCase().includes(q)
+          || (c.telefono1 ?? '').includes(busquedaCliente)
+          || (c.telefono2 ?? '').includes(busquedaCliente)
+          || c.mascotas.some((m) => m.nombre.toLowerCase().includes(q));
+      })
     : clientes;
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     if (!clienteId || !productoId) return;
     setGuardando(true);
-    const producto = productos.find((p) => p.id === productoId)!;
+    setError(null);
+    const producto = productos.find((p) => p.id === productoId);
+    if (!producto) { setError('Selecciona un producto válido.'); setGuardando(false); return; }
+    try {
     await database.registrarVenta({
       cliente_id: Number(clienteId),
       ruta_id: rutaActiva?.id ?? null,
@@ -63,12 +73,16 @@ export default function NuevaVenta() {
       costo_aplicado: costo,
       estado_pago: pagada ? 'PAGADA' : 'PENDIENTE',
     });
-    setGuardando(false);
     setConfirmacion(`✓ Venta registrada por ${formatoMoneda(precio * cantidad)}`);
+    setGuardando(false);
     setTimeout(() => {
       if (rutaActiva) navigate(`/rutas/${rutaActiva.id}`);
       else navigate(`/clientes/${clienteId}`);
     }, 900);
+    } catch (e) {
+      setGuardando(false);
+      setError(String((e as Error)?.message ?? e));
+    }
   }
 
   return (
@@ -79,6 +93,7 @@ export default function NuevaVenta() {
 
       {rutaActiva && <p className="banner-info">🧭 Se asociará a la ruta en curso</p>}
       {confirmacion && <p className="banner-exito">{confirmacion}</p>}
+      {error && <p className="banner-error">{error}</p>}
 
       <form className="formulario" onSubmit={guardar}>
         <label>

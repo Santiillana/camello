@@ -4,7 +4,9 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello.db';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
+
+export const MIGRACIONES = [{ version: 2, columns: [{ table: 'clientes', column: 'ultimo_contacto', sql: 'ALTER TABLE clientes ADD COLUMN ultimo_contacto TEXT;' }, { table: 'ventas', column: 'anulada', sql: 'ALTER TABLE ventas ADD COLUMN anulada INTEGER NOT NULL DEFAULT 0;' }] }];
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -18,7 +20,8 @@ export const SCHEMA_STATEMENTS: string[] = [
     lat REAL,
     lng REAL,
     observaciones TEXT,
-    estado TEXT NOT NULL DEFAULT 'activo'
+    estado TEXT NOT NULL DEFAULT 'activo',
+    ultimo_contacto TEXT
   );`,
 
   `CREATE TABLE IF NOT EXISTS mascotas (
@@ -73,6 +76,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     hora TEXT NOT NULL,
     estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE',
     fecha_pago TEXT,
+    anulada INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (ruta_id) REFERENCES rutas(id)
   );`,
@@ -80,6 +84,11 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);`,
   `CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);`,
+  `CREATE INDEX IF NOT EXISTS idx_ventas_cliente_fecha ON ventas(cliente_id, fecha DESC);`,
+  `CREATE INDEX IF NOT EXISTS idx_ventas_ruta_anulada ON ventas(ruta_id, anulada);`,
+  `CREATE INDEX IF NOT EXISTS idx_ventas_anulada_fecha ON ventas(anulada, fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);`,
+  `CREATE INDEX IF NOT EXISTS idx_clientes_telefono1 ON clientes(telefono1);`,
+  `CREATE INDEX IF NOT EXISTS idx_clientes_telefono2 ON clientes(telefono2);`
 ];
