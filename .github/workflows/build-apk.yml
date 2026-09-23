@@ -39,7 +39,7 @@ jobs:
 
       - name: Compilar APK debug
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: bash ./gradlew assembleDebug --no-daemon
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
