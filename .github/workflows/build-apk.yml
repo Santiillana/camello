@@ -44,6 +44,9 @@ jobs:
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
           accept-android-sdk-licenses: "true"
 
+      - name: Dar permiso de ejecución a Gradle
+        run: chmod +x android/gradlew
+
       - name: Compilar APK debug
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
