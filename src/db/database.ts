@@ -6,6 +6,8 @@ import {
 } from '@capacitor-community/sqlite';
 import { DB_NAME, DB_VERSION, SCHEMA_STATEMENTS } from './schema';
 import type {
+  CarteraItem,
+  ConfiguracionApp,
   Cliente,
   Mascota,
   Producto,
@@ -27,7 +29,7 @@ const DEFAULT_CONFIG: ConfiguracionApp = {
 };
 
 function normalizarTelefono(valor?: string): string {
-  return (valor ?? '').replace(/\\D/g, '');
+  return (valor ?? '').replace(/\D/g, '');
 }
 
 function validarMesDia(mes: number | undefined, dia: number | undefined, campo: string): void {
