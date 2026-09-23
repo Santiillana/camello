@@ -9,6 +9,7 @@ import type {
   CarteraItem,
   ConfiguracionApp,
   Cliente,
+  MascotaConCliente,
   Mascota,
   Producto,
   Ruta,
