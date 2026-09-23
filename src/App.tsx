@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { database } from './db/database';
 import BottomNav from './components/BottomNav';
+import ConfiguracionInicial from './pages/ConfiguracionInicial';
+import Configuracion from './pages/Configuracion';
 import Dashboard from './pages/Dashboard';
 import Clientes from './pages/Clientes';
 import ClienteDetalle from './pages/ClienteDetalle';
@@ -10,7 +12,11 @@ import Rutas from './pages/Rutas';
 import RutaDetalle from './pages/RutaDetalle';
 import Mapa from './pages/Mapa';
 import Informes from './pages/Informes';
+import Cartera from './pages/Cartera';
 import Respaldo from './pages/Respaldo';
+import Recordatorios from './pages/Recordatorios';
+import { aplicarTema } from './utils/theme';
+import type { ConfiguracionApp } from './types';
 
 const DB_INIT_TIMEOUT_MS = 15_000;
 
@@ -31,15 +37,23 @@ function inicializarBaseDeDatosConTimeout(): Promise<void> {
 
 export default function App() {
   const [listo, setListo] = useState(false);
+  const [config, setConfig] = useState<ConfiguracionApp | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let activo = true;
 
-    inicializarBaseDeDatosConTimeout().then(
-      () => { if (activo) setListo(true); },
-      (e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); }
-    );
+    inicializarBaseDeDatosConTimeout()
+      .then(() => database.obtenerConfiguracion())
+      .then((resultado) => {
+        if (!activo) return;
+        setConfig(resultado);
+        aplicarTema(resultado.color_acento);
+        setListo(true);
+      })
+      .catch((e: unknown) => {
+        if (activo) setError(e instanceof Error ? e.message : String(e));
+      });
 
     return () => { activo = false; };
   }, []);
@@ -56,7 +70,7 @@ export default function App() {
     );
   }
 
-  if (!listo) {
+  if (!listo || !config) {
     return (
       <div className="pantalla-carga">
         <strong>Cargando CAMELLO…</strong>
@@ -65,12 +79,23 @@ export default function App() {
     );
   }
 
+  if (!config.negocio_nombre || !config.usuario_nombre) {
+    return (
+      <ConfiguracionInicial
+        onCompletada={(resultado) => {
+          setConfig(resultado);
+          aplicarTema(resultado.color_acento);
+        }}
+      />
+    );
+  }
+
   return (
     <HashRouter>
       <div className="app-shell">
         <main className="app-contenido">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard config={config} />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalle />} />
             <Route path="/venta-nueva" element={<NuevaVenta />} />
@@ -78,8 +103,14 @@ export default function App() {
             <Route path="/rutas/:id" element={<RutaDetalle />} />
             <Route path="/mapa" element={<Mapa />} />
             <Route path="/informes" element={<Informes />} />
+            <Route path="/cartera" element={<Cartera />} />
+            <Route path="/recordatorios" element={<Recordatorios />} />
+            <Route path="/configuracion" element={<Configuracion onConfigChanged={(resultado) => {
+              setConfig(resultado);
+              aplicarTema(resultado.color_acento);
+            }} />} />
             <Route path="/respaldo" element={<Respaldo />} />
-            <Route path="*" element={<Dashboard />} />
+            <Route path="*" element={<Dashboard config={config} />} />
           </Routes>
         </main>
         <BottomNav />
