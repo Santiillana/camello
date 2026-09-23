@@ -46,6 +46,7 @@ export default function Dashboard() {
         <Link to="/clientes" className="acceso-boton">📇 Clientes</Link>
         <Link to="/mapa" className="acceso-boton">📍 Mapa</Link>
         <Link to="/informes" className="acceso-boton">📊 Informes</Link>
+        <Link to="/productos" className="acceso-boton">🏷️ Productos</Link>
         <Link to="/respaldo" className="acceso-boton">💾 Respaldo</Link>
       </section>
     </div>
