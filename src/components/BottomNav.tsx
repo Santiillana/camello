@@ -5,7 +5,7 @@ const ITEMS = [
   { to: '/clientes', label: 'Clientes', icon: '👤' },
   { to: '/venta-nueva', label: 'Vender', icon: '➕', destacado: true },
   { to: '/rutas', label: 'Rutas', icon: '🧭' },
-  { to: '/mapa', label: 'Mapa', icon: '📍' },
+  { to: '/cartera', label: 'Cartera', icon: '💰' },
 ];
 
 export default function BottomNav() {
