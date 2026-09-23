@@ -40,8 +40,12 @@ export default function RutaDetalle() {
         // sin ubicación de cierre si no hay permiso/señal
       }
     }
-    await database.finalizarRuta(rutaId, { lat_fin: lat, lng_fin: lng });
-    cargar();
+    try {
+      await database.finalizarRuta(rutaId, { lat_fin: lat, lng_fin: lng });
+      await cargar();
+    } catch (e) {
+      alert(String((e as Error)?.message ?? e));
+    }
   }
 
   return (
@@ -85,9 +89,14 @@ export default function RutaDetalle() {
       </section>
 
       {enCurso && (
-        <button className="boton-peligro" onClick={finalizar}>
-          Finalizar ruta
-        </button>
+        <div className="fila-botones">
+          <button className="boton-secundario" onClick={async () => {
+            if (!confirm('¿Cancelar esta ruta? Las ventas ya registradas no se borrarán.')) return;
+            try { await database.cancelarRuta(rutaId); await cargar(); }
+            catch (e) { alert(String((e as Error)?.message ?? e)); }
+          }}>Cancelar ruta</button>
+          <button className="boton-peligro" onClick={finalizar}>Finalizar ruta</button>
+        </div>
       )}
     </div>
   );
