@@ -316,6 +316,11 @@ class Database {
     if (!Number.isFinite(v.costo_aplicado) || v.costo_aplicado < 0) {
       throw new Error('El costo aplicado no es válido.');
     }
+    if (!v.producto_nombre.trim()) throw new Error('El producto de la venta es obligatorio.');
+
+    const cliente = await this.conn().query('SELECT estado FROM clientes WHERE id = ?;', [v.cliente_id]);
+    if (!cliente.values?.[0]) throw new Error('El cliente seleccionado no existe.');
+    if (cliente.values[0].estado !== 'activo') throw new Error('No puedes registrar ventas para un cliente archivado.');
 
     if (v.ruta_id != null) {
       const ruta = await this.conn().query('SELECT estado, paquetes_llevados FROM rutas WHERE id = ?;', [v.ruta_id]);
