@@ -54,6 +54,10 @@ class Database {
 
     await this.db.open();
 
+    // SQLite no aplica FOREIGN KEY por defecto en todas las plataformas.
+    // Activarlo evita ventas/mascotas huérfanas y hace cumplir las relaciones del modelo.
+    await this.db.execute('PRAGMA foreign_keys = ON;');
+
     for (const stmt of SCHEMA_STATEMENTS) {
       await this.db.execute(stmt);
     }
@@ -93,21 +97,30 @@ class Database {
   // ---------------------------------------------------------------------
 
   async crearCliente(c: Omit<Cliente, 'id' | 'fecha_registro' | 'estado'> & { fecha_registro?: string }): Promise<number> {
+    const nombre = c.nombre.trim();
+    if (!nombre) throw new Error('El nombre del cliente es obligatorio.');
     const fecha = c.fecha_registro ?? new Date().toISOString().slice(0, 10);
     const res = await this.conn().run(
       `INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
-      [c.nombre, c.telefono1 ?? null, c.telefono2 ?? null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones ?? null]
+      [nombre, c.telefono1?.trim() || null, c.telefono2 ?? null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones ?? null]
     );
     await this.persist();
     return res.changes?.lastId ?? 0;
   }
 
   async actualizarCliente(id: number, c: Partial<Cliente>): Promise<void> {
-    const campos = Object.keys(c).filter((k) => k !== 'id');
+    const permitidos = new Set(['nombre', 'telefono1', 'telefono2', 'cumple_dia', 'cumple_mes', 'fecha_registro', 'lat', 'lng', 'observaciones', 'estado']);
+    const campos = Object.keys(c).filter((k) => permitidos.has(k));
     if (campos.length === 0) return;
     const sets = campos.map((k) => `${k} = ?`).join(', ');
-    const valores = campos.map((k) => (c as Record<string, unknown>)[k] ?? null);
+    const valores = campos.map((k) => {
+      const value = (c as Record<string, unknown>)[k];
+      return typeof value === 'string' ? (value.trim() || null) : (value ?? null);
+    });
+    if (campos.includes('nombre') && !String((c as Record<string, unknown>).nombre ?? '').trim()) {
+      throw new Error('El nombre del cliente es obligatorio.');
+    }
     await this.conn().run(`UPDATE clientes SET ${sets} WHERE id = ?;`, [...valores, id]);
     await this.persist();
   }
@@ -123,8 +136,8 @@ class Database {
     const params: unknown[] = [];
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
     if (opts?.texto) {
-      cond.push('(nombre LIKE ? OR telefono1 LIKE ?)');
-      params.push(`%${opts.texto}%`, `%${opts.texto}%`);
+      cond.push('(nombre LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ?)');
+      params.push(`%${opts.texto}%`, `%${opts.texto}%`, `%${opts.texto}%`);
     }
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
     sql += ' ORDER BY nombre ASC;';
@@ -173,10 +186,12 @@ class Database {
   // ---------------------------------------------------------------------
 
   async crearMascota(m: Omit<Mascota, 'id' | 'estado'>): Promise<number> {
+    if (!Number.isInteger(m.cliente_id) || m.cliente_id < 1) throw new Error('El cliente de la mascota no es válido.');
+    if (!m.nombre.trim()) throw new Error('El nombre de la mascota es obligatorio.');
     const res = await this.conn().run(
       `INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
-      [m.cliente_id, m.nombre, m.cumple_dia ?? null, m.cumple_mes ?? null, m.sexo ?? null, m.raza ?? null, m.tamano ?? null, m.preferencias ?? null, m.observaciones ?? null]
+      [m.cliente_id, m.nombre.trim(), m.cumple_dia ?? null, m.cumple_mes ?? null, m.sexo ?? null, m.raza ?? null, m.tamano ?? null, m.preferencias ?? null, m.observaciones ?? null]
     );
     await this.persist();
     return res.changes?.lastId ?? 0;
@@ -227,16 +242,24 @@ class Database {
   }
 
   async finalizarRuta(id: number, fin?: { lat_fin?: number; lng_fin?: number }): Promise<void> {
+    const actual = await this.conn().query('SELECT estado FROM rutas WHERE id = ?;', [id]);
+    const estado = actual.values?.[0]?.estado;
+    if (!estado) throw new Error('La ruta no existe.');
+    if (estado !== 'EN_CURSO') throw new Error('Solo puedes finalizar una ruta que está en curso.');
     const ahora = new Date();
     await this.conn().run(
-      `UPDATE rutas SET estado = 'FINALIZADA', hora_fin = ?, lat_fin = ?, lng_fin = ? WHERE id = ?;`,
+      `UPDATE rutas SET estado = 'FINALIZADA', hora_fin = ?, lat_fin = ?, lng_fin = ? WHERE id = ? AND estado = 'EN_CURSO';`,
       [ahora.toTimeString().slice(0, 5), fin?.lat_fin ?? null, fin?.lng_fin ?? null, id]
     );
     await this.persist();
   }
 
   async cancelarRuta(id: number): Promise<void> {
-    await this.conn().run(`UPDATE rutas SET estado = 'CANCELADA' WHERE id = ?;`, [id]);
+    const actual = await this.conn().query('SELECT estado FROM rutas WHERE id = ?;', [id]);
+    const estado = actual.values?.[0]?.estado;
+    if (!estado) throw new Error('La ruta no existe.');
+    if (estado !== 'EN_CURSO' && estado !== 'PROGRAMADA') throw new Error('Esta ruta ya terminó y no se puede cancelar.');
+    await this.conn().run(`UPDATE rutas SET estado = 'CANCELADA' WHERE id = ? AND estado IN ('EN_CURSO','PROGRAMADA');`, [id]);
     await this.persist();
   }
 
@@ -337,7 +360,10 @@ class Database {
   }
 
   async marcarVentaPagada(id: number): Promise<void> {
-    await this.conn().run(`UPDATE ventas SET estado_pago = 'PAGADA', fecha_pago = ? WHERE id = ?;`, [new Date().toISOString().slice(0, 10), id]);
+    const actual = await this.conn().query('SELECT estado_pago FROM ventas WHERE id = ?;', [id]);
+    if (!actual.values?.[0]) throw new Error('La venta no existe.');
+    if (actual.values[0].estado_pago === 'PAGADA') return;
+    await this.conn().run(`UPDATE ventas SET estado_pago = 'PAGADA', fecha_pago = ? WHERE id = ? AND estado_pago = 'PENDIENTE';`, [new Date().toISOString().slice(0, 10), id]);
     await this.persist();
   }
 
