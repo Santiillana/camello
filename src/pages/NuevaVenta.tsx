@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { database } from '../db/database';
 import type { ClienteConResumen, Producto, Ruta } from '../types';
 import { formatoMoneda } from '../utils/format';
+import ClienteForm from '../components/ClienteForm';
 
 export default function NuevaVenta() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function NuevaVenta() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmacion, setConfirmacion] = useState<string | null>(null);
+  const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -50,7 +52,7 @@ export default function NuevaVenta() {
   }
 
   const clientesFiltrados = busquedaCliente
-    ? clientes.filter((c) => c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase()))
+    ? clientes.filter((c) => c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase()) || c.mascotas.some((m) => m.nombre.toLowerCase().includes(busquedaCliente.toLowerCase())))
     : clientes;
 
   async function guardar(e: React.FormEvent) {
@@ -99,6 +101,25 @@ export default function NuevaVenta() {
       </header>
 
       {rutaActiva && <p className="banner-info">🧭 Se asociará a la ruta en curso</p>}
+      {mostrarNuevoCliente && (
+        <section className="tarjeta">
+          <div className="fila-titulo-boton">
+            <h2>Nuevo cliente</h2>
+            <button type="button" className="boton-texto" onClick={() => setMostrarNuevoCliente(false)}>Cerrar</button>
+          </div>
+          <ClienteForm
+            textoBoton="Guardar y seleccionar"
+            onGuardado={async (id) => {
+              const nuevos = await database.listarClientes({ soloActivos: true });
+              setClientes(nuevos);
+              setClienteId(id);
+              setBusquedaCliente('');
+              setMostrarNuevoCliente(false);
+            }}
+            onCancelar={() => setMostrarNuevoCliente(false)}
+          />
+        </section>
+      )}
       {confirmacion && <p className="banner-exito">{confirmacion}</p>}
       {error && <p className="texto-error">{error}</p>}
       {productos.length === 0 && <p className="texto-vacio">No hay productos activos registrados.</p>}
@@ -107,7 +128,14 @@ export default function NuevaVenta() {
         <label>
           Cliente
           {!clienteId && (
-            <input placeholder="Buscar cliente…" value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} />
+            <>
+              <input placeholder="Buscar cliente o mascota…" value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} />
+              {clientesFiltrados.length === 0 && (
+                <button type="button" className="boton-secundario" onClick={() => setMostrarNuevoCliente(true)}>
+                  + Crear cliente
+                </button>
+              )}
+            </>
           )}
           <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')} required>
             <option value="" disabled>Selecciona un cliente…</option>
