@@ -18,8 +18,11 @@ export async function initWebSqlite(): Promise<void> {
 
   if (!jeepEl) {
     jeepEl = document.createElement('jeep-sqlite') as HTMLElement & { wasmPath?: string };
-    document.body.appendChild(jeepEl);
   }
 
   jeepEl.wasmPath = base + 'assets';
+
+  if (!jeepEl.isConnected) {
+    document.body.appendChild(jeepEl);
+  }
 }

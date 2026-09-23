@@ -46,7 +46,7 @@ export default function ClienteDetalle() {
         )}
         <p>🧾 Total comprado: {formatoMoneda(cliente.total_comprado)}</p>
         {cliente.pendiente > 0 && <p className="texto-alerta">⚠️ Pendiente por cobrar: {formatoMoneda(cliente.pendiente)}</p>}
-        {cliente.lat && cliente.lng ? (
+        {cliente.lat != null && cliente.lng != null ? (
           <p>📍 Ubicación guardada ({cliente.lat.toFixed(5)}, {cliente.lng.toFixed(5)})</p>
         ) : (
           <button className="boton-secundario" onClick={() => setMostrarUbicacion(true)}>📍 Guardar ubicación</button>

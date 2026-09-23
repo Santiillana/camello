@@ -3,6 +3,7 @@ import { database } from '../db/database';
 
 export default function Respaldo() {
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
   const [importando, setImportando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -10,6 +11,7 @@ export default function Respaldo() {
   async function exportar() {
     setExportando(true);
     setMensaje(null);
+    setError(null);
     try {
       const json = await database.exportarRespaldo();
       const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
@@ -23,7 +25,7 @@ export default function Respaldo() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMensaje('✓ Respaldo descargado correctamente.');
     } catch (e: unknown) {
-      setMensaje('No se pudo generar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
+      setError('No se pudo generar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setExportando(false);
     }
@@ -32,12 +34,13 @@ export default function Respaldo() {
   async function importar(file: File) {
     setImportando(true);
     setMensaje(null);
+    setError(null);
     try {
       const texto = await file.text();
       await database.importarRespaldo(texto);
       setMensaje('✓ Respaldo restaurado correctamente. Reinicia la app para refrescar todas las pantallas.');
     } catch (e: unknown) {
-      setMensaje('No se pudo restaurar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
+      setError('No se pudo restaurar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setImportando(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -80,6 +83,7 @@ export default function Respaldo() {
       </section>
 
       {mensaje && <p className="banner-exito">{mensaje}</p>}
+      {error && <p className="texto-error">{error}</p>}
     </div>
   );
 }
