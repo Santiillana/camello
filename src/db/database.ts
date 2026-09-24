@@ -180,6 +180,7 @@ class Database {
     await this.abrirConexion();
     marcarEtapaSqlite('schema');
     await this.prepararEsquema();
+    await this.restaurarEspejoSiLaBaseApareceVacia();
     marcarEtapaSqlite('health');
     await this.verificarSalud();
     marcarEtapaSqlite('seed');
@@ -1266,10 +1267,51 @@ class Database {
   private async persist(): Promise<void> {
     if (Capacitor.getPlatform() === 'web' && this.sqlite) {
       await this.sqlite.saveToStore(this.activeDbName);
+      const exportado = await this.conn().exportToJson('full');
+      if (exportado.export) await guardarEspejoSqlite(JSON.stringify(exportado.export));
     }
   }
 
-  private async seedProductosSiVacio(): Promise<void> {
+  private async restaurarEspejoSiLaBaseApareceVacia(): Promise<void> {
+    if (Capacitor.getPlatform() !== 'web' || !this.sqlite) return;
+
+    const estadoActual = await this.conn().query(
+      "SELECT " +
+      "(SELECT COUNT(*) FROM clientes) AS clientes, " +
+      "(SELECT COUNT(*) FROM ventas) AS ventas, " +
+      "(SELECT COUNT(*) FROM configuracion_app) AS configuracion;"
+    );
+    const row = estadoActual.values?.[0] ?? {};
+    const estaVacia =
+      Number(row.clientes ?? 0) === 0 &&
+      Number(row.ventas ?? 0) === 0 &&
+      Number(row.configuracion ?? 0) === 0;
+    if (!estaVacia) return;
+
+    const espejo = await leerEspejoSqlite();
+    if (!espejo) return;
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(espejo) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+
+    const tablas = Array.isArray(parsed.tables) ? parsed.tables as Array<Record<string, unknown>> : [];
+    const tieneDatos = tablas.some((tabla) => Array.isArray(tabla.values) && tabla.values.length > 0);
+    if (!tieneDatos) return;
+
+    await this.cerrarConexion();
+    await this.sqlite.importFromJson(JSON.stringify({
+      ...parsed,
+      database: this.activeDbName,
+      overwrite: true,
+    }));
+    await this.abrirConexion();
+  }
+
+  private async seedProductosSiVacio(): Promise<void {
     const r = await this.conn().query('SELECT COUNT(*) as n FROM productos;');
     const n = Number(r.values?.[0]?.n ?? 0);
     if (n === 0) {
