@@ -8,6 +8,10 @@ export type FotoBorrador = {
   nombre: string;
 };
 
+function esCategoriaFoto(valor: string): CategoriaFoto {
+  return valor === 'cliente' || valor === 'mascota' || valor === 'producto' || valor === 'otro' ? valor : 'otro';
+}
+
 type Props = {
   fotos: FotoBorrador[];
   onChange: (fotos: FotoBorrador[]) => void;
@@ -69,7 +73,7 @@ export default function FotosSelector({ fotos, onChange, onOmitir }: Props) {
       <div className="grid-dos-columnas">
         <label>
           ¿Qué muestra la foto?
-          <select value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaFoto)}>
+          <select value={categoria} onChange={(e) => setCategoria(esCategoriaFoto(e.target.value))}>
             <option value="cliente">Cliente</option>
             <option value="mascota">Mascota</option>
             <option value="casa">Casa / ubicación</option>
