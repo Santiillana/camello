@@ -44,9 +44,10 @@ export default function Gastos(){
       <div><p className="texto-kicker">Operación</p><h1>Gastos</h1></div>
       <button className="boton-primario" onClick={()=>{setMostrar(true);setParams({nuevo:'1'});}}>+ Nuevo gasto</button>
     </header>
-    {mostrar&&<FormularioGasto categorias={categorias} onGuardado={()=>{setMostrar(false);setParams({});void cargar();}} onCancelar={()=>{setMostrar(false);setParams({});}} />}
+    {mostrar&&<FormularioGasto categorias={categorias} onCategoriaCreada={async()=>{await cargar();}} onGuardado={()=>{setMostrar(false);setParams({});void cargar();}} onCancelar={()=>{setMostrar(false);setParams({});}} />}
     <section className="periodo-selector">{(['hoy','semana','mes'] as FiltroPeriodo[]).map(x=><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
-    <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><div className="fila-botones"><strong>{formatoMoneda(total)}</strong><button type="button" className="boton-secundario" onClick={()=>descargarCSV(gastos)}>Exportar CSV</button></div></div>
+    <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><div className="fila-botones"><strong>{formatoMoneda(total)}</strong><button type="button" className="boton-secundario" onClick={()=>descargarCSV(gastos)}>Exportar CSV</button>
+<button type="button" className="boton-secundario" onClick={()=>void compartirCSV(gastos)}>Compartir CSV</button></div></div>
       <div className="grid-dos-columnas">
         <label>Categoría<select value={categoriaId} onChange={e=>setCategoriaId(e.target.value)}><option value="">Todas</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
         <label>Estado<select value={estado} onChange={e=>setEstado(e.target.value as EstadoGasto|'')}><option value="">Todos</option><option value="pagado">Pagado</option><option value="pendiente">Por pagar</option><option value="anulado">Anulado</option></select></label>
@@ -70,14 +71,30 @@ export default function Gastos(){
 }
 
 
-function descargarCSV(items: Gasto[]) {
+async function compartirCSV(items: Gasto[]) {
+  const csv = crearCSV(items);
+  if (typeof navigator.share !== 'function') {
+    descargarCSV(items);
+    return;
+  }
+  const archivo = new File([csv], 'camello-gastos.csv', { type: 'text/csv;charset=utf-8' });
+  try {
+    await navigator.share({ title: 'Gastos CAMELLO', text: 'Exportación de gastos', files: [archivo] });
+  } catch {}
+}
+
+function crearCSV(items: Gasto[]) {
   const filas=[['fecha','categoria','monto','estado','metodo','proveedor','descripcion'],...items.map(g=>[g.fecha,g.categoria_nombre??'',String(g.monto),g.estado,g.metodo_pago??'',g.proveedor??'',g.descripcion??''])];
-  const csv=filas.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\n');
+  return filas.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\n');
+}
+
+function descargarCSV(items: Gasto[]) {
+  const csv=crearCSV(items);
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='camello-gastos.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
-function FormularioGasto({categorias,onGuardado,onCancelar}:{categorias:CategoriaGasto[];onGuardado:()=>void;onCancelar:()=>void}){
+function FormularioGasto({categorias,onCategoriaCreada,onGuardado,onCancelar}:{categorias:CategoriaGasto[];onCategoriaCreada:()=>Promise<void>;onGuardado:()=>void;onCancelar:()=>void}){
   const [monto,setMonto]=useState(''); const [categoria,setCategoria]=useState(''); const [fecha,setFecha]=useState(hoyISO()); const [estado,setEstado]=useState<EstadoGasto>('pagado'); const [metodo,setMetodo]=useState('EFECTIVO'); const [fechaLimite,setFechaLimite]=useState(''); const [nota,setNota]=useState(''); const [proveedor,setProveedor]=useState(''); const [foto,setFoto]=useState(''); const [ruta,setRuta]=useState<number|undefined>();
   const [paso,setPaso]=useState(0); const [guardando,setGuardando]=useState(false);
   const datos={monto,categoria,fecha,estado,metodo,fechaLimite,nota,proveedor,foto,ruta};
@@ -86,7 +103,7 @@ function FormularioGasto({categorias,onGuardado,onCancelar}:{categorias:Categori
   useEffect(()=>{void database.obtenerRutaActiva().then(r=>setPendienteRutas(r?[{id:r.id,nombre:r.nombre}]:[]));},[]);
   const tarjetas=[
     {id:'monto',titulo:'Monto',contenido:<label>Monto<input type="number" min={1} step={1} value={monto} onChange={e=>setMonto(e.target.value)} inputMode="numeric"/></label>,validar:()=>Number.isSafeInteger(Number(monto))&&Number(monto)>0?null:'Escribe un monto entero mayor que 0.'},
-    {id:'cat',titulo:'Categoría',contenido:<label>Categoría<select value={categoria} onChange={e=>setCategoria(e.target.value)}><option value="">Selecciona</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>,validar:()=>categoria?null:'Selecciona una categoría.'},
+    {id:'cat',titulo:'Categoría',contenido:<label>Categoría<select value={categoria} onChange={e=>setCategoria(e.target.value)}><option value="">Selecciona</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label><button type="button" className="boton-texto" onClick={async()=>{const nombre=window.prompt('Nombre de la nueva categoría');if(!nombre?.trim())return;const tipo=(window.prompt('Tipo: fijo o variable','variable')==='fijo'?'fijo':'variable');const naturaleza=window.prompt('Naturaleza: operativo, compra_insumos o retiro_dueno','operativo')||'operativo';const id=await database.crearCategoriaGasto({nombre:nombre.trim(),tipo:naturaleza==='operativo'?tipo:(tipo==='fijo'?'fijo':'variable'),naturaleza:naturaleza as 'operativo'|'compra_insumos'|'retiro_dueno'});await onCategoriaCreada();setCategoria(String(id));}}>+ Nueva categoría</button>,validar:()=>categoria?null:'Selecciona una categoría.'},
     {id:'fecha',titulo:'Fecha',contenido:<label>Fecha<input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></label>},
     {id:'pago',titulo:'Estado del pago',contenido:<div className="fila-botones"><button type="button" className={'boton-chip'+(estado==='pagado'?' activo':'')} onClick={()=>setEstado('pagado')}>Ya pagué</button><button type="button" className={'boton-chip'+(estado==='pendiente'?' activo':'')} onClick={()=>setEstado('pendiente')}>Por pagar</button></div>},
     {id:'metodo',titulo:'Método',opcional:estado!=='pagado',contenido:<select value={metodo} onChange={e=>setMetodo(e.target.value)}><option>Efectivo</option><option>Transferencia</option><option>Otro</option></select>},
