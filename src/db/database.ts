@@ -123,7 +123,10 @@ class Database {
       : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
 
     await this.db.open();
-    const { version: currentVersion = 0 } = await this.db.getVersion();
+    const { version: currentVersion } = await this.db.getVersion();
+    if (currentVersion == null || !Number.isInteger(currentVersion) || currentVersion < 0) {
+      throw new Error('SQLite devolvió una versión inválida: ' + String(currentVersion) + '.');
+    }
     if (currentVersion > DB_VERSION) {
       throw new Error('La base de datos tiene una versión ' + currentVersion + ' superior a la compatible (' + DB_VERSION + ').');
     }
@@ -197,7 +200,7 @@ class Database {
     const placeholders = TABLAS_ESPERADAS.map(() => '?').join(', ');
     const result = await db.query(
       'SELECT name FROM sqlite_master WHERE type = \'table\' AND name IN (' + placeholders + ');',
-      TABLAS_ESPERADAS
+      [...TABLAS_ESPERADAS]
     );
     const existentes = new Set((result.values ?? []).map((row) => String(row.name)));
     return TABLAS_ESPERADAS.filter((tabla) => !existentes.has(tabla));
@@ -217,9 +220,6 @@ class Database {
       );
     }
 
-    if (faltantes.length === 0) {
-      throw new Error('La base de datos es inconsistente y no se detectaron tablas faltantes.');
-    }
   }
 
   private conn(): SQLiteDBConnection {
