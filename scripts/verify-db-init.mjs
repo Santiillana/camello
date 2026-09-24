@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const schemaSource = await readFile(new URL('../src/db/schema.ts', import.meta.url), 'utf8');
 const databaseSource = await readFile(new URL('../src/db/database.ts', import.meta.url), 'utf8');
 
-assert.match(databaseSource, /const \{ version: currentVersion = 0 \} = await this\.db\.getVersion\(\);/);
+assert.match(databaseSource, /const \{ version: currentVersion \} = await this\.db\.getVersion\(\);/);
 assert.match(databaseSource, /await db\.beginTransaction\(\);/);
 assert.match(databaseSource, /await db\.execute\(stmt, false\);/);
 assert.match(databaseSource, /PRAGMA user_version/);
