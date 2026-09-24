@@ -46,7 +46,7 @@ export async function initWebSqlite(): Promise<void> {
       driver: [localForage.INDEXEDDB],
       version: 1,
     });
-    const persisted = await store.getItem<Uint8Array>('camelloSQLite.db');
+    const persisted: unknown = await store.getItem('camelloSQLite.db');
     if (persisted instanceof Uint8Array) {
       await store.setItem('camelloSQLite.db', new Uint8Array(persisted));
     } else if (persisted instanceof ArrayBuffer) {
