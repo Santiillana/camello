@@ -178,6 +178,95 @@ export class WebSqliteConnection {
     await this.persist();
   }
 
+  async replaceFromJson(data: Record<string, unknown>, version: number): Promise<void> {
+    const SQL = await initSqlJs({
+      locateFile: (file) => this.wasmBasePath + file,
+    });
+    const next = new SQL.Database();
+
+    const quote = (value: string): string => '"' + value.replace(/"/g, '""') + '"';
+    const tables = Array.isArray(data.tables) ? data.tables : [];
+
+    try {
+      for (const rawTable of tables) {
+        if (!rawTable || typeof rawTable !== 'object') continue;
+        const table = rawTable as Record<string, unknown>;
+        const name = typeof table.name === 'string' ? table.name : '';
+        if (!name) continue;
+
+        const schema = Array.isArray(table.schema) ? table.schema : [];
+        const definitions = schema.map((rawColumn) => {
+          if (!rawColumn || typeof rawColumn !== 'object') return null;
+          const column = rawColumn as Record<string, unknown>;
+          const value = typeof column.value === 'string' ? column.value : '';
+          if (!value) return null;
+          if (typeof column.foreignkey === 'string') {
+            return quote(column.foreignkey) + ' ' + value;
+          }
+          if (typeof column.constraint === 'string' && !column.column) {
+            return column.constraint + ' ' + value;
+          }
+          const columnName = typeof column.column === 'string' ? column.column : '';
+          if (!columnName) return null;
+          return quote(columnName) + ' ' + value;
+        }).filter((value): value is string => Boolean(value));
+
+        next.exec('CREATE TABLE ' + quote(name) + ' (' + definitions.join(', ') + ');');
+
+        const values = Array.isArray(table.values) ? table.values : [];
+        for (const rawRow of values) {
+          if (!Array.isArray(rawRow) || !rawRow.length) continue;
+          const placeholders = rawRow.map(() => '?').join(', ');
+          next.run(
+            'INSERT INTO ' + quote(name) + ' VALUES (' + placeholders + ');',
+            rawRow as Array<string | number | Uint8Array | null>,
+          );
+        }
+
+        const indexes = Array.isArray(table.indexes) ? table.indexes : [];
+        for (const rawIndex of indexes) {
+          if (!rawIndex || typeof rawIndex !== 'object') continue;
+          const index = rawIndex as Record<string, unknown>;
+          const indexName = typeof index.name === 'string' ? index.name : '';
+          const expression = typeof index.value === 'string' ? index.value : '';
+          if (!indexName || !expression) continue;
+          const unique = String(index.mode ?? '').toUpperCase() === 'UNIQUE' ? 'UNIQUE ' : '';
+          next.exec('CREATE ' + unique + 'INDEX ' + quote(indexName) + ' ON ' + quote(name) + ' (' + expression + ');');
+        }
+
+        const triggers = Array.isArray(table.triggers) ? table.triggers : [];
+        for (const rawTrigger of triggers) {
+          if (!rawTrigger || typeof rawTrigger !== 'object') continue;
+          const trigger = rawTrigger as Record<string, unknown>;
+          const triggerName = typeof trigger.name === 'string' ? trigger.name : '';
+          const timeevent = typeof trigger.timeevent === 'string' ? trigger.timeevent : '';
+          const logic = typeof trigger.logic === 'string' ? trigger.logic : '';
+          const condition = typeof trigger.condition === 'string' && trigger.condition ? ' WHEN ' + trigger.condition : '';
+          if (!triggerName || !timeevent || !logic) continue;
+          next.exec('CREATE TRIGGER ' + quote(triggerName) + ' ' + timeevent + condition + ' BEGIN ' + logic + ' END;');
+        }
+      }
+
+      const views = Array.isArray(data.views) ? data.views : [];
+      for (const rawView of views) {
+        if (!rawView || typeof rawView !== 'object') continue;
+        const view = rawView as Record<string, unknown>;
+        const name = typeof view.name === 'string' ? view.name : '';
+        const sql = typeof view.value === 'string' ? view.value : '';
+        if (name && sql) next.exec('CREATE VIEW ' + quote(name) + ' AS ' + sql + ';');
+      }
+
+      next.exec('PRAGMA user_version = ' + Math.max(0, Math.floor(version)) + ';');
+    } catch (error) {
+      next.close();
+      throw error;
+    }
+
+    if (this.db) this.db.close();
+    this.db = next;
+    await this.persist();
+  }
+
   async deletePersistedDatabase(): Promise<void> {
     if (this.db) {
       this.db.close();
