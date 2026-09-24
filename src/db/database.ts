@@ -2218,6 +2218,9 @@ class Database {
       color_acento: valores.get('color_acento') ?? DEFAULT_CONFIG.color_acento,
       moneda: 'COP',
       mensaje_recordatorio: valores.get('mensaje_recordatorio') ?? DEFAULT_CONFIG.mensaje_recordatorio,
+      privacidad_habilitada: valores.get('privacidad_habilitada') !== '0',
+      privacidad_texto: valores.get('privacidad_texto') ?? 'Los datos de clientes se usan únicamente para gestionar ventas, cartera, rutas y contacto del negocio.',
+      responsable_datos: valores.get('responsable_datos') ?? '',
       privacy_accepted_at: valores.get('privacy_accepted_at') ?? null,
       privacy_responsable: valores.get('privacy_responsable') ?? valores.get('negocio_nombre') ?? '',
     };
