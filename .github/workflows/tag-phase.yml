@@ -1,0 +1,42 @@
+name: Etiquetar fases aprobadas
+
+on:
+  push:
+    branches:
+      - "fix/sqlite-wasm-web"
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: contains(github.event.head_commit.message, '[phase-ok:')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Extraer etiqueta
+        id: tag
+        shell: bash
+        run: |
+          tag="$(printf '%s\n' "${{ github.event.head_commit.message }}" | sed -n 's/.*\[phase-ok:\([^]]*\)\].*/\1/p' | head -n1)"
+          test -n "$tag"
+          case "$tag" in
+            fase-[a-z0-9-]*-ok) ;;
+            *) echo "Etiqueta no permitida: $tag"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Crear etiqueta
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            test "$(git rev-list -n1 "$TAG")" = "$GITHUB_SHA"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
