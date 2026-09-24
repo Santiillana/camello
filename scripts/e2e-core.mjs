@@ -69,11 +69,11 @@ async function crearCliente(page) {
 
   await page.evaluate(() => window.dispatchEvent(new Event('pause')));
   for (let intento = 0; intento < 40; intento += 1) {
-    const guardado = await sql(page, "SELECT json,paso FROM borradores WHERE tipo='cliente' AND clave='nuevo' LIMIT 1;");
+    const guardado = await sql(page, "SELECT json,paso FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo' LIMIT 1;");
     if (guardado.length === 1) break;
     await sleep(250);
   }
-  const borradorPersistido = await sql(page, "SELECT json,paso FROM borradores WHERE tipo='cliente' AND clave='nuevo' LIMIT 1;");
+  const borradorPersistido = await sql(page, "SELECT json,paso FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo' LIMIT 1;");
   if (borradorPersistido.length !== 1) throw new Error('El borrador no se persistió en SQLite antes de recargar.');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
