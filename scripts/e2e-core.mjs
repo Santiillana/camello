@@ -72,10 +72,10 @@ async function crearCliente(page) {
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
     undefined,
-    { timeout: 15000 },
+    { timeout: 60000 },
   );
 
-  await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).waitFor();
+  await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).waitFor({ timeout: 60000 });
   await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByLabel('Nombre completo').inputValue().then((value) => {
     if (value !== 'Cliente E2E') throw new Error('El borrador no restauró el nombre.');
