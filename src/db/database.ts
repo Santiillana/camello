@@ -1311,14 +1311,14 @@ class Database {
     let sql = 'SELECT * FROM clientes';
     const cond: string[] = [];
     const params: unknown[] = [];
-    const limite = Math.min(250, Math.max(1, Math.floor(opts?.limite ?? 250)));
+    const limite = Math.min(100, Math.max(1, Math.floor(opts?.limite ?? 100)));
     const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
 
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
     if (opts?.texto?.trim()) {
       const texto = normalizarTextoBusqueda(opts.texto);
       cond.push(`(nombre_normalizado LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ? OR id IN (SELECT cliente_id FROM mascotas WHERE estado = 'activo' AND nombre_normalizado LIKE ?))`);
-      params.push('%' + texto + '%', '%' + opts.texto.trim() + '%', '%' + opts.texto.trim() + '%', '%' + texto + '%');
+      params.push(texto + '%', opts.texto.trim() + '%', opts.texto.trim() + '%', texto + '%');
     }
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
     sql += ' ORDER BY nombre_normalizado ASC, id ASC LIMIT ? OFFSET ?;';
@@ -1326,7 +1326,7 @@ class Database {
 
     const r = await this.conn().query(sql, params);
     const clientes = (r.values ?? []) as Cliente[];
-    return Promise.all(clientes.map((c) => this.enriquecerCliente(c)));
+    return this.enriquecerClientes(clientes);
   }
 
   async obtenerCliente(id: number): Promise<ClienteConResumen | null> {
@@ -1334,6 +1334,32 @@ class Database {
     const c = r.values?.[0] as Cliente | undefined;
     return c ? this.enriquecerCliente(c) : null;
   }
+
+  async listarRecordatoriosRecompra(hoy = fechaLocalISO()): Promise<Array<{ cliente_id:number; nombre:string; telefono1?:string; dias_desde_ultima_compra:number; ritmo_dias:number }>> {
+    const r = await this.conn().query(
+      `SELECT c.id AS cliente_id, c.nombre, c.telefono1, MAX(v.fecha) AS ultima_compra,
+              COALESCE(s.dias, 20) AS ritmo_dias
+       FROM clientes c
+       JOIN ventas v ON v.cliente_id=c.id AND COALESCE(v.estado_registro,'activa')='activa'
+       LEFT JOIN seguimiento_clientes s ON s.cliente_id=c.id
+       WHERE c.estado='activo'
+       GROUP BY c.id, c.nombre, c.telefono1, s.dias
+       HAVING julianday(?) - julianday(MAX(v.fecha)) > COALESCE(s.dias,20)
+       ORDER BY (julianday(?) - julianday(MAX(v.fecha))) DESC
+       LIMIT 100;`,
+      [hoy, hoy],
+    );
+    return (r.values ?? []).map((row) => {
+      const dias = Math.max(0, Math.floor(Number(juliandayDiff(hoy, String(row.ultima_compra ?? hoy)))));
+      return { cliente_id:Number(row.cliente_id), nombre:String(row.nombre), telefono1:row.telefono1 ? String(row.telefono1) : undefined, dias_desde_ultima_compra:dias, ritmo_dias:Number(row.ritmo_dias ?? 20) };
+    });
+  }
+
+function juliandayDiff(desde: string, hasta: string): number {
+  const a = new Date(desde + 'T00:00:00Z').getTime();
+  const b = new Date(hasta + 'T00:00:00Z').getTime();
+  return (a - b) / 86400000;
+}
 
   private async calcularRitmoAutomatico(clienteId: number): Promise<number> {
     const r = await this.conn().query(
@@ -1376,6 +1402,62 @@ class Database {
       contactado_fecha: row?.contactado_fecha ? String(row.contactado_fecha) : null,
       recordar_hasta: row?.recordar_hasta ? String(row.recordar_hasta) : null,
     };
+  }
+
+  private async enriquecerClientes(clientes: Cliente[]): Promise<ClienteConResumen[]> {
+    if (!clientes.length) return [];
+    const ids = clientes.map((cliente) => cliente.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const [mascotasResult, ventasResult, seguimientoResult] = await Promise.all([
+      this.conn().query('SELECT * FROM mascotas WHERE estado=\'activo\' AND cliente_id IN (' + placeholders + ') ORDER BY nombre_normalizado;', ids),
+      this.conn().query(
+        `SELECT cliente_id, MIN(fecha) primera, MAX(fecha) ultima, COALESCE(SUM(total),0) total,
+                COALESCE(SUM(monto_pagado),0) pagado,
+                COALESCE(SUM(CASE WHEN total>COALESCE(monto_pagado,0) THEN total-COALESCE(monto_pagado,0) ELSE 0 END),0) pendiente,
+                COALESCE(SUM(cantidad),0) paquetes, COUNT(*) compras,
+                COUNT(CASE WHEN total>COALESCE(monto_pagado,0) THEN 1 END) ventas_pendientes
+         FROM ventas
+         WHERE cliente_id IN (${placeholders}) AND COALESCE(estado_registro,'activa')='activa'
+         GROUP BY cliente_id;`,
+        ids,
+      ),
+      this.conn().query('SELECT cliente_id,modo,dias,contactado_fecha,recordar_hasta FROM seguimiento_clientes WHERE cliente_id IN (' + placeholders + ');', ids),
+    ]);
+    const mascotasMap = new Map<number,Mascota[]>();
+    for (const row of mascotasResult.values ?? []) {
+      const mascota=row as unknown as Mascota;
+      const list=mascotasMap.get(Number(row.cliente_id))??[];
+      list.push(mascota);
+      mascotasMap.set(Number(row.cliente_id),list);
+    }
+    const ventasMap=new Map<number,Record<string,unknown>>();
+    for(const row of ventasResult.values??[]) ventasMap.set(Number(row.cliente_id),row as Record<string,unknown>);
+    const seguimientoMap=new Map<number,Record<string,unknown>>();
+    for(const row of seguimientoResult.values??[]) seguimientoMap.set(Number(row.cliente_id),row as Record<string,unknown>);
+    return clientes.map((c)=>{
+      const row=ventasMap.get(c.id)??{};
+      const seguimiento=seguimientoMap.get(c.id);
+      const primera_compra=row.primera?String(row.primera):null;
+      const ultima_compra=row.ultima?String(row.ultima):null;
+      const numero_compras=Number(row.compras??0);
+      const total_comprado=Number(row.total??0);
+      const ritmo_modo:ModoRitmo=seguimiento?.modo==='manual'?'manual':'automatico';
+      const ritmo_dias=ritmo_modo==='manual'?Math.max(1,Number(seguimiento?.dias??20)):20;
+      return {
+        ...c,
+        mascotas:mascotasMap.get(c.id)??[],
+        primera_compra,ultima_compra,
+        dias_desde_ultima_compra:ultima_compra?diasDesdeISO(ultima_compra):undefined,
+        total_comprado,total_pagado:Number(row.pagado??0),pendiente:Number(row.pendiente??0),
+        paquetes_comprados:Number(row.paquetes??0),numero_compras,
+        ventas_pendientes:Number(row.ventas_pendientes??0),
+        ticket_promedio:numero_compras>0?total_comprado/numero_compras:0,
+        seguimiento:this.calcularSeguimiento(ultima_compra),
+        ritmo_modo,ritmo_dias,
+        contactado_fecha:seguimiento?.contactado_fecha?String(seguimiento.contactado_fecha):null,
+        recordar_hasta:seguimiento?.recordar_hasta?String(seguimiento.recordar_hasta):null,
+      };
+    });
   }
 
   private async enriquecerCliente(c: Cliente): Promise<ClienteConResumen> {
