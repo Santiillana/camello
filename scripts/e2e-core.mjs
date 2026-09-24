@@ -349,7 +349,7 @@ try {
 
     await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: /Descargar respaldo/ }).click();
+    await page.getByRole('button', { name: 'Descargar sin cifrar' }).click();
     await download;
     await page.getByText(/Respaldo generado|Respaldo/).first().waitFor();
     const backupBase = await sql(page, "SELECT COUNT(*) AS n FROM clientes;");
