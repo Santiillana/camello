@@ -39,7 +39,8 @@ async function siguiente(page) {
 }
 
 async function omitir(page) {
-  await page.getByRole('button', { name: 'Omitir' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Nuevo cliente' });
+  await dialog.locator('.asistente-tarjeta > button.boton-texto').click();
 }
 
 async function crearCliente(page) {
