@@ -1,6 +1,6 @@
 import { calcularChecksum } from './respaldo';
 
-type BackupItem = {
+export type BackupItem = {
   id: string;
   kind: 'daily' | 'weekly';
   date: string;
