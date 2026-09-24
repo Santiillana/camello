@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import { diasDesdeISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
+import { calcularChecksum } from '../utils/respaldo';
 
 const DEFAULT_CONFIG: ConfiguracionApp = {
   negocio_nombre: '',
@@ -1265,51 +1266,101 @@ class Database {
   async exportarRespaldo(): Promise<string> {
     const json = await this.conn().exportToJson('full');
     if (!json.export) throw new Error('SQLite no devolvió un respaldo válido.');
-    return JSON.stringify(json.export, null, 2);
+    const payload = JSON.stringify(json.export);
+    const checksum = await calcularChecksum(payload);
+    const envelope = {
+      camello_backup_version: 1,
+      database: DB_NAME,
+      schema_version: DB_VERSION,
+      exported_at: new Date().toISOString(),
+      checksum,
+      data: json.export,
+    };
+    return JSON.stringify(envelope, null, 2);
+  }
+
+  async validarRespaldo(jsonTexto: string): Promise<{ version: number; checksum: string | null; exportData: Record<string, unknown> }> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonTexto);
+    } catch {
+      throw new Error('El archivo no contiene JSON válido.');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('El respaldo debe ser un objeto JSON.');
+    }
+    const data = parsed as Record<string, unknown>;
+    if (Number(data.camello_backup_version ?? 0) === 1 && data.data && typeof data.data === 'object') {
+      const exportData = data.data as Record<string, unknown>;
+      const checksum = String(data.checksum ?? '');
+      if (!checksum) throw new Error('El respaldo no tiene checksum.');
+      const calculado = await calcularChecksum(JSON.stringify(exportData));
+      if (calculado !== checksum) throw new Error('El respaldo fue alterado o está corrupto.');
+      const version = Number(data.schema_version);
+      if (!Number.isInteger(version) || version < 1 || version > DB_VERSION) {
+        throw new Error('Versión de respaldo no compatible.');
+      }
+      return { version, checksum, exportData };
+    }
+
+    const version = Number(data.version);
+    if (!Number.isInteger(version) || version < 1 || version > DB_VERSION) {
+      throw new Error('Versión de respaldo no compatible.');
+    }
+    return { version, checksum: null, exportData: data };
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
     if (!this.sqlite) throw new Error('SQLite no está inicializado.');
+    const valido = await this.validarRespaldo(jsonTexto);
+    const data = { ...valido.exportData, database: this.activeDbName };
 
-    let data: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(jsonTexto);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('El respaldo debe ser un objeto JSON.');
-      }
-      data = parsed as Record<string, unknown>;
-    } catch (e) {
-      if (e instanceof SyntaxError) throw new Error('El archivo no contiene JSON válido.');
-      throw e;
-    }
-
-    if (data.database !== DB_NAME && data.database !== DB_NAME + '.db') {
+    if (data.database !== DB_NAME && data.database !== DB_NAME + '.db' && data.database !== this.activeDbName) {
       throw new Error('Este respaldo no pertenece a CAMELLO.');
     }
-    data.database = this.activeDbName;
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
     if (data.encrypted !== false) throw new Error('No se admiten respaldos cifrados en esta versión.');
     if (!Array.isArray(data.tables)) throw new Error('El respaldo está incompleto.');
-    const version = Number(data.version);
-    if (!Number.isInteger(version) || version < 1 || version > DB_VERSION) {
-      throw new Error(`Versión de respaldo no compatible: ${String(data.version)}.`);
-    }
 
-    data.overwrite = true;
     const serialized = JSON.stringify(data);
-    const valido = await this.sqlite.isJsonValid(serialized);
-    if (!valido.result) throw new Error('El archivo de respaldo no tiene una estructura SQLite válida.');
+    const estructural = await this.sqlite.isJsonValid(serialized);
+    if (!estructural.result) throw new Error('El archivo de respaldo no tiene una estructura SQLite válida.');
+
+    const actual = await this.conn().exportToJson('full');
+    if (!actual.export) throw new Error('No se pudo crear un respaldo de seguridad antes de restaurar.');
+    const actualSerialized = JSON.stringify(actual.export);
 
     await this.cerrarConexion();
 
     try {
       await this.sqlite.importFromJson(serialized);
+    } catch (error) {
+      try {
+        await this.abrirConexion();
+        await this.sqlite.importFromJson(JSON.stringify({ ...JSON.parse(actualSerialized), database: this.activeDbName, overwrite: true }));
+      } catch {
+        // Si la restauración de emergencia también falla, propagamos el error original.
+      }
+      throw error;
     } finally {
-      await this.abrirConexion();
+      if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
       await this.persist();
     }
+  }
+
+  async limpiarAplicacion(respaldoVerificado: string): Promise<void> {
+    if (!this.db) throw new Error('SQLite no está inicializado.');
+    const valido = await this.validarRespaldo(respaldoVerificado);
+    if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
+    await this.db.delete();
+    this.db = null;
+    this.activeDbName = DB_NAME;
+    await this.abrirConexion();
+    await this.prepararEsquema();
+    await this.seedProductosSiVacio();
+    await this.persist();
   }
 }
 
