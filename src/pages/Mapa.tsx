@@ -44,7 +44,7 @@ function cargarFiltrosGuardados(): FiltrosMapa {
   try {
     const raw = localStorage.getItem(CLAVE_FILTROS_MAPA);
     if (!raw) return FILTROS_DEFAULT;
-    const parsed = JSON.parse(raw) as Partial<FiltrosMapa>;
+    const parsedUnknown: unknown = JSON.parse(raw);\n    const parsed = parsedUnknown && typeof parsedUnknown === 'object' && !Array.isArray(parsedUnknown) ? parsedUnknown : {};
     const estado = parsed.estado;
     const filtroEstado: Filtro = estado === 'ACTIVO' || estado === 'POR_CONTACTAR' || estado === 'INACTIVO' || estado === 'pendientes'
       ? estado
@@ -338,7 +338,7 @@ export default function Mapa() {
       <p className="detalle-cliente">{clientesFiltrados.length} de {clientesConUbicacion.length} clientes con ubicación cumplen los filtros.</p>
 
       <div className="filtros-mapa">
-        {(['todos', 'ACTIVO', 'POR_CONTACTAR', 'INACTIVO', 'pendientes'] as Filtro[]).map((f) => (
+        {['todos', 'ACTIVO', 'POR_CONTACTAR', 'INACTIVO', 'pendientes'].filter(esFiltroMapa).map((f) => (
           <button
             key={f}
             className={'chip-filtro' + (filtros.estado === f ? ' activo' : '')}
