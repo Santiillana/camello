@@ -18,7 +18,7 @@ export async function cifrarRespaldo(texto:string,password:string):Promise<strin
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
   if(password.length<10) throw new Error('La contraseña debe tener al menos 10 caracteres.');
   const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
-  const ivBuffer = iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer;
+  const ivBuffer = toArrayBuffer(iv);
   const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv:ivBuffer},await keyFromPassword(password,salt),enc.encode(texto));
   return JSON.stringify({camello_encrypted_backup_version:1,kdf:'PBKDF2-SHA256',iterations:ITERACIONES,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(cipher))});
 }
@@ -26,7 +26,8 @@ export async function descifrarRespaldo(texto:string,password:string):Promise<st
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
   const parsed: unknown = JSON.parse(texto);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Formato de respaldo cifrado no reconocido.');
-  const data = parsed as { camello_encrypted_backup_version?: unknown; iv?: unknown; salt?: unknown; ciphertext?: unknown };
+  // JSON.parse devuelve unknown: el type guard valida la estructura antes de leer los campos.
+  const data = esRespaldoCifrado(parsed);
   if(Number(data.camello_encrypted_backup_version)!==1) throw new Error('Formato de respaldo cifrado no reconocido.');
   try {
     const iv = bytes(String(data.iv));
