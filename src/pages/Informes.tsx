@@ -36,6 +36,39 @@ export default function Informes() {
       <BloquePeriodo titulo="Hoy" resumen={hoy} />
       <BloquePeriodo titulo="Esta semana" resumen={semana} extendido />
       <BloquePeriodo titulo="Este mes" resumen={mes} extendido mes />
+
+      <section className="tarjeta">
+        <div className="fila-titulo-boton">
+          <div>
+            <p className="texto-kicker">Análisis</p>
+            <h2>Resultado por rango</h2>
+          </div>
+        </div>
+        <div className="grid-dos-columnas">
+          <label>Desde<input type="date" value={desde} onChange={(e)=>setDesde(e.target.value)} /></label>
+          <label>Hasta<input type="date" value={hasta} onChange={(e)=>setHasta(e.target.value)} /></label>
+        </div>
+        <button
+          type="button"
+          className="boton-primario"
+          onClick={()=>void database.resultadoRango(desde,hasta).then(setRango).catch((e: unknown)=>setError(e instanceof Error?e.message:String(e)))}
+        >
+          Calcular resultado
+        </button>
+        {rango && (
+          <div className="lista-resumen">
+            <div><span>Ventas</span><strong>{formatoMoneda(rango.ventas)}</strong></div>
+            <div><span>Costo materia prima</span><strong>{formatoMoneda(rango.costo_materia_prima)}</strong></div>
+            <div><span>Utilidad bruta</span><strong>{formatoMoneda(rango.utilidad_bruta)}</strong></div>
+            <div><span>Gastos operativos</span><strong>{formatoMoneda(rango.gastos_operativos)}</strong></div>
+            <div><span>Utilidad neta</span><strong>{formatoMoneda(rango.utilidad_neta)}</strong></div>
+            <div><span>Cobrado</span><strong>{formatoMoneda(rango.cobrado)}</strong></div>
+            <div><span>Gastos pagados</span><strong>{formatoMoneda(rango.gastos_pagados)}</strong></div>
+            <div><span>Flujo de caja</span><strong>{formatoMoneda(rango.flujo_caja)}</strong></div>
+            <div><span>Gastos pendientes</span><strong>{formatoMoneda(rango.gastos_pendientes)}</strong></div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
