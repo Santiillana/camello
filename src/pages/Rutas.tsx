@@ -136,20 +136,20 @@ function FormNuevaRuta({
     {
       id: 'nombre',
       titulo: 'Nombre de la ruta',
-      contenido: <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} />,
+      contenido: <label>Nombre de la ruta<input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} /></label>,
       validar: () => nombre.trim() ? null : 'Escribe un nombre para la ruta.',
     },
     {
       id: 'tipo',
       titulo: 'Tipo de recorrido',
-      contenido: <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoRuta)}>
+      contenido: <label>Tipo de recorrido<select value={tipo} onChange={(e) => setTipo(e.target.value as TipoRuta)}>
         {TIPOS.map((item) => <option key={item}>{item}</option>)}
-      </select>,
+      </select></label>,
     },
     {
       id: 'paquetes',
       titulo: 'Paquetes llevados',
-      contenido: <input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} inputMode="numeric" />,
+      contenido: <label>Paquetes llevados<input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} inputMode="numeric" /></label>,
       validar: () => Number.isInteger(paquetes) && paquetes > 0 ? null : 'La cantidad debe ser mayor que 0.',
     },
     {
