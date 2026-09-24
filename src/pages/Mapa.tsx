@@ -10,6 +10,8 @@ const VILLAVICENCIO: [number, number] = [4.142, -73.6266];
 const CLAVE_FILTROS_MAPA = 'camello.mapa.filtros.v1';
 
 type Filtro = 'todos' | 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO' | 'pendientes';
+function esFiltroMapa(value: string): value is Filtro { return value === 'todos' || value === 'ACTIVO' || value === 'POR_CONTACTAR' || value === 'INACTIVO' || value === 'pendientes'; }
+
 type FiltrosMapa = {
   texto: string;
   estado: Filtro;
