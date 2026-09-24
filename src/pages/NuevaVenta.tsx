@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { database } from '../db/database';
 import type { ClienteConResumen, Producto, Ruta } from '../types';
@@ -24,6 +24,7 @@ export default function NuevaVenta() {
   const [error, setError] = useState<string | null>(null);
   const [confirmacion, setConfirmacion] = useState<string | null>(null);
   const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
+  const operacionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -72,6 +73,7 @@ export default function NuevaVenta() {
     }
 
     setGuardando(true);
+    if (!operacionIdRef.current) operacionIdRef.current = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'venta-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     try {
       await database.registrarVenta({
         cliente_id: Number(clienteId),
@@ -81,6 +83,9 @@ export default function NuevaVenta() {
         precio_aplicado: precio,
         costo_aplicado: costo,
         estado_pago: pagada ? 'PAGADA' : 'PENDIENTE',
+        metodo_pago: pagada ? 'EFECTIVO' : 'FIADO',
+        monto_pagado: pagada ? precio * cantidad : 0,
+        operacion_id: operacionIdRef.current,
       });
       setConfirmacion(`✓ Venta registrada por ${formatoMoneda(precio * cantidad)}`);
       window.setTimeout(() => {

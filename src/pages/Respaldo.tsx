@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { database } from '../db/database';
+import { descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
 
 export default function Respaldo() {
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -14,15 +15,8 @@ export default function Respaldo() {
     setError(null);
     try {
       const json = await database.exportarRespaldo();
-      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `camello-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      descargarRespaldo(json);
+      registrarExportacionRespaldo();
       setMensaje('✓ Respaldo descargado correctamente.');
     } catch (e: unknown) {
       setError('No se pudo generar el respaldo: ' + (e instanceof Error ? e.message : String(e)));

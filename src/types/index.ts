@@ -4,6 +4,7 @@
 export type EstadoCliente = 'activo' | 'archivado';
 export type EstadoMascota = 'activo' | 'archivado';
 export type EstadoPago = 'PAGADA' | 'PENDIENTE';
+export type MetodoPago = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
 export type EstadoRuta = 'PROGRAMADA' | 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
 export type TipoRuta = 'Puerta a puerta' | 'Barrio' | 'Vereda' | 'Sector' | 'Visita comercial';
 export type SexoMascota = 'M' | 'H' | 'Desconocido';
@@ -97,6 +98,9 @@ export interface Venta {
   hora: string;  // HH:MM
   estado_pago: EstadoPago;
   fecha_pago?: string | null;
+  metodo_pago?: MetodoPago | string;
+  monto_pagado?: number;
+  operacion_id?: string | null;
 }
 
 // Vistas compuestas usadas en la UI (no son tablas)

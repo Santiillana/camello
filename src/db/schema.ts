@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -39,8 +39,8 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS productos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL,
-    precio REAL NOT NULL,
-    costo REAL NOT NULL,
+    precio INTEGER NOT NULL,
+    costo INTEGER NOT NULL,
     activo INTEGER NOT NULL DEFAULT 1
   );`,
 
@@ -68,16 +68,20 @@ export const SCHEMA_STATEMENTS: string[] = [
     ruta_id INTEGER,
     producto_nombre TEXT NOT NULL,
     cantidad INTEGER NOT NULL DEFAULT 1,
-    precio_aplicado REAL NOT NULL,
-    costo_aplicado REAL NOT NULL,
-    total REAL NOT NULL,
-    utilidad REAL NOT NULL,
+    precio_aplicado INTEGER NOT NULL,
+    costo_aplicado INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    utilidad INTEGER NOT NULL,
     fecha TEXT NOT NULL,
     hora TEXT NOT NULL,
     estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE',
     fecha_pago TEXT,
+    metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO',
+    monto_pagado INTEGER NOT NULL DEFAULT 0,
+    operacion_id TEXT UNIQUE,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
-    FOREIGN KEY (ruta_id) REFERENCES rutas(id)
+    FOREIGN KEY (ruta_id) REFERENCES rutas(id),
+    CHECK (monto_pagado >= 0 AND monto_pagado <= total)
   );`,
 
   `CREATE TABLE IF NOT EXISTS configuracion_app (\n    clave TEXT PRIMARY KEY,\n    valor TEXT NOT NULL\n  );`,

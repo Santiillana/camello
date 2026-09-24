@@ -76,10 +76,16 @@ function textoObligatorio(valor: string, campo: string): string {
 }
 
 function numeroNoNegativo(valor: number, campo: string): number {
-  if (!Number.isFinite(valor) || valor < 0) {
-    throw new Error(`${campo} debe ser un número válido mayor o igual a 0.`);
+  if (!Number.isSafeInteger(valor) || valor < 0) {
+    throw new Error(campo + ' debe ser un número entero de pesos COP mayor o igual a 0.');
   }
   return valor;
+}
+
+function multiplicarDinero(entero: number, cantidad: number, campo: string): number {
+  const resultado = entero * cantidad;
+  if (!Number.isSafeInteger(resultado)) throw new Error(campo + ' excede el límite seguro de cálculo.');
+  return resultado;
 }
 
 function enteroPositivo(valor: number, campo: string): number {
@@ -134,8 +140,8 @@ class Database {
         })
         .filter((name) => name && name !== 'database');
 
-      if (nombres.includes(DB_NAME)) return DB_NAME;
       if (nombres.includes(DB_NAME + '.db')) return DB_NAME + '.db';
+      if (nombres.includes(DB_NAME)) return DB_NAME;
     } catch {
       // Algunas plataformas pueden no exponer la lista en este momento.
     }
@@ -159,79 +165,80 @@ class Database {
 
   private async prepararEsquema(): Promise<void> {
     const db = this.conn();
-
-    // La creación del esquema es idempotente y se ejecuta antes de cualquier
-    // consulta funcional. También repara tablas que falten aunque user_version
-    // ya esté adelantado.
-    for (const stmt of SCHEMA_STATEMENTS) {
-      await db.execute(stmt);
-    }
-
+    for (const stmt of SCHEMA_STATEMENTS) await db.execute(stmt);
     const versionResult = await db.query('PRAGMA user_version;');
     const version = Number(versionResult.values?.[0]?.user_version ?? 0);
-
-    if (version > DB_VERSION) {
-      throw new Error(
-        'La base de datos usa una versión de esquema más nueva (' +
-        version +
-        ') que esta app (' +
-        DB_VERSION +
-        ').',
-      );
-    }
-
+    if (version > DB_VERSION) throw new Error('La base de datos usa una versión de esquema más nueva (' + version + ') que esta app (' + DB_VERSION + ').');
     const migraciones = [
       { version: 2, ejecutar: () => this.migrarVersion2() },
+      { version: 3, ejecutar: () => this.migrarVersion3() },
     ];
-
-    for (const migracion of migraciones) {
-      // También repara la versión actual si quedó marcada como aplicada a medias.
-      if (version <= migracion.version) {
-        await migracion.ejecutar();
-      }
-    }
-
+    for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
     await this.verificarEsquemaCompleto();
   }
 
-  private async migrarVersion2(): Promise<void> {
-    const db = this.conn();
-    const columnas = await db.query('PRAGMA table_info(rutas);');
-    const nombres = new Set((columnas.values ?? []).map((row) => String(row.name)));
+  private async columnasDeTabla(tabla: string): Promise<Map<string, string>> {
+    const r = await this.conn().query('PRAGMA table_info(' + tabla + ');');
+    return new Map((r.values ?? []).map((row) => [String(row.name), String(row.type ?? '').toUpperCase()]));
+  }
 
-    if (!nombres.has('nombre')) {
-      await db.execute("ALTER TABLE rutas ADD COLUMN nombre TEXT NOT NULL DEFAULT '';");
-    }
-    if (!nombres.has('fecha_planificada')) {
-      await db.execute('ALTER TABLE rutas ADD COLUMN fecha_planificada TEXT;');
-    }
-    if (!nombres.has('hora_planificada')) {
-      await db.execute('ALTER TABLE rutas ADD COLUMN hora_planificada TEXT;');
+  private async migrarVersion2(): Promise<void> {
+    const columnas = await this.columnasDeTabla('rutas');
+    if (!columnas.has('nombre')) await this.conn().execute("ALTER TABLE rutas ADD COLUMN nombre TEXT NOT NULL DEFAULT '';");
+    if (!columnas.has('fecha_planificada')) await this.conn().execute('ALTER TABLE rutas ADD COLUMN fecha_planificada TEXT;');
+    if (!columnas.has('hora_planificada')) await this.conn().execute('ALTER TABLE rutas ADD COLUMN hora_planificada TEXT;');
+  }
+
+  private async migrarVersion3(): Promise<void> {
+    const productos = await this.columnasDeTabla('productos');
+    const ventas = await this.columnasDeTabla('ventas');
+    const productosListos = productos.get('precio') === 'INTEGER' && productos.get('costo') === 'INTEGER';
+    const ventasListas = ventas.get('precio_aplicado') === 'INTEGER' && ventas.get('costo_aplicado') === 'INTEGER' && ventas.get('total') === 'INTEGER' && ventas.get('utilidad') === 'INTEGER' && ventas.has('metodo_pago') && ventas.has('monto_pagado') && ventas.has('operacion_id');
+    if (productosListos && ventasListas) return;
+    const db = this.conn();
+    await db.execute('PRAGMA foreign_keys = OFF;');
+    try {
+      await db.execute('BEGIN TRANSACTION;');
+      if (!productosListos) {
+        await db.execute('ALTER TABLE productos RENAME TO productos_migracion_v3;');
+        await db.execute('CREATE TABLE productos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, precio INTEGER NOT NULL, costo INTEGER NOT NULL, activo INTEGER NOT NULL DEFAULT 1);');
+        await db.execute('INSERT INTO productos (id, nombre, precio, costo, activo) SELECT id, nombre, CAST(ROUND(precio) AS INTEGER), CAST(ROUND(costo) AS INTEGER), activo FROM productos_migracion_v3;');
+        await db.execute('DROP TABLE productos_migracion_v3;');
+      }
+      if (!ventasListas) {
+        await db.execute('DROP INDEX IF EXISTS idx_ventas_cliente;');
+        await db.execute('DROP INDEX IF EXISTS idx_ventas_ruta;');
+        await db.execute('DROP INDEX IF EXISTS idx_ventas_fecha;');
+        const metodo = ventas.has('metodo_pago') ? "COALESCE(metodo_pago, CASE WHEN estado_pago = 'PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END)" : "CASE WHEN estado_pago = 'PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END";
+        const monto = ventas.has('monto_pagado') ? "MIN(MAX(CAST(ROUND(COALESCE(monto_pagado, 0)) AS INTEGER), 0), CAST(ROUND(total) AS INTEGER))" : "CASE WHEN estado_pago = 'PAGADA' THEN CAST(ROUND(total) AS INTEGER) ELSE 0 END";
+        const operacion = ventas.has('operacion_id') ? 'operacion_id' : 'NULL';
+        await db.execute('ALTER TABLE ventas RENAME TO ventas_migracion_v3;');
+        await db.execute("CREATE TABLE ventas (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, ruta_id INTEGER, producto_nombre TEXT NOT NULL, cantidad INTEGER NOT NULL DEFAULT 1, precio_aplicado INTEGER NOT NULL, costo_aplicado INTEGER NOT NULL, total INTEGER NOT NULL, utilidad INTEGER NOT NULL, fecha TEXT NOT NULL, hora TEXT NOT NULL, estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE', fecha_pago TEXT, metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO', monto_pagado INTEGER NOT NULL DEFAULT 0, operacion_id TEXT UNIQUE, FOREIGN KEY (cliente_id) REFERENCES clientes(id), FOREIGN KEY (ruta_id) REFERENCES rutas(id), CHECK (monto_pagado >= 0 AND monto_pagado <= total));");
+        await db.execute('INSERT INTO ventas (id, cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) SELECT id, cliente_id, ruta_id, producto_nombre, cantidad, CAST(ROUND(precio_aplicado) AS INTEGER), CAST(ROUND(costo_aplicado) AS INTEGER), CAST(ROUND(total) AS INTEGER), CAST(ROUND(utilidad) AS INTEGER), fecha, hora, estado_pago, fecha_pago, ' + metodo + ', ' + monto + ', ' + operacion + ' FROM ventas_migracion_v3;');
+        await db.execute('DROP TABLE ventas_migracion_v3;');
+      }
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);');
+      await db.execute('COMMIT;');
+    } catch (error) {
+      try { await db.execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      throw error;
+    } finally {
+      await db.execute('PRAGMA foreign_keys = ON;');
     }
   }
 
   private async verificarEsquemaCompleto(): Promise<void> {
-    const tablasRequeridas = [
-      'clientes',
-      'mascotas',
-      'productos',
-      'rutas',
-      'ventas',
-      'configuracion_app',
-    ];
+    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
-    const resultado = await this.conn().query(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');',
-    );
-    const existentes = new Set((resultado.values ?? []).map((row) => String(row.name)));
+    const r = await this.conn().query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');');
+    const existentes = new Set((r.values ?? []).map((row) => String(row.name)));
     const faltantes = tablasRequeridas.filter((nombre) => !existentes.has(nombre));
-
-    if (faltantes.length) {
-      throw new Error(
-        'La base de datos no quedó lista: faltan tablas (' + faltantes.join(', ') + ').',
-      );
-    }
+    if (faltantes.length) throw new Error('La base de datos no quedó lista: faltan tablas (' + faltantes.join(', ') + ').');
+    const fk = await this.conn().query('PRAGMA foreign_keys;');
+    if (Number(fk.values?.[0]?.foreign_keys ?? 0) !== 1) await this.conn().execute('PRAGMA foreign_keys = ON;');
   }
 
   private async cerrarConexion(): Promise<void> {
@@ -705,65 +712,64 @@ class Database {
     precio_aplicado: number;
     costo_aplicado: number;
     estado_pago?: 'PAGADA' | 'PENDIENTE';
+    metodo_pago?: string;
+    monto_pagado?: number;
+    operacion_id?: string;
   }): Promise<number> {
     const cantidad = enteroPositivo(v.cantidad, 'La cantidad');
     const precio = numeroNoNegativo(v.precio_aplicado, 'El precio aplicado');
     const costo = numeroNoNegativo(v.costo_aplicado, 'El costo aplicado');
     const productoNombre = textoObligatorio(v.producto_nombre, 'El producto');
-
+    const total = multiplicarDinero(precio, cantidad, 'El total');
+    const utilidad = multiplicarDinero(precio - costo, cantidad, 'La utilidad');
+    const montoPagado = v.monto_pagado == null ? (v.estado_pago === 'PAGADA' ? total : 0) : numeroNoNegativo(v.monto_pagado, 'El monto pagado');
+    if (montoPagado > total) throw new Error('El monto pagado no puede superar el total de la venta.');
+    const estado = montoPagado === total ? 'PAGADA' : 'PENDIENTE';
+    const metodo = v.metodo_pago?.trim() || (estado === 'PAGADA' ? 'EFECTIVO' : 'FIADO');
+    const operacionId = v.operacion_id?.trim() || null;
+    if (operacionId) {
+      const existente = await this.conn().query('SELECT id FROM ventas WHERE operacion_id = ?;', [operacionId]);
+      if (existente.values?.[0]?.id != null) return Number(existente.values[0].id);
+    }
     const cliente = await this.conn().query('SELECT id FROM clientes WHERE id = ? AND estado = \'activo\';', [v.cliente_id]);
     if (!cliente.values?.length) throw new Error('El cliente no existe o está archivado.');
-
     if (v.ruta_id != null) {
       const ruta = await this.conn().query('SELECT estado, paquetes_llevados FROM rutas WHERE id = ?;', [v.ruta_id]);
       const row = ruta.values?.[0];
       if (!row) throw new Error('La ruta no existe.');
       if (row.estado !== 'EN_CURSO') throw new Error('No se pueden registrar ventas en una ruta que no está en curso.');
-
-      const vendidos = await this.conn().query(
-        'SELECT COALESCE(SUM(cantidad), 0) as n FROM ventas WHERE ruta_id = ?;',
-        [v.ruta_id]
-      );
+      const vendidos = await this.conn().query('SELECT COALESCE(SUM(cantidad), 0) as n FROM ventas WHERE ruta_id = ?;', [v.ruta_id]);
       const yaVendidos = Number(vendidos.values?.[0]?.n ?? 0);
       const llevados = Number(row.paquetes_llevados ?? 0);
-      if (yaVendidos + cantidad > llevados) {
-        throw new Error(`No hay suficientes paquetes disponibles en la ruta. Disponibles: ${Math.max(llevados - yaVendidos, 0)}.`);
-      }
+      if (yaVendidos + cantidad > llevados) throw new Error('No hay suficientes paquetes disponibles en la ruta. Disponibles: ' + Math.max(llevados - yaVendidos, 0) + '.');
     }
-
     const ahora = new Date();
-    const total = precio * cantidad;
-    const utilidad = (precio - costo) * cantidad;
-    const estado = v.estado_pago ?? 'PENDIENTE';
-
-    const res = await this.conn().run(
-      `INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-      [
-        v.cliente_id,
-        v.ruta_id ?? null,
-        productoNombre,
-        cantidad,
-        precio,
-        costo,
-        total,
-        utilidad,
-        fechaLocalISO(ahora),
-        horaLocalHHMM(ahora),
-        estado,
-        estado === 'PAGADA' ? fechaLocalISO(ahora) : null,
-      ]
-    );
-    await this.persist();
-    return Number(res.changes?.lastId ?? 0);
+    await this.conn().execute('BEGIN TRANSACTION;');
+    try {
+      const res = await this.conn().run(`INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [v.cliente_id, v.ruta_id ?? null, productoNombre, cantidad, precio, costo, total, utilidad, fechaLocalISO(ahora), horaLocalHHMM(ahora), estado, estado === 'PAGADA' ? fechaLocalISO(ahora) : null, metodo, montoPagado, operacionId]);
+      await this.conn().execute('COMMIT;');
+      await this.persist();
+      return Number(res.changes?.lastId ?? 0);
+    } catch (error) {
+      try { await this.conn().execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      if (operacionId) {
+        const existente = await this.conn().query('SELECT id FROM ventas WHERE operacion_id = ?;', [operacionId]);
+        if (existente.values?.[0]?.id != null) return Number(existente.values[0].id);
+      }
+      throw error;
+    }
   }
 
   async marcarVentaPagada(id: number): Promise<void> {
-    await this.conn().run(
-      'UPDATE ventas SET estado_pago = \'PAGADA\', fecha_pago = ? WHERE id = ? AND estado_pago = \'PENDIENTE\';',
-      [fechaLocalISO(), id]
-    );
-    await this.persist();
+    await this.conn().execute('BEGIN TRANSACTION;');
+    try {
+      await this.conn().run('UPDATE ventas SET estado_pago = \'PAGADA\', fecha_pago = ?, monto_pagado = total WHERE id = ? AND estado_pago = \'PENDIENTE\';', [fechaLocalISO(), id]);
+      await this.conn().execute('COMMIT;');
+      await this.persist();
+    } catch (error) {
+      try { await this.conn().execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      throw error;
+    }
   }
 
   async listarVentasPorCliente(clienteId: number): Promise<Venta[]> {
@@ -928,7 +934,7 @@ class Database {
     if (data.database !== DB_NAME && data.database !== DB_NAME + '.db') {
       throw new Error('Este respaldo no pertenece a CAMELLO.');
     }
-    data.database = DB_NAME;
+    data.database = this.activeDbName;
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
     if (data.encrypted !== false) throw new Error('No se admiten respaldos cifrados en esta versión.');
     if (!Array.isArray(data.tables)) throw new Error('El respaldo está incompleto.');
@@ -948,6 +954,8 @@ class Database {
       await this.sqlite.importFromJson(serialized);
     } finally {
       await this.abrirConexion();
+      await this.prepararEsquema();
+      await this.seedProductosSiVacio();
       await this.persist();
     }
   }

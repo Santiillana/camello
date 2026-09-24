@@ -3,6 +3,7 @@ import { database } from '../db/database';
 import { aplicarTema } from '../utils/theme';
 import { formatoMoneda } from '../utils/format';
 import type { ConfiguracionApp, Producto } from '../types';
+import { descargarRespaldo, diasDesdeUltimoRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
 
 type Props = {
   onConfigChanged?: (config: ConfiguracionApp) => void;
@@ -18,6 +19,9 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [guardandoDatos, setGuardandoDatos] = useState(false);
+  const [guardandoProducto, setGuardandoProducto] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   async function cargar() {
     try {
@@ -41,6 +45,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
 
   async function guardarDatos(e: React.FormEvent) {
     e.preventDefault();
+    setGuardandoDatos(true);
     try {
       await database.guardarConfiguracion({
         negocio_nombre: negocio.trim(),
@@ -54,11 +59,14 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setMensaje('Configuración guardada.');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGuardandoDatos(false);
     }
   }
 
   async function guardarProducto(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setGuardandoProducto(true);
     const datos = new FormData(e.currentTarget);
     const nombre = String(datos.get('nombre') ?? '').trim();
     const precio = Number(datos.get('precio'));
@@ -76,6 +84,24 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setMensaje('Producto guardado.');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGuardandoProducto(false);
+    }
+  }
+
+  async function exportarRespaldo() {
+    setExportando(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarRespaldo();
+      descargarRespaldo(json);
+      registrarExportacionRespaldo();
+      setMensaje('Respaldo exportado correctamente.');
+    } catch (e: unknown) {
+      setError('No se pudo exportar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportando(false);
     }
   }
 
@@ -122,7 +148,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
             </div>
           </label>
           <p className="texto-vacio">Moneda: COP (peso colombiano).</p>
-          <button className="boton-primario" type="submit">Guardar cambios</button>
+          <button className="boton-primario" type="submit" disabled={guardandoDatos}>{guardandoDatos ? 'Guardando…' : 'Guardar cambios'}</button>
         </form>
       </section>
 
@@ -161,7 +187,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
                 setEditandoProducto(null);
                 setMostrarNuevo(false);
               }}>Cancelar</button>
-              <button type="submit" className="boton-primario">Guardar producto</button>
+              <button type="submit" className="boton-primario" disabled={guardandoProducto}>{guardandoProducto ? 'Guardando…' : 'Guardar producto'}</button>
             </div>
           </form>
         )}
@@ -189,6 +215,23 @@ export default function Configuracion({ onConfigChanged }: Props) {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="tarjeta">
+        <h2>Respaldo</h2>
+        {(() => {
+          const dias = diasDesdeUltimoRespaldo();
+          return dias == null || dias > 7 ? (
+            <p className="texto-alerta">
+              {dias == null ? 'Aún no has exportado un respaldo.' : 'Han pasado ' + dias + ' días desde el último respaldo.'}
+            </p>
+          ) : (
+            <p className="texto-vacio">Último respaldo: hace {dias} día(s).</p>
+          );
+        })()}
+        <button className="boton-primario boton-grande" type="button" onClick={() => void exportarRespaldo()} disabled={exportando}>
+          {exportando ? 'Exportando…' : 'Exportar respaldo'}
+        </button>
       </section>
 
       {mensaje && <p className="banner-exito">{mensaje}</p>}

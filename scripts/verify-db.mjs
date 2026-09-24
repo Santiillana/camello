@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js';
 import { fileURLToPath } from 'node:url';
 
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const REQUIRED_TABLES = [
   'clientes',
   'mascotas',
@@ -42,8 +42,8 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS productos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL,
-    precio REAL NOT NULL,
-    costo REAL NOT NULL,
+    precio INTEGER NOT NULL,
+    costo INTEGER NOT NULL,
     activo INTEGER NOT NULL DEFAULT 1
   );`,
   `CREATE TABLE IF NOT EXISTS rutas (
@@ -69,16 +69,20 @@ const SCHEMA_STATEMENTS = [
     ruta_id INTEGER,
     producto_nombre TEXT NOT NULL,
     cantidad INTEGER NOT NULL DEFAULT 1,
-    precio_aplicado REAL NOT NULL,
-    costo_aplicado REAL NOT NULL,
-    total REAL NOT NULL,
-    utilidad REAL NOT NULL,
+    precio_aplicado INTEGER NOT NULL,
+    costo_aplicado INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    utilidad INTEGER NOT NULL,
     fecha TEXT NOT NULL,
     hora TEXT NOT NULL,
     estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE',
     fecha_pago TEXT,
+    metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO',
+    monto_pagado INTEGER NOT NULL DEFAULT 0,
+    operacion_id TEXT UNIQUE,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
-    FOREIGN KEY (ruta_id) REFERENCES rutas(id)
+    FOREIGN KEY (ruta_id) REFERENCES rutas(id),
+    CHECK (monto_pagado >= 0 AND monto_pagado <= total)
   );`,
   `CREATE TABLE IF NOT EXISTS configuracion_app (
     clave TEXT PRIMARY KEY,
@@ -103,6 +107,49 @@ function migrateVersion2(db) {
   if (!columns.has('hora_planificada')) db.run('ALTER TABLE rutas ADD COLUMN hora_planificada TEXT;');
 }
 
+function columnMap(db, table) {
+  const rows = db.exec('PRAGMA table_info(' + table + ');')[0]?.values ?? [];
+  return new Map(rows.map((row) => [String(row[1]), String(row[2] ?? '').toUpperCase()]));
+}
+
+function migrateVersion3(db) {
+  const productos = columnMap(db, 'productos');
+  const ventas = columnMap(db, 'ventas');
+  const productosListos = productos.get('precio') === 'INTEGER' && productos.get('costo') === 'INTEGER';
+  const ventasListas = ventas.get('precio_aplicado') === 'INTEGER' && ventas.get('costo_aplicado') === 'INTEGER' && ventas.get('total') === 'INTEGER' && ventas.get('utilidad') === 'INTEGER' && ventas.has('metodo_pago') && ventas.has('monto_pagado') && ventas.has('operacion_id');
+  if (productosListos && ventasListas) return;
+  db.run('PRAGMA foreign_keys = OFF;');
+  db.run('BEGIN TRANSACTION;');
+  try {
+    if (!productosListos) {
+      db.run('ALTER TABLE productos RENAME TO productos_migracion_v3;');
+      db.run('CREATE TABLE productos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, precio INTEGER NOT NULL, costo INTEGER NOT NULL, activo INTEGER NOT NULL DEFAULT 1);');
+      db.run('INSERT INTO productos (id, nombre, precio, costo, activo) SELECT id, nombre, CAST(ROUND(precio) AS INTEGER), CAST(ROUND(costo) AS INTEGER), activo FROM productos_migracion_v3;');
+      db.run('DROP TABLE productos_migracion_v3;');
+    }
+    if (!ventasListas) {
+      db.run('DROP INDEX IF EXISTS idx_ventas_cliente;');
+      db.run('DROP INDEX IF EXISTS idx_ventas_ruta;');
+      db.run('DROP INDEX IF EXISTS idx_ventas_fecha;');
+      const metodo = ventas.has('metodo_pago') ? "COALESCE(metodo_pago, CASE WHEN estado_pago = 'PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END)" : "CASE WHEN estado_pago = 'PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END";
+      const monto = ventas.has('monto_pagado') ? "MIN(MAX(CAST(ROUND(COALESCE(monto_pagado, 0)) AS INTEGER), 0), CAST(ROUND(total) AS INTEGER))" : "CASE WHEN estado_pago = 'PAGADA' THEN CAST(ROUND(total) AS INTEGER) ELSE 0 END";
+      const operacion = ventas.has('operacion_id') ? 'operacion_id' : 'NULL';
+      db.run('ALTER TABLE ventas RENAME TO ventas_migracion_v3;');
+      db.run("CREATE TABLE ventas (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, ruta_id INTEGER, producto_nombre TEXT NOT NULL, cantidad INTEGER NOT NULL DEFAULT 1, precio_aplicado INTEGER NOT NULL, costo_aplicado INTEGER NOT NULL, total INTEGER NOT NULL, utilidad INTEGER NOT NULL, fecha TEXT NOT NULL, hora TEXT NOT NULL, estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE', fecha_pago TEXT, metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO', monto_pagado INTEGER NOT NULL DEFAULT 0, operacion_id TEXT UNIQUE, FOREIGN KEY (cliente_id) REFERENCES clientes(id), FOREIGN KEY (ruta_id) REFERENCES rutas(id), CHECK (monto_pagado >= 0 AND monto_pagado <= total));");
+      db.run('INSERT INTO ventas (id, cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) SELECT id, cliente_id, ruta_id, producto_nombre, cantidad, CAST(ROUND(precio_aplicado) AS INTEGER), CAST(ROUND(costo_aplicado) AS INTEGER), CAST(ROUND(total) AS INTEGER), CAST(ROUND(utilidad) AS INTEGER), fecha, hora, estado_pago, fecha_pago, ' + metodo + ', ' + monto + ', ' + operacion + ' FROM ventas_migracion_v3;');
+      db.run('DROP TABLE ventas_migracion_v3;');
+    }
+    db.run('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);');
+    db.run('COMMIT;');
+  } catch (error) {
+    try { db.run('ROLLBACK;'); } catch {}
+    throw error;
+  } finally {
+    db.run('PRAGMA foreign_keys = ON;');
+  }
+}
 function initialize(db) {
   applySchema(db);
   const currentVersion = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
@@ -114,6 +161,7 @@ function initialize(db) {
   // Se ejecuta también cuando ya figura como aplicada para reparar columnas
   // que falten por una actualización anterior incompleta.
   migrateVersion2(db);
+  migrateVersion3(db);
   db.run(`PRAGMA user_version = ${DB_VERSION};`);
   assertRequiredTables(db, 'inicialización');
 }
@@ -218,4 +266,8 @@ if (version !== DB_VERSION) throw new Error(`migración: user_version = ${versio
 fresh.close();
 legacy.close();
 
-console.log('verify-db: OK (base nueva + migración v1→v2 + conservación de datos)');
+const productTypes = new Map((fresh.exec('PRAGMA table_info(productos);')[0]?.values ?? []).map((row) => [String(row[1]), String(row[2]).toUpperCase()]));
+for (const field of ['precio', 'costo']) if (productTypes.get(field) !== 'INTEGER') throw new Error('base nueva: productos.' + field + ' no usa INTEGER');
+const saleTypes = new Map((fresh.exec('PRAGMA table_info(ventas);')[0]?.values ?? []).map((row) => [String(row[1]), String(row[2]).toUpperCase()]));
+for (const field of ['precio_aplicado', 'costo_aplicado', 'total', 'utilidad', 'monto_pagado']) if (saleTypes.get(field) !== 'INTEGER') throw new Error('base nueva: ventas.' + field + ' no usa INTEGER');
+console.log('verify-db: OK (base nueva + migración v1→v3 + enteros COP + pago atómico)');
