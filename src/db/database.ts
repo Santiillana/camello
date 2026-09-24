@@ -521,10 +521,6 @@ class Database {
       const filasAntes = Number((snapshot.values ?? []).length);
       const filasDespues = Number(despues.values?.[0]?.n ?? 0);
       if (filasAntes !== filasDespues) throw new Error('La migración v8 cambió el conteo de rutas.');
-    } catch (error) {
-      // El coordinador de migraciones revierte toda la transacción, incluida la reconstrucción.
-      throw error;
-    }
     if (!reemplazoCreado) throw new Error('La reconstrucción v8 no terminó.');
     const fk = await db.query('PRAGMA foreign_key_check;');
     if ((fk.values ?? []).length > 0) throw new Error('La migración v8 dejó claves foráneas inválidas.');
