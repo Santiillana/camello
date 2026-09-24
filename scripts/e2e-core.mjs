@@ -45,6 +45,11 @@ async function omitir(page) {
 
 async function crearCliente(page) {
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.waitForFunction(
+    () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
+    undefined,
+    { timeout: 15000 },
+  );
   await configurarPrimeraVez(page);
   await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -109,7 +114,11 @@ async function crearCliente(page) {
   }
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.documentElement.dataset.camelloSqliteStage === 'persist', undefined, { timeout: 15000 });
+  await page.waitForFunction(
+    () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
+    undefined,
+    { timeout: 15000 },
+  );
   const trasRecarga = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
   if (trasRecarga.length !== 1 || trasRecarga[0]?.estado !== 'activo') {
     throw new Error(
