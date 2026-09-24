@@ -48,8 +48,8 @@ jobs:
           if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
             echo "SIGNING_READY=true" >> "$GITHUB_ENV"
           else
-            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
-            echo "Secretos de release ausentes: se omite el firmado sin fallar."
+            echo "Faltan secretos de firma: CAMELLO_RELEASE_KEYSTORE_B64, CAMELLO_KEYSTORE_PASSWORD, CAMELLO_KEY_ALIAS y CAMELLO_KEY_PASSWORD."
+            exit 1
           fi
 
       - name: Compilar APK debug fallback
