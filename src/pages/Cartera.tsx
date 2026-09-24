@@ -5,6 +5,8 @@ import type { CarteraItem } from '../types';
 import { formatoMoneda, hoyISO, inicioMesISO, inicioSemanaISO } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import MetodoPagoSelector, { type MetodoPagoCobro } from '../components/MetodoPagoSelector';
+import BorradorPendiente from '../components/BorradorPendiente';
+import { useBorrador } from '../hooks/useBorrador';
 
 type Periodo = 'dia' | 'semana' | 'mes';
 
@@ -142,7 +144,15 @@ function PagoCartera({
   const [metodo, setMetodo] = useState<MetodoPagoCobro>('EFECTIVO');
   const [pagando, setPagando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasoInicial, setPasoInicial] = useState(0);
   const operacionRef = useRef<string | null>(null);
+  const datosBorrador = { monto, metodo };
+  const borrador = useBorrador<typeof datosBorrador>({
+    tipo: 'pago-cartera',
+    clave: String(item.cliente_id),
+    datos: datosBorrador,
+    paso: pasoInicial,
+  });
 
   const tarjetas = [
     {
@@ -220,6 +230,7 @@ function PagoCartera({
     }
     try {
       await database.registrarPagoCliente(Number(item.cliente_id), Number(monto), metodo, operacionRef.current);
+      await borrador.limpiar();
       await onGuardado();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -238,12 +249,30 @@ function PagoCartera({
 
   return (
     <section className="tarjeta modal-flotante">
+      {borrador.pendiente && (
+        <BorradorPendiente
+          fecha={borrador.pendiente.updated_at}
+          onDescartar={() => void borrador.descartar()}
+          onContinuar={async () => {
+            const pendiente = borrador.pendiente;
+            if (!pendiente) return;
+            const paso = await borrador.continuar();
+            setMonto(pendiente.datos.monto);
+            setMetodo(pendiente.datos.metodo);
+            setPasoInicial(paso);
+          }}
+        />
+      )}
       <AsistenteTarjetas
         titulo={'Pagar a ' + item.nombre}
         tarjetas={tarjetas}
         onCompletar={async () => { await registrar(); }}
         onCancelar={onCancelar}
         textoFinal="CONFIRMAR COBRO"
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
       />
     </section>
   );
