@@ -7,15 +7,15 @@ Aplicación Android local, offline-first, para que **COMBOPITT** registre client
 - Inicio con Hoy / Semana / Mes, dinero vendido, paquetes, cobrado, pendiente, costo y utilidad.
 - Recordatorio de recompra y Cartera con cobro por tarjetas.
 - Alta y edición de clientes/mascotas con AsistenteTarjetas.
-- Fotos comprimidas, ubicación GPS/manual/WhatsApp y mini mapa.
+- Fotos comprimidas, ubicación GPS/manual/WhatsApp y mini mapa; GPS nativo pide permisos y los enlaces cortos de Google Maps se resuelven en APK con límite de redirecciones.
 - Nueva venta por tarjetas con Efectivo, Transferencia/Nequi, Fiado y Pago parcial.
 - Voucher y compartir.
 - Rutas operativas en curso/finalizadas/canceladas, métricas y cuadre.
 - Mapa con filtros persistentes y popup seguro.
 - Respaldo con checksum, restauración y rotación automática.
 - Configuración inicial y productos.
-- SQLite nativo con migraciones v2→v8.
-- CI para verify, UI smoke, E2E y APK.
+- SQLite nativo con migraciones v2→v10, reparación v9 para referencias temporales y borradores persistentes.
+- CI para verify, UI smoke, E2E y APK; los tests de migración y parser se conservan como puertas del verify.
 - Release firmado preparado para secretos de GitHub.
 
 ## Arquitectura
@@ -36,7 +36,7 @@ npm run benchmark:db
 npx cap sync android
 ```
 
-Para release firmado se requieren los cuatro secretos descritos en `docs/RELEASE.md`.
+Para release firmado se requieren los cuatro secretos descritos en `docs/RELEASE.md`. La ejecución final de Verify/UI/E2E/APK de este cierre quedó QUEUED y no se interpreta como PASÓ hasta observar su conclusión.
 
 ## Estructura
 
