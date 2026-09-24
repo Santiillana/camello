@@ -100,7 +100,7 @@ export default function Dashboard({ config }: Props) {
           <section className="dashboard-total">
             <span className="texto-kicker">Total vendido</span>
             <strong>{formatoMoneda(resumen.ventas)}</strong>
-            <span className="detalle-cliente">{resumen.numero_ventas ?? 0} ventas · {resumen.paquetes} paquetes</span>
+            <span className="detalle-cliente">{resumen.numero_ventas ?? 0} {(resumen.numero_ventas ?? 0) === 1 ? 'venta' : 'ventas'} · {resumen.paquetes} {(resumen.paquetes ?? 0) === 1 ? 'paquete' : 'paquetes'}</span>
           </section>
 
           <section className="grid-stats">
