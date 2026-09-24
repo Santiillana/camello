@@ -125,6 +125,10 @@ function migrate14(db){
 }
 
 
+function applySchema(db){
+  for(const statement of CURRENT_SCHEMA) db.run(statement);
+}
+
 function initialize(db){
   applySchema(db);
   const current=Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0]??0);
