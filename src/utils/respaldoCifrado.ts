@@ -3,6 +3,20 @@ const ITERACIONES = 180000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
+type RespaldoCifrado = {
+  camello_encrypted_backup_version?: unknown;
+  iv?: unknown;
+  salt?: unknown;
+  ciphertext?: unknown;
+};
+
+function esRespaldoCifrado(value: unknown): value is RespaldoCifrado {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Formato de respaldo cifrado no reconocido.');
+  }
+  return true;
+}
+
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
