@@ -4,6 +4,7 @@ import { database } from '../db/database';
 import type { CarteraItem } from '../types';
 import { formatoMoneda, hoyISO, inicioMesISO, inicioSemanaISO } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
+import MetodoPagoSelector, { type MetodoPagoCobro } from '../components/MetodoPagoSelector';
 
 type Periodo = 'dia' | 'semana' | 'mes';
 
@@ -138,7 +139,7 @@ function PagoCartera({
   onCancelar: () => void;
 }) {
   const [monto, setMonto] = useState(String(item.pendiente));
-  const [metodo, setMetodo] = useState<'EFECTIVO' | 'TRANSFERENCIA_NEQUI'>('EFECTIVO');
+  const [metodo, setMetodo] = useState<MetodoPagoCobro>('EFECTIVO');
   const [pagando, setPagando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const operacionRef = useRef<string | null>(null);
@@ -177,22 +178,11 @@ function PagoCartera({
       id: 'metodo',
       titulo: 'Método de pago',
       contenido: (
-        <div className="metodos-pago">
-          <button
-            type="button"
-            className={'metodo-pago-card' + (metodo === 'EFECTIVO' ? ' activo' : '')}
-            onClick={() => setMetodo('EFECTIVO')}
-          >
-            <strong>Efectivo</strong><span>Pago recibido directamente</span>
-          </button>
-          <button
-            type="button"
-            className={'metodo-pago-card' + (metodo === 'TRANSFERENCIA_NEQUI' ? ' activo' : '')}
-            onClick={() => setMetodo('TRANSFERENCIA_NEQUI')}
-          >
-            <strong>Transferencia / Nequi</strong><span>Pago electrónico</span>
-          </button>
-        </div>
+        <MetodoPagoSelector
+          value={metodo}
+          options={['EFECTIVO', 'TRANSFERENCIA_NEQUI']}
+          onChange={setMetodo}
+        />
       ),
     },
     {
