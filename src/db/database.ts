@@ -875,16 +875,112 @@ class Database {
     }
   }
 
-  async marcarVentaPagada(id: number): Promise<void> {
+  async registrarPagoCliente(
+    clienteId: number,
+    montoSolicitado: number,
+    metodoPago: 'EFECTIVO' | 'TRANSFERENCIA_NEQUI',
+    operacionId?: string,
+  ): Promise<number> {
+    const monto = numeroNoNegativo(montoSolicitado, 'El monto del pago');
+    if (monto <= 0) throw new Error('El monto del pago debe ser mayor que 0.');
+
+    const cliente = await this.conn().query(
+      "SELECT id FROM clientes WHERE id = ? AND estado = 'activo';",
+      [clienteId],
+    );
+    if (!cliente.values?.length) throw new Error('El cliente no existe o está archivado.');
+
+    const ahora = new Date();
+    const op = operacionId?.trim() || null;
+    const ventas = await this.conn().query(
+      `SELECT id, total, COALESCE(monto_pagado,0) as monto_pagado
+       FROM ventas
+       WHERE cliente_id = ? AND total > COALESCE(monto_pagado,0)
+       ORDER BY fecha ASC, hora ASC, id ASC;`,
+      [clienteId],
+    );
+
+    let restante = monto;
+    let aplicado = 0;
+
     await this.conn().beginTransaction();
     try {
-      await this.conn().run('UPDATE ventas SET estado_pago = \'PAGADA\', fecha_pago = ?, monto_pagado = total WHERE id = ? AND estado_pago = \'PENDIENTE\';', [fechaLocalISO(), id], false);
+      for (const row of ventas.values ?? []) {
+        if (restante <= 0) break;
+
+        const ventaId = Number(row.id);
+        const totalVenta = Number(row.total);
+        const pagadoActual = Number(row.monto_pagado ?? 0);
+        const saldo = Math.max(totalVenta - pagadoActual, 0);
+        const abono = Math.min(saldo, restante);
+        if (abono <= 0) continue;
+
+        const pagoOperacion = op ? op + '-' + ventaId : null;
+        if (pagoOperacion) {
+          const previo = await this.conn().query(
+            'SELECT id FROM pagos WHERE operacion_id = ?;',
+            [pagoOperacion],
+          );
+          if (previo.values?.length) {
+            restante -= abono;
+            aplicado += abono;
+            continue;
+          }
+        }
+
+        await this.conn().run(
+          'INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?);',
+          [
+            ventaId,
+            clienteId,
+            abono,
+            fechaLocalISO(ahora),
+            horaLocalHHMM(ahora),
+            metodoPago,
+            pagoOperacion,
+          ],
+          false,
+        );
+
+        const nuevoPagado = pagadoActual + abono;
+        await this.conn().run(
+          `UPDATE ventas
+           SET monto_pagado = ?, estado_pago = ?, fecha_pago = ?, metodo_pago = ?
+           WHERE id = ?;`,
+          [
+            nuevoPagado,
+            nuevoPagado >= totalVenta ? 'PAGADA' : 'PENDIENTE',
+            fechaLocalISO(ahora),
+            metodoPago,
+            ventaId,
+          ],
+          false,
+        );
+
+        restante -= abono;
+        aplicado += abono;
+      }
+
+      if (restante > 0) throw new Error('El pago supera la cartera pendiente del cliente.');
       await this.conn().commitTransaction();
       await this.persist();
+      return aplicado;
     } catch (error) {
       try { await this.conn().rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       throw error;
     }
+  }
+
+  async marcarVentaPagada(id: number): Promise<void> {
+    const venta = await this.conn().query(
+      'SELECT cliente_id, total, COALESCE(monto_pagado,0) as monto_pagado FROM ventas WHERE id = ?;',
+      [id],
+    );
+    const row = venta.values?.[0];
+    if (!row) throw new Error('La venta no existe.');
+    const saldo = Math.max(Number(row.total) - Number(row.monto_pagado ?? 0), 0);
+    if (saldo <= 0) return;
+    await this.registrarPagoCliente(Number(row.cliente_id), saldo, 'EFECTIVO');
   }
 
   async listarVentasPorCliente(clienteId: number): Promise<Venta[]> {
