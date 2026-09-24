@@ -1,6 +1,12 @@
 const ITERACIONES = 150000;
 const enc = new TextEncoder();
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
   for (const byte of bytes) bin += String.fromCharCode(byte);
@@ -14,7 +20,7 @@ function fromBase64(value: string): Uint8Array {
 }
 async function derive(pin: string, salt: Uint8Array): Promise<Uint8Array> {
   const base = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: ITERACIONES, hash: 'SHA-256' }, base, 256);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: toArrayBuffer(salt), iterations: ITERACIONES, hash: 'SHA-256' }, base, 256);
   return new Uint8Array(bits);
 }
 export async function crearHashPin(pin: string): Promise<{ hash: string; salt: string }> {
