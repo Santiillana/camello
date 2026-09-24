@@ -178,18 +178,57 @@ Actualizados: README, ARQUITECTURA, DATOS, DECISIONES, PRUEBAS, RELEASE, PROGRES
 ### A7 — entrega
 El informe final incluye hashes, estado CI/APK, Intacto verificado, Pendiente de decidir y guía manual.
 
-## Compuerta final
 
-HEAD verificado de la rama al cierre de este turno: `2f3228ed047b1ae5736b483fbf9fed3d86c74d4d`.
+## B0-B6 — Bloque de estabilidad final 2026-09-24
 
-- Verify: QUEUED en GitHub Actions (runs 344 y 345).
-- UI smoke: QUEUED (runs 228 y 229).
-- E2E: QUEUED (runs 50 y 51).
-- APK debug: QUEUED (runs 351 y 352).
-- Etiquetado de fases: SKIPPED porque no existe un commit con marcador `[phase-ok:...]` posterior a F0.
-- Release firmado: PENDIENTE DE SECRETOS de GitHub.
-- Instrumented Android: NO EJECUTABLE AQUÍ.
+### B0 — Reparación SQLite que bloqueaba ventas
+- Causa reproducida: la v8 anterior usaba ALTER TABLE rutas RENAME TO rutas_migracion_v8 en src/db/database.ts:326; SQLite reescribía la FK de ventas hacia rutas_migracion_v8 y luego la tabla temporal era eliminada.
+- Evidencia SQLite: sqlite_master mostró la FK de ventas apuntando a rutas_migracion_v8; PRAGMA foreign_key_check devolvió ventas -> rutas_migracion_v8.
+- Corrección: v8 reconstruye rutas sin RENAME; v9 repara referencias temporales existentes, valida foreign_key_check e integrity_check.
+- Fixtures añadidos: v7 y una base dañada por v8; flujo B0 cubierto en verify-db.
+- Estado de ejecución: BLOQUEADO por CI QUEUED; la prueba SQLite base del patrón causante: PASÓ.
 
-Tags reales al cierre: `fase-0-ok` existe; `fase-c1-ok` a `fase-c9-ok` no existen porque no se obtuvo una compuerta verde final para esas fases.
+### B1 — Borradores persistentes
+- Tabla borradores, migración v10, JSON + paso + fecha, upsert y purga a 7 días.
+- Autosalvado de 300 ms y guardado en visibilitychange/pagehide/pause/appStateChange.
+- Integrado en cliente, venta, ruta, pago y edición de cliente/mascota/ubicación.
+- Estado: IMPLEMENTADO; E2E preparado. Gate final: BLOQUEADO por CI QUEUED.
 
-No se ha tocado `main` ni se ha hecho merge.
+### B2 — Asistente a pantalla completa
+- Overlay fijo, progreso, una tarjeta por dato, foco automático, Enter=Siguiente y botón X con Guardar borrador/Descartar.
+- visualViewport/dvh para teclado virtual.
+- Atrás de Android retrocede tarjeta y luego cierra.
+- Alta de cliente, venta, ruta, pago, edición y ubicación usan el asistente.
+- Estado: IMPLEMENTADO; smoke de pantalla pendiente de ejecución final.
+
+### B3 — Ubicación
+- Android declara COARSE/FINE; @capacitor/geolocation pide permisos y toma lecturas de alta precisión.
+- Pegado acepta coordenadas, geo:, Google Maps y texto de WhatsApp; enlaces cortos se resuelven en APK vía CapacitorHttp con máximo 5 redirecciones y dominios Google permitidos.
+- Navegador comunica el bloqueo exacto para enlaces cortos y HTTP GPS.
+- Pin SVG inline, arrastrable y ajustable tocando el mapa; guarda fuente, precisión y fecha.
+- scripts/verify-ubicacion.ts: PASÓ localmente con 10 formatos + negativos.
+
+### B4 — Menú móvil
+- Riel fijo de 52 px, expansión recordada, contenido con margen, 10 iconos SVG con aria-label/title.
+- Estado: IMPLEMENTADO; comprobación 360 px pendiente del smoke final.
+
+### B5 — Auditoría de botones y flujos
+- E2E ampliado a borrador/reload, cuatro métodos de venta, doble toque, cobro desde Inicio/Cartera, venta en ruta, cierre, mapa y respaldo.
+- Auditoría estática corrigió enlace de Nueva ruta de Inicio y carga de Recordatorio de recompra.
+- Estado: IMPLEMENTADO; ejecución E2E final BLOQUEADA por cola.
+
+### B6 — Cierre documental
+- Este documento, DECISIONES, ARQUITECTURA, PRUEBAS, CHANGELOG y README actualizados con el bloque B.
+- Release firmado sigue requiriendo secretos de GitHub; no se declara APK firmado.
+- Guía manual incluye ubicación/GPS, enlace corto, compartir, foto, métodos de venta, ruta, supervivencia de formularios y menú móvil.
+
+## Compuerta final B
+
+HEAD actual: ff6b5f160216c61d2b6c7919150dfa7fda35752b.
+
+- Verify CAMELLO run 449: QUEUED.
+- APK debug run 456: QUEUED.
+- UI smoke run 333: QUEUED.
+- E2E run 155: QUEUED.
+- Tags B0-B6: no creados; no existe una compuerta verde observada.
+- No merge a main.
