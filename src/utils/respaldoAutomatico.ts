@@ -2,7 +2,7 @@ import { calcularChecksum } from './respaldo';
 
 export type BackupItem = {
   id: string;
-  kind: 'daily' | 'weekly';
+  kind: 'daily' | 'weekly' | 'monthly';
   date: string;
   json: string;
   checksum: string;
@@ -56,22 +56,24 @@ async function eliminar(id: string): Promise<void> {
 
 export async function necesitaRespaldoAutomatico(ahora = new Date()): Promise<boolean> {
   const fecha = ahora.toISOString().slice(0, 10);
-  const tipo: BackupItem['kind'] = ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
+  const day = ahora.getUTCDate();
+  const tipo: BackupItem['kind'] = day === 1 ? 'monthly' : ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
   const items = await listar();
-  return !items.some((item) => item.kind === tipo && item.date.slice(0, 10) === fecha);
+  const clave = tipo === 'monthly' ? fecha.slice(0,7) : fecha;
+  return !items.some((item) => item.kind === tipo && item.date.slice(0, tipo === 'monthly' ? 7 : 10) === clave);
 }
 
 export async function guardarRespaldoAutomatico(json: string, ahora = new Date()): Promise<void> {
   const fecha = ahora.toISOString();
   const dia = fecha.slice(0, 10);
   const existentes = await listar();
-  const tipoHoy: BackupItem['kind'] = ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
-  if (existentes.some((item) => item.id === tipoHoy + '-' + dia)) return;
-  const kind: BackupItem['kind'] = ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
+  const kind: BackupItem['kind'] = ahora.getUTCDate() === 1 ? 'monthly' : ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
+  const idKey = kind === 'monthly' ? dia.slice(0,7) : dia;
+  if (existentes.some((item) => item.id === kind + '-' + idKey)) return;
   const checksum = await calcularChecksum(json);
 
   await guardar({
-    id: kind + '-' + dia,
+    id: kind + '-' + idKey,
     kind,
     date: fecha,
     json,
@@ -81,9 +83,11 @@ export async function guardarRespaldoAutomatico(json: string, ahora = new Date()
   const items = await listar();
   const diarios = items.filter((item) => item.kind === 'daily').sort((a, b) => b.date.localeCompare(a.date));
   const semanales = items.filter((item) => item.kind === 'weekly').sort((a, b) => b.date.localeCompare(a.date));
+  const mensuales = items.filter((item) => item.kind === 'monthly').sort((a, b) => b.date.localeCompare(a.date));
 
   for (const item of diarios.slice(7)) await eliminar(item.id);
-  for (const item of semanales.slice(1)) await eliminar(item.id);
+  for (const item of semanales.slice(4)) await eliminar(item.id);
+  for (const item of mensuales.slice(3)) await eliminar(item.id);
 }
 
 export async function listarRespaldosAutomaticos(): Promise<BackupItem[]> {
