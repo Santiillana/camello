@@ -64,6 +64,11 @@ async function crearCliente(page) {
 
   await page.evaluate(() => window.dispatchEvent(new Event('pause')));
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(
+    () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
+    undefined,
+    { timeout: 15000 },
+  );
 
   await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).waitFor();
   await page.getByRole('button', { name: 'Continuar' }).click();
