@@ -20,8 +20,11 @@ export default function BottomNav() {
             <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/venta-nueva'); }}>
               <span>▣</span> Nueva venta
             </button>
-            <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/rutas?nueva=1'); }}>
+            <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/rutas?nuevo=1'); }}>
               <span>⌁</span> Nueva ruta
+            </button>
+            <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/gastos?nuevo=1'); }}>
+              <span>◫</span> Nuevo gasto
             </button>
           </div>
         )}

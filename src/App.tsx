@@ -19,6 +19,7 @@ const Informes = lazy(() => import('./pages/Informes'));
 const Cartera = lazy(() => import('./pages/Cartera'));
 const Respaldo = lazy(() => import('./pages/Respaldo'));
 const Recordatorios = lazy(() => import('./pages/Recordatorios'));
+const Gastos = lazy(() => import('./pages/Gastos'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
 
 const DB_INIT_TIMEOUT_MS = 15_000;
@@ -89,6 +90,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
             <Route path="/informes" element={<Informes />} />
             <Route path="/cartera" element={<Cartera />} />
             <Route path="/recordatorios" element={<Recordatorios />} />
+            <Route path="/gastos" element={<Gastos />} />
             <Route path="/configuracion" element={<Configuracion onConfigChanged={onConfigChanged} />} />
             <Route path="/respaldo" element={<Respaldo />} />
             <Route path="*" element={<Dashboard config={config} />} />

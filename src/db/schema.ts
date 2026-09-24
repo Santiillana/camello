@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 10
+export const DB_VERSION = 11
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -117,6 +117,48 @@ export const SCHEMA_STATEMENTS: string[] = [
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     CHECK (monto > 0)
   );`,
+  `CREATE TABLE IF NOT EXISTS categorias_gasto (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL UNIQUE,
+    tipo TEXT NOT NULL CHECK (tipo IN ('fijo','variable')),
+    naturaleza TEXT NOT NULL CHECK (naturaleza IN ('operativo','compra_insumos','retiro_dueno')),
+    presupuesto_mensual INTEGER,
+    activa INTEGER NOT NULL DEFAULT 1,
+    orden INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE TABLE IF NOT EXISTS gastos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT NOT NULL,
+    monto INTEGER NOT NULL CHECK (monto > 0),
+    categoria_id INTEGER NOT NULL,
+    descripcion TEXT,
+    metodo_pago TEXT,
+    estado TEXT NOT NULL DEFAULT 'pagado' CHECK (estado IN ('pagado','pendiente','anulado')),
+    fecha_pago TEXT,
+    fecha_limite TEXT,
+    proveedor TEXT,
+    ruta_id INTEGER,
+    recurrente_id INTEGER,
+    periodo TEXT NOT NULL,
+    foto_ref TEXT,
+    operacion_id TEXT UNIQUE,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    archivado INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (categoria_id) REFERENCES categorias_gasto(id),
+    FOREIGN KEY (ruta_id) REFERENCES rutas(id),
+    CHECK (monto > 0)
+  );`,
+  `CREATE TABLE IF NOT EXISTS gastos_recurrentes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria_id INTEGER NOT NULL,
+    nombre TEXT NOT NULL,
+    monto_estimado INTEGER NOT NULL CHECK (monto_estimado > 0),
+    dia_vencimiento INTEGER NOT NULL CHECK (dia_vencimiento BETWEEN 1 AND 31),
+    activo INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(categoria_id, nombre),
+    FOREIGN KEY (categoria_id) REFERENCES categorias_gasto(id)
+  );`,
   `CREATE TABLE IF NOT EXISTS configuracion_app (
     clave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
@@ -140,4 +182,11 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);`,
   `CREATE INDEX IF NOT EXISTS idx_borradores_updated ON borradores(updated_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_periodo ON gastos(periodo);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_estado ON gastos(estado);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_ruta ON gastos(ruta_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_recurrentes_categoria ON gastos_recurrentes(categoria_id);`
+
 ];

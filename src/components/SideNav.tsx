@@ -8,6 +8,7 @@ const ITEMS = [
   { to: '/cartera', label: 'Cartera', icon: 'M4 7h16v12H4V7Zm0 3h16M8 15h4' },
   { to: '/mapa', label: 'Mapa', icon: 'M4 5l6-2 6 2 4-2v16l-4 2-6-2-6 2V5Zm6-2v16m6-14v16' },
   { to: '/recordatorios', label: 'Recordatorios', icon: 'M7 18h10l-1-2v-5a4 4 0 0 0-8 0v5l-1 2Zm3 3h4' },
+  { to: '/gastos', label: 'Gastos', icon: 'M4 5h16v14H4zM7 9h10M7 13h6' },
   { to: '/informes', label: 'Informes', icon: 'M5 19V9M12 19V5M19 19v-8' },
   { to: '/respaldo', label: 'Respaldo', icon: 'M12 3v12m0 0 4-4m-4 4-4-4M5 20h14' },
   { to: '/configuracion', label: 'Configuración', icon: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5 1 2.1 2.2.5 1.8-1.1 1.6 1.6-1.1 1.8.5 2.2L21 12l-2.1 1  -.5 2.2 1.1 1.8-1.6 1.6-1.8-1.1-2.2.5L12 21l-1-2.1-2.2-.5-1.8 1.1-1.6-1.6 1.1-1.8-.5-2.2L3 12l2.1-1 .5-2.2-1.1-1.8 1.6-1.6 1.8 1.1 2.2-.5L12 3Z' },

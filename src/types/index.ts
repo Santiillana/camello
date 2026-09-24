@@ -175,3 +175,55 @@ export interface ResumenPeriodo {
   clientes_por_contactar?: number;
   cartera_pendiente?: number;
 }
+
+
+export type TipoCategoriaGasto = 'fijo' | 'variable';
+export type NaturalezaGasto = 'operativo' | 'compra_insumos' | 'retiro_dueno';
+export type EstadoGasto = 'pagado' | 'pendiente' | 'anulado';
+
+export interface CategoriaGasto {
+  id: number;
+  nombre: string;
+  tipo: TipoCategoriaGasto;
+  naturaleza: NaturalezaGasto;
+  presupuesto_mensual?: number | null;
+  activa: 0 | 1;
+  orden: number;
+}
+
+export interface Gasto {
+  id: number;
+  fecha: string;
+  monto: number;
+  categoria_id: number;
+  descripcion?: string | null;
+  metodo_pago?: string | null;
+  estado: EstadoGasto;
+  fecha_pago?: string | null;
+  fecha_limite?: string | null;
+  proveedor?: string | null;
+  ruta_id?: number | null;
+  recurrente_id?: number | null;
+  periodo: string;
+  foto_ref?: string | null;
+  operacion_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  archivado: 0 | 1;
+  categoria_nombre?: string;
+  naturaleza?: NaturalezaGasto;
+}
+
+export interface ResultadoMes {
+  periodo: string;
+  ventas: number;
+  costo_materia_prima: number;
+  utilidad_bruta: number;
+  gastos_operativos: number;
+  utilidad_neta: number;
+  margen_neto: number;
+  cobrado: number;
+  gastos_pagados: number;
+  flujo_caja: number;
+  gastos_pendientes: number;
+}

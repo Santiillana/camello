@@ -186,6 +186,7 @@ class Database {
       { version: 7, ejecutar: () => this.migrarVersion7() },
       { version: 8, ejecutar: () => this.migrarVersion8() },
       { version: 10, ejecutar: () => this.migrarVersion10() },
+      { version: 11, ejecutar: () => this.migrarVersion11() },
     ];
     for (const migracion of migraciones) {
       if (version < migracion.version) await migracion.ejecutar();
@@ -617,6 +618,226 @@ class Database {
       false,
     );
     await this.persist();
+  }
+
+
+  private async migrarVersion11(): Promise<void> {
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS categorias_gasto (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL UNIQUE,
+      tipo TEXT NOT NULL CHECK (tipo IN ('fijo','variable')),
+      naturaleza TEXT NOT NULL CHECK (naturaleza IN ('operativo','compra_insumos','retiro_dueno')),
+      presupuesto_mensual INTEGER,
+      activa INTEGER NOT NULL DEFAULT 1,
+      orden INTEGER NOT NULL DEFAULT 0
+    );`, false);
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS gastos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fecha TEXT NOT NULL,
+      monto INTEGER NOT NULL CHECK (monto > 0),
+      categoria_id INTEGER NOT NULL,
+      descripcion TEXT,
+      metodo_pago TEXT,
+      estado TEXT NOT NULL DEFAULT 'pagado' CHECK (estado IN ('pagado','pendiente','anulado')),
+      fecha_pago TEXT,
+      fecha_limite TEXT,
+      proveedor TEXT,
+      ruta_id INTEGER,
+      recurrente_id INTEGER,
+      periodo TEXT NOT NULL,
+      foto_ref TEXT,
+      operacion_id TEXT UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      archivado INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (categoria_id) REFERENCES categorias_gasto(id),
+      FOREIGN KEY (ruta_id) REFERENCES rutas(id)
+    );`, false);
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS gastos_recurrentes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      categoria_id INTEGER NOT NULL,
+      nombre TEXT NOT NULL,
+      monto_estimado INTEGER NOT NULL CHECK (monto_estimado > 0),
+      dia_vencimiento INTEGER NOT NULL CHECK (dia_vencimiento BETWEEN 1 AND 31),
+      activo INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(categoria_id, nombre),
+      FOREIGN KEY (categoria_id) REFERENCES categorias_gasto(id)
+    );`, false);
+    for (const [nombre, tipo, naturaleza, orden] of [
+      ['Arriendo', 'fijo', 'operativo', 1],
+      ['Servicios', 'fijo', 'operativo', 2],
+      ['Gas', 'variable', 'operativo', 3],
+      ['Transporte/Gasolina', 'variable', 'operativo', 4],
+      ['Empaques', 'variable', 'operativo', 5],
+      ['Publicidad', 'variable', 'operativo', 6],
+      ['Mantenimiento', 'variable', 'operativo', 7],
+      ['Otros', 'variable', 'operativo', 8],
+      ['Compra de materia prima', 'variable', 'compra_insumos', 9],
+      ['Retiro del dueño', 'variable', 'retiro_dueno', 10],
+    ] as const) {
+      await this.conn().run(
+        `INSERT INTO categorias_gasto (nombre, tipo, naturaleza, orden) VALUES (?, ?, ?, ?)
+         ON CONFLICT(nombre) DO NOTHING;`,
+        [nombre, tipo, naturaleza, orden],
+        false,
+      );
+    }
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_periodo ON gastos(periodo);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria_id);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_estado ON gastos(estado);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_ruta ON gastos(ruta_id);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_recurrentes_categoria ON gastos_recurrentes(categoria_id);', false);
+  }
+
+  async listarCategoriasGasto(incluirInactivas = false): Promise<CategoriaGasto[]> {
+    const r = await this.conn().query(
+      'SELECT * FROM categorias_gasto ' + (incluirInactivas ? '' : 'WHERE activa = 1 ') + 'ORDER BY orden, nombre;',
+    );
+    return (r.values ?? []) as CategoriaGasto[];
+  }
+
+  async crearCategoriaGasto(data: { nombre: string; tipo: TipoCategoriaGasto; naturaleza: NaturalezaGasto; presupuesto_mensual?: number | null }): Promise<number> {
+    const nombre = textoObligatorio(data.nombre, 'El nombre de la categoría').slice(0, 80);
+    if (data.presupuesto_mensual != null) numeroNoNegativo(data.presupuesto_mensual, 'El presupuesto');
+    const r = await this.conn().run(
+      'INSERT INTO categorias_gasto (nombre, tipo, naturaleza, presupuesto_mensual, orden) VALUES (?, ?, ?, ?, COALESCE((SELECT MAX(orden)+1 FROM categorias_gasto),1));',
+      [nombre, data.tipo, data.naturaleza, data.presupuesto_mensual ?? null],
+    );
+    await this.persist();
+    return Number(r.changes?.lastId ?? 0);
+  }
+
+  async actualizarCategoriaGasto(id: number, data: Partial<Pick<CategoriaGasto, 'nombre'|'tipo'|'naturaleza'|'presupuesto_mensual'>>): Promise<void> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error('Categoría inválida.');
+    const campos: string[] = [];
+    const values: unknown[] = [];
+    if (data.nombre !== undefined) { campos.push('nombre = ?'); values.push(textoObligatorio(data.nombre, 'El nombre de la categoría').slice(0, 80)); }
+    if (data.tipo !== undefined) { campos.push('tipo = ?'); values.push(data.tipo); }
+    if (data.naturaleza !== undefined) { campos.push('naturaleza = ?'); values.push(data.naturaleza); }
+    if (data.presupuesto_mensual !== undefined) { if (data.presupuesto_mensual != null) numeroNoNegativo(data.presupuesto_mensual, 'El presupuesto'); campos.push('presupuesto_mensual = ?'); values.push(data.presupuesto_mensual); }
+    if (!campos.length) return;
+    await this.conn().run('UPDATE categorias_gasto SET ' + campos.join(', ') + ' WHERE id = ?;', [...values, id]);
+    await this.persist();
+  }
+
+  async archivarCategoriaGasto(id: number): Promise<void> {
+    await this.conn().run('UPDATE categorias_gasto SET activa = 0 WHERE id = ?;', [id]);
+    await this.persist();
+  }
+
+  async listarGastos(opts?: { desde?: string; hasta?: string; categoriaId?: number; estado?: EstadoGasto }): Promise<Gasto[]> {
+    const where = ['g.archivado = 0'];
+    const params: unknown[] = [];
+    if (opts?.desde && opts?.hasta) { where.push('g.fecha BETWEEN ? AND ?'); params.push(opts.desde, opts.hasta); }
+    if (opts?.categoriaId) { where.push('g.categoria_id = ?'); params.push(opts.categoriaId); }
+    if (opts?.estado) { where.push('g.estado = ?'); params.push(opts.estado); }
+    const r = await this.conn().query(
+      `SELECT g.*, c.nombre AS categoria_nombre, c.naturaleza
+       FROM gastos g JOIN categorias_gasto c ON c.id = g.categoria_id
+       WHERE ${where.join(' AND ')}
+       ORDER BY g.fecha DESC, g.id DESC;`,
+      params,
+    );
+    return (r.values ?? []) as Gasto[];
+  }
+
+  async crearGasto(data: {
+    fecha: string; monto: number; categoria_id: number; descripcion?: string; metodo_pago?: string;
+    estado: EstadoGasto; fecha_limite?: string; proveedor?: string; ruta_id?: number | null; foto_ref?: string; operacion_id?: string;
+  }): Promise<number> {
+    const monto = enteroPositivo(data.monto, 'El monto del gasto');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) throw new Error('La fecha del gasto no es válida.');
+    if (data.descripcion && data.descripcion.length > 500) throw new Error('La descripción es demasiado larga.');
+    if (data.proveedor && data.proveedor.length > 160) throw new Error('El proveedor es demasiado largo.');
+    const categoria = await this.conn().query('SELECT id FROM categorias_gasto WHERE id = ? AND activa = 1;', [data.categoria_id]);
+    if (!categoria.values?.length) throw new Error('La categoría no existe o está archivada.');
+    const ruta = data.ruta_id == null ? null : Number(data.ruta_id);
+    if (ruta != null) {
+      const rr = await this.conn().query("SELECT id, estado FROM rutas WHERE id = ?;", [ruta]);
+      if (!rr.values?.length || rr.values[0].estado !== 'EN_CURSO') throw new Error('Solo se puede asociar un gasto a una ruta en curso.');
+    }
+    const ahora = new Date().toISOString();
+    const operacion = data.operacion_id?.trim() || null;
+    if (operacion) {
+      const previo = await this.conn().query('SELECT id FROM gastos WHERE operacion_id = ?;', [operacion]);
+      if (previo.values?.length) return Number(previo.values[0].id);
+    }
+    const estado = data.estado;
+    const fechaPago = estado === 'pagado' ? (data.fecha ?? fechaLocalISO()) : null;
+    const r = await this.conn().run(
+      `INSERT INTO gastos (fecha, monto, categoria_id, descripcion, metodo_pago, estado, fecha_pago, fecha_limite, proveedor, ruta_id, periodo, foto_ref, operacion_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [data.fecha, monto, data.categoria_id, data.descripcion?.trim() || null, data.metodo_pago?.trim() || null, estado, fechaPago, data.fecha_limite ?? null, data.proveedor?.trim() || null, ruta, data.fecha.slice(0,7), data.foto_ref ?? null, operacion, ahora, ahora],
+    );
+    await this.persist();
+    return Number(r.changes?.lastId ?? 0);
+  }
+
+  async pagarGasto(id: number, montoReal: number, metodo: string): Promise<void> {
+    const monto = enteroPositivo(montoReal, 'El monto real');
+    const r = await this.conn().query('SELECT estado FROM gastos WHERE id = ? AND archivado = 0;', [id]);
+    if (!r.values?.length) throw new Error('El gasto no existe.');
+    await this.conn().run('UPDATE gastos SET monto = ?, estado = \'pagado\', metodo_pago = ?, fecha_pago = ?, updated_at = ? WHERE id = ?;', [monto, metodo, fechaLocalISO(), new Date().toISOString(), id]);
+    await this.persist();
+  }
+
+  async archivarGasto(id: number): Promise<void> {
+    await this.conn().run('UPDATE gastos SET archivado = 1, updated_at = ? WHERE id = ?;', [new Date().toISOString(), id]);
+    await this.persist();
+  }
+
+  async anularGasto(id: number, motivo: string): Promise<void> {
+    const m = textoObligatorio(motivo, 'El motivo de anulación').slice(0, 300);
+    await this.conn().run("UPDATE gastos SET estado='anulado', descripcion=COALESCE(descripcion || ' | ', '') || ?, updated_at=? WHERE id=?;", ['ANULADO: ' + m, new Date().toISOString(), id]);
+    await this.persist();
+  }
+
+  async sincronizarGastosRecurrentes(periodo: string): Promise<void> {
+    const items = await this.conn().query('SELECT r.*, c.naturaleza FROM gastos_recurrentes r JOIN categorias_gasto c ON c.id=r.categoria_id WHERE r.activo=1;');
+    for (const row of items.values ?? []) {
+      const recurrenteId = Number(row.id);
+      const existe = await this.conn().query('SELECT id FROM gastos WHERE recurrente_id=? AND periodo=?;', [recurrenteId, periodo]);
+      if (existe.values?.length) continue;
+      const fechaLimite = periodo + '-' + String(row.dia_vencimiento).padStart(2,'0');
+      await this.conn().run(
+        `INSERT INTO gastos (fecha, monto, categoria_id, descripcion, estado, fecha_limite, recurrente_id, periodo, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?);`,
+        [periodo + '-01', Number(row.monto_estimado), Number(row.categoria_id), String(row.nombre), fechaLimite, recurrenteId, periodo, new Date().toISOString(), new Date().toISOString()],
+      );
+    }
+    await this.persist();
+  }
+
+  async resultadoMes(periodo: string): Promise<ResultadoMes> {
+    if (!/^\d{4}-\d{2}$/.test(periodo)) throw new Error('Periodo inválido.');
+    const desde=periodo+'-01';
+    const hasta=periodo+'-31';
+    const ventas = await this.conn().query(
+      `SELECT COALESCE(SUM(total),0) ventas, COALESCE(SUM(costo_aplicado*cantidad),0) costos,
+              COALESCE((SELECT SUM(monto) FROM pagos WHERE fecha BETWEEN ? AND ?),0) cobrado
+       FROM ventas WHERE fecha BETWEEN ? AND ? AND estado_pago IN ('PAGADA','PENDIENTE');`,
+      [desde,hasta,desde,hasta]
+    );
+    const gastos = await this.conn().query(
+      `SELECT COALESCE(SUM(CASE WHEN c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) operativo,
+              COALESCE(SUM(CASE WHEN g.estado='pendiente' AND c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) pendientes,
+              COALESCE(SUM(CASE WHEN g.estado='pagado' THEN g.monto ELSE 0 END),0) pagados
+       FROM gastos g JOIN categorias_gasto c ON c.id=g.categoria_id
+       WHERE g.periodo=? AND g.archivado=0 AND g.estado <> 'anulado';`,
+      [periodo]
+    );
+    const row=ventas.values?.[0] ?? {};
+    const gr=gastos.values?.[0] ?? {};
+    const utilidadBruta=Number(row.ventas??0)-Number(row.costos??0);
+    const op=Number(gr.operativo??0);
+    return {
+      periodo, ventas:Number(row.ventas??0), costo_materia_prima:Number(row.costos??0),
+      utilidad_bruta:utilidadBruta, gastos_operativos:op, utilidad_neta:utilidadBruta-op,
+      margen_neto:Number(row.ventas??0)>0 ? ((utilidadBruta-op)/Number(row.ventas))*100 : 0,
+      cobrado:Number(row.cobrado??0), gastos_pagados:Number(gr.pagados??0),
+      flujo_caja:Number(row.cobrado??0)-Number(gr.pagados??0), gastos_pendientes:Number(gr.pendientes??0)
+    };
   }
 
   private async verificarEsquemaCompleto(): Promise<void> {
