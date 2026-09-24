@@ -453,6 +453,14 @@ if (saldoCartera !== 6000) throw new Error('cartera: el saldo después de abonos
 const cobradoHoy = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2 AND fecha = '2026-09-24';")[0].values[0][0]);
 if (cobradoHoy !== 12000) throw new Error('cartera: cobrado hoy no es 12000');
 
+const pagosAntesDobleToque = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2;")[0].values[0][0]);
+fresh.run("INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (3, 2, 6000, '2026-09-24', '10:31', 'EFECTIVO', 'cobro-doble-3');");
+const pagosDespuesPrimera = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2;")[0].values[0][0]);
+if (pagosDespuesPrimera !== pagosAntesDobleToque + 6000) throw new Error('cobro: no registró primer toque');
+
+const yaRegistrado = Number(fresh.exec("SELECT COALESCE(SUM(monto),0) FROM pagos WHERE operacion_id LIKE 'cobro-doble-%';")[0].values[0][0]);
+if (yaRegistrado !== 6000) throw new Error('cobro: el segundo toque no debería registrar más dinero');
+
 fresh.close();
 fixtureV1.close();
 fixtureV2.close();
