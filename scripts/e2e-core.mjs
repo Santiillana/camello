@@ -149,6 +149,18 @@ try {
     const parcial = await venta(page, 'PARCIAL', 1);
     if (!parcial.includes('Pendiente')) throw new Error('La venta parcial no dejó pendiente.');
 
+    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByRole('link', { name: 'Pagar' }).first().click();
+    await page.getByRole('heading', { name: 'Pagar cartera' }).waitFor().catch(() => {});
+    await page.getByRole('button', { name: 'Efectivo' }).click().catch(() => {});
+    if (await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).count()) {
+      await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
+    }
+    await page.getByText(/Cobro registrado|Cartera/).first().waitFor();
+
+    await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+
     await crearRuta(page);
     await venta(page, 'EFECTIVO', 1);
     await page.goto('http://127.0.0.1:5173/#/rutas/1', { waitUntil: 'domcontentloaded', timeout: 15000 });
