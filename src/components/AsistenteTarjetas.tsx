@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 
 export type TarjetaAsistente = {
   id: string;
@@ -96,7 +96,7 @@ export default function AsistenteTarjetas({
     primerCampo?.focus();
   }, [paso]);
 
-  function manejarEnter(event: React.KeyboardEvent) {
+  function manejarEnter(event: KeyboardEvent) {
     if (event.key !== 'Enter' || (event.target instanceof HTMLTextAreaElement)) return;
     event.preventDefault();
     siguiente();
