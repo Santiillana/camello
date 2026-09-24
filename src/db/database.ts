@@ -2083,6 +2083,8 @@ class Database {
       color_acento: valores.get('color_acento') ?? DEFAULT_CONFIG.color_acento,
       moneda: 'COP',
       mensaje_recordatorio: valores.get('mensaje_recordatorio') ?? DEFAULT_CONFIG.mensaje_recordatorio,
+      privacy_accepted_at: valores.get('privacy_accepted_at') ?? null,
+      privacy_responsable: valores.get('privacy_responsable') ?? valores.get('negocio_nombre') ?? '',
     };
   }
 
