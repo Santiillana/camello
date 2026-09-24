@@ -194,6 +194,7 @@ class Database {
       { version: 10, ejecutar: () => this.migrarVersion10() },
       { version: 11, ejecutar: () => this.migrarVersion11() },
       { version: 12, ejecutar: () => this.migrarVersion12() },
+      { version: 13, ejecutar: () => this.migrarVersion13() },
     ];
     for (const migracion of migraciones) {
       if (version < migracion.version) await migracion.ejecutar();
@@ -871,6 +872,103 @@ class Database {
       margen_neto:Number(row.ventas??0)>0 ? ((utilidadBruta-op)/Number(row.ventas))*100 : 0,
       cobrado:Number(row.cobrado??0), gastos_pagados:Number(gr.pagados??0),
       flujo_caja:Number(row.cobrado??0)-Number(gr.pagados??0), gastos_pendientes:Number(gr.pendientes??0)
+    };
+  }
+
+  private async migrarVersion13(): Promise<void> {
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS modulos_migraciones (
+      modulo_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      aplicada_at TEXT NOT NULL,
+      PRIMARY KEY (modulo_id, version)
+    );`, false);
+  }
+
+  async obtenerModuloHabilitado(moduloId: string): Promise<boolean> {
+    const r = await this.conn().query('SELECT valor FROM configuracion_app WHERE clave = ?;', ['modulo_' + moduloId + '_activo']);
+    const valor = r.values?.[0]?.valor;
+    return valor === undefined ? true : String(valor) === '1';
+  }
+
+  async guardarModuloHabilitado(moduloId: string, habilitado: boolean): Promise<void> {
+    await this.conn().run(
+      'INSERT INTO configuracion_app (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor;',
+      ['modulo_' + moduloId + '_activo', habilitado ? '1' : '0'],
+    );
+    await this.persist();
+  }
+
+  async limpiarModuloDatosPrefijados(moduloId: string): Promise<void> {
+    if (!/^[a-z0-9_]+$/.test(moduloId)) throw new Error('ID de módulo inválido.');
+    const tablas = await this.conn().query(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?;",
+      ['mod_' + moduloId + '_%'],
+    );
+    await this.conn().beginTransaction();
+    try {
+      for (const row of tablas.values ?? []) {
+        const table = String(row.name);
+        if (!table.startsWith('mod_' + moduloId + '_')) throw new Error('Tabla de módulo fuera de prefijo permitido.');
+        await this.conn().execute('DROP TABLE IF EXISTS "' + table.replace(/"/g, '""') + '";', false);
+      }
+      await this.conn().run('DELETE FROM modulos_migraciones WHERE modulo_id = ?;', [moduloId], false);
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch {}
+      throw error;
+    }
+  }
+
+  async crearContextoModulo(moduloId: string) {
+    const prefijo = 'mod_' + moduloId + '_';
+    if (!/^[a-z0-9_]+$/.test(moduloId)) throw new Error('ID de módulo inválido.');
+    const validarSql = (sql: string) => {
+      const tablas = sql.match(/(?:FROM|JOIN|INTO|UPDATE|TABLE|INDEX|TRIGGER)\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)/gi) ?? [];
+      for (const item of tablas) {
+        const nombre = item.trim().split(/\s+/).pop() ?? '';
+        if (nombre && !nombre.toLowerCase().startsWith(prefijo)) throw new Error('El módulo solo puede tocar tablas con prefijo ' + prefijo);
+      }
+      if (/\b(?:clientes|ventas|pagos|gastos|rutas|configuracion_app|sqlite_master)\b/i.test(sql)) throw new Error('El módulo no puede consultar tablas del núcleo directamente.');
+    };
+    return {
+      leer: async (operacion: 'clientes_activos' | 'ventas_periodo', parametros: unknown[] = []) => {
+        if (operacion === 'clientes_activos') {
+          const r = await this.conn().query("SELECT COUNT(*) AS total FROM clientes WHERE estado='activo';");
+          return Number(r.values?.[0]?.total ?? 0);
+        }
+        const desde = String(parametros[0] ?? '');
+        const hasta = String(parametros[1] ?? '');
+        const r = await this.conn().query('SELECT COALESCE(SUM(total),0) AS ventas, COALESCE(SUM(cantidad),0) AS paquetes FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,\'activa\')=\'activa\';', [desde, hasta]);
+        return r.values?.[0] ?? { ventas: 0, paquetes: 0 };
+      },
+      consultarPropio: async <T = Record<string, unknown>>(sql: string, parametros: unknown[] = []): Promise<T[]> => {
+        validarSql(sql);
+        const r = await this.conn().query(sql, parametros);
+        return (r.values ?? []) as T[];
+      },
+      ejecutarPropio: async (sql: string, parametros: unknown[] = []): Promise<void> => {
+        validarSql(sql);
+        await this.conn().run(sql, parametros, false);
+        await this.persist();
+      },
+      migracion: async (version: number, trabajo: () => Promise<void>): Promise<void> => {
+        const previa = await this.conn().query('SELECT 1 FROM modulos_migraciones WHERE modulo_id=? AND version=?;', [moduloId, version]);
+        if (previa.values?.length) return;
+        const snapshot = await this.conn().exportToJson('full');
+        if (!snapshot.export) throw new Error('No se pudo crear snapshot del módulo.');
+        await this.conn().beginTransaction();
+        try {
+          await trabajo();
+          await this.conn().run('INSERT INTO modulos_migraciones (modulo_id,version,aplicada_at) VALUES (?,?,?);', [moduloId,version,new Date().toISOString()], false);
+          await this.conn().commitTransaction();
+          await this.persist();
+        } catch (error) {
+          try { await this.conn().rollbackTransaction(); } catch {}
+          await this.conn().execute('PRAGMA foreign_keys = ON;', false);
+          throw error;
+        }
+      },
     };
   }
 
