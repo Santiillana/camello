@@ -23,7 +23,7 @@ import type {
   Foto,
   FuenteUbicacion,
 } from '../types';
-import { diasDesdeISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
+import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
 import { calcularChecksum } from '../utils/respaldo';
 
@@ -627,7 +627,7 @@ class Database {
     let totalGap = 0;
     let gaps = 0;
     for (let i = 0; i < fechas.length - 1; i += 1) {
-      const dias = Math.abs(diasDesdeISO(fechas[i + 1], new Date(fechas[i])));
+      const dias = diasEntreISO(fechas[i + 1], fechas[i]);
       if (Number.isFinite(dias) && dias > 0) {
         totalGap += dias;
         gaps += 1;
