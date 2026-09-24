@@ -5,6 +5,7 @@
 
 export const DB_NAME = 'camello';
 export const DB_VERSION = 1;
+export const TABLAS_ESPERADAS = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas'] as const;
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -83,3 +84,7 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);`,
 ];
+
+export const MIGRACIONES: Record<number, string[]> = {
+  1: SCHEMA_STATEMENTS,
+};
