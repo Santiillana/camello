@@ -187,7 +187,12 @@ class Database {
       { version: 7, ejecutar: () => this.migrarVersion7() },
       { version: 8, ejecutar: () => this.migrarVersion8() },
     ];
-    for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
+    for (const migracion of migraciones) {
+      if (version < migracion.version) await migracion.ejecutar();
+    }
+    // v9 es una reparación idempotente: también corre sobre bases que ya
+    // tengan user_version alto si quedaron referencias a tablas temporales.
+    await this.migrarVersion9();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
     await this.verificarEsquemaCompleto();
   }
@@ -320,10 +325,47 @@ class Database {
     if (!necesitaRehacer) return;
 
     const db = this.conn();
+    const snapshot = await db.query(`
+      SELECT id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
+        lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
+        COALESCE(paquetes_sobrantes, 0) AS paquetes_sobrantes, notas
+      FROM rutas
+      ORDER BY id;
+    `);
+
+    // No usar ALTER TABLE ... RENAME sobre rutas: SQLite puede reescribir
+    // las FK de tablas hijas para apuntar al nombre temporal.
     await db.execute('PRAGMA foreign_keys = OFF;', false);
+    let reemplazoCreado = false;
     try {
-      await db.beginTransaction();
-      await db.execute('ALTER TABLE rutas RENAME TO rutas_migracion_v8;', false);
+      await db.execute('DROP TABLE IF EXISTS rutas_reconstruccion_v8;', false);
+      await db.execute(`CREATE TABLE rutas_reconstruccion_v8 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL DEFAULT '',
+        tipo TEXT NOT NULL,
+        estado TEXT NOT NULL DEFAULT 'EN_CURSO',
+        fecha TEXT NOT NULL,
+        hora_inicio TEXT,
+        hora_fin TEXT,
+        lat_inicio REAL,
+        lng_inicio REAL,
+        lat_fin REAL,
+        lng_fin REAL,
+        paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+        paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
+        notas TEXT
+      );`, false);
+      await db.execute(`INSERT INTO rutas_reconstruccion_v8 (
+        id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
+        lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
+        paquetes_sobrantes, notas
+      ) SELECT
+        id, nombre, tipo,
+        CASE WHEN estado = 'PROGRAMADA' THEN 'CANCELADA' ELSE estado END,
+        fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin,
+        lng_fin, paquetes_llevados, COALESCE(paquetes_sobrantes, 0), notas
+      FROM rutas;`, false);
+      await db.execute('DROP TABLE rutas;', false);
       await db.execute(`CREATE TABLE rutas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL DEFAULT '',
@@ -344,34 +386,172 @@ class Database {
         id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
         lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
         paquetes_sobrantes, notas
-      )
-      SELECT
-        id,
-        nombre,
-        tipo,
-        CASE WHEN estado = 'PROGRAMADA' THEN 'CANCELADA' ELSE estado END,
-        fecha,
-        hora_inicio,
-        hora_fin,
-        lat_inicio,
-        lng_inicio,
-        lat_fin,
-        lng_fin,
-        paquetes_llevados,
-        COALESCE(paquetes_sobrantes, 0),
-        notas
-      FROM rutas_migracion_v8;`, false);
-      await db.execute('DROP TABLE rutas_migracion_v8;', false);
-      const fk = await db.query('PRAGMA foreign_key_check;');
-      if ((fk.values ?? []).length > 0) throw new Error('La migración de rutas rompió claves foráneas.');
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);', false);
-      await db.commitTransaction();
+      ) SELECT id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
+        lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
+        paquetes_sobrantes, notas
+      FROM rutas_reconstruccion_v8;`, false);
+      await db.execute('DROP TABLE rutas_reconstruccion_v8;', false);
+      reemplazoCreado = true;
+      const rutaIndex = `CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);`;
+      await db.execute(rutaIndex, false);
     } catch (error) {
-      try { await db.rollbackTransaction(); } catch {}
+      // Sin transacción explícita: si el proceso quedó a mitad, restauramos
+      // rutas desde el snapshot para no dejar una tabla incompleta.
+      try {
+        await db.execute('DROP TABLE IF EXISTS rutas_reconstruccion_v8;', false);
+        await db.execute('DROP TABLE IF EXISTS rutas;', false);
+        await db.execute(`CREATE TABLE rutas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL DEFAULT '',
+          tipo TEXT NOT NULL,
+          estado TEXT NOT NULL DEFAULT 'EN_CURSO',
+          fecha TEXT NOT NULL,
+          hora_inicio TEXT,
+          hora_fin TEXT,
+          lat_inicio REAL,
+          lng_inicio REAL,
+          lat_fin REAL,
+          lng_fin REAL,
+          paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+          paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
+          notas TEXT
+        );`, false);
+        for (const row of snapshot.values ?? []) {
+          await db.run(
+            `INSERT INTO rutas (
+              id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
+              lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
+              paquetes_sobrantes, notas
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            row.map((value) => value == null ? null : value),
+            false,
+          );
+        }
+      } catch {
+        // El error original conserva más contexto.
+      }
       throw error;
     } finally {
       await db.execute('PRAGMA foreign_keys = ON;', false);
     }
+    if (!reemplazoCreado) throw new Error('La reconstrucción v8 no terminó.');
+    const fk = await db.query('PRAGMA foreign_key_check;');
+    if ((fk.values ?? []).length > 0) throw new Error('La migración v8 dejó claves foráneas inválidas.');
+  }
+
+  private async migrarVersion9(): Promise<void> {
+    const db = this.conn();
+    const referencias = await db.query(`
+      SELECT type, name, tbl_name, sql
+      FROM sqlite_master
+      WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';
+    `);
+    const objetos = (referencias.values ?? []).map((row) => ({
+      type: String(row.type ?? ''),
+      name: String(row.name ?? ''),
+      tbl_name: String(row.tbl_name ?? ''),
+      sql: String(row.sql ?? ''),
+    }));
+    if (!objetos.length) return;
+
+    const temporales = new Set<string>();
+    const extraer = /\\b[A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*\\b/g;
+    for (const objeto of objetos) {
+      for (const match of objeto.sql.match(extraer) ?? []) temporales.add(match);
+      if (objeto.name.includes('_migracion_')) temporales.add(objeto.name);
+    }
+    const reemplazos = new Map<string, string>();
+    for (const temporal of temporales) {
+      const base = temporal.split('_migracion_')[0];
+      if (base) reemplazos.set(temporal, base);
+    }
+
+    const normalizarSql = (sql: string): string => {
+      let resultado = sql;
+      for (const [temporal, canonical] of reemplazos) {
+        resultado = resultado.split(temporal).join(canonical);
+      }
+      return resultado;
+    };
+
+    const objetosNoTabla = objetos.filter((objeto) => objeto.type !== 'table');
+    for (const objeto of objetosNoTabla) {
+      const quoted = '"' + objeto.name.replace(/"/g, '""') + '"';
+      if (objeto.type === 'index') await db.execute('DROP INDEX IF EXISTS ' + quoted + ';', false);
+      if (objeto.type === 'trigger') await db.execute('DROP TRIGGER IF EXISTS ' + quoted + ';', false);
+      if (objeto.type === 'view') await db.execute('DROP VIEW IF EXISTS ' + quoted + ';', false);
+    }
+
+    const afectadas = objetos.filter((objeto) =>
+      objeto.type === 'table' &&
+      !objeto.name.includes('_migracion_') &&
+      Array.from(reemplazos.keys()).some((temporal) => objeto.sql.includes(temporal))
+    );
+
+    const sentenciaTabla = (nombre: string): string => {
+      const sentencia = SCHEMA_STATEMENTS.find((statement) =>
+        new RegExp('CREATE TABLE IF NOT EXISTS\\\\s+' + nombre + '\\\\s*\\\\(', 'i').test(statement),
+      );
+      if (!sentencia) throw new Error('No existe esquema canónico para reconstruir ' + nombre + '.');
+      return sentencia;
+    };
+
+    await db.execute('PRAGMA foreign_keys = OFF;', false);
+    try {
+      for (const objeto of afectadas) {
+        const nombre = objeto.name;
+        const originalCols = await this.columnasDeTabla(nombre);
+        const create = sentenciaTabla(nombre);
+        const reparacion = nombre + '_reparacion_v9';
+        await db.execute('DROP TABLE IF EXISTS ' + reparacion + ';', false);
+        await db.execute(create.replace('CREATE TABLE IF NOT EXISTS ' + nombre, 'CREATE TABLE ' + reparacion), false);
+        const nuevasCols = await this.columnasDeTabla(reparacion);
+        const comunes = Array.from(originalCols.keys()).filter((columna) => nuevasCols.has(columna));
+        if (!comunes.length) throw new Error('No hay columnas comunes para reparar ' + nombre + '.');
+        const lista = comunes.map((columna) => '"' + columna.replace(/"/g, '""') + '"').join(', ');
+        await db.execute(`INSERT INTO ${reparacion} (${lista}) SELECT ${lista} FROM ${nombre};`, false);
+        await db.execute('DROP TABLE ' + nombre + ';', false);
+        await db.execute(create, false);
+        await db.execute(`INSERT INTO ${nombre} (${lista}) SELECT ${lista} FROM ${reparacion};`, false);
+        await db.execute('DROP TABLE ' + reparacion + ';', false);
+      }
+
+      const tablasTemporales = objetos.filter((objeto) => objeto.type === 'table' && objeto.name.includes('_migracion_'));
+      for (const objeto of tablasTemporales) {
+        const canonical = reemplazos.get(objeto.name);
+        if (!canonical) continue;
+        const existeCanonica = await db.query(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?;`, [canonical]);
+        if (Number(existeCanonica.values?.[0]?.n ?? 0) > 0) {
+          const filasTemp = await db.query('SELECT COUNT(*) AS n FROM ' + objeto.name + ';');
+          if (Number(filasTemp.values?.[0]?.n ?? 0) === 0) await db.execute('DROP TABLE ' + objeto.name + ';', false);
+          else throw new Error('Quedó una tabla temporal con datos: ' + objeto.name);
+        }
+      }
+    } finally {
+      await db.execute('PRAGMA foreign_keys = ON;', false);
+    }
+
+    for (const statement of SCHEMA_STATEMENTS.filter((stmt) => /^CREATE (INDEX|TRIGGER) /i.test(stmt.trim()))) {
+      await db.execute(statement, false);
+    }
+    for (const objeto of objetosNoTabla) {
+      const sql = normalizarSql(objeto.sql);
+      if (sql) await db.execute(sql, false);
+    }
+
+    const restantes = await db.query(`
+      SELECT type, name, sql
+      FROM sqlite_master
+      WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';
+    `);
+    if ((restantes.values ?? []).length) {
+      throw new Error('Quedaron referencias a _migracion_ tras v9: ' + JSON.stringify(restantes.values));
+    }
+    const fk = await db.query('PRAGMA foreign_key_check;');
+    if ((fk.values ?? []).length) throw new Error('v9: foreign_key_check no está vacío.');
+    const integrity = await db.query('PRAGMA integrity_check;');
+    const resultadoIntegrity = String(integrity.values?.[0]?.integrity_check ?? integrity.values?.[0]?.[0] ?? '');
+    if (resultadoIntegrity.toLowerCase() !== 'ok') throw new Error('v9: integrity_check = ' + resultadoIntegrity);
   }
 
   private async verificarEsquemaCompleto(): Promise<void> {
@@ -383,6 +563,11 @@ class Database {
     if (faltantes.length) throw new Error('La base de datos no quedó lista: faltan tablas (' + faltantes.join(', ') + ').');
     const fk = await this.conn().query('PRAGMA foreign_keys;');
     if (Number(fk.values?.[0]?.foreign_keys ?? 0) !== 1) await this.conn().execute('PRAGMA foreign_keys = ON;');
+    const referenciasTemporales = await this.conn().query("SELECT name FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';");
+    if ((referenciasTemporales.values ?? []).length) throw new Error('La base de datos contiene referencias a tablas temporales de migración.');
+    const integridad = await this.conn().query('PRAGMA integrity_check;');
+    const resultadoIntegridad = String(integridad.values?.[0]?.integrity_check ?? integridad.values?.[0]?.[0] ?? '');
+    if (resultadoIntegridad.toLowerCase() !== 'ok') throw new Error('La base de datos no pasó integrity_check: ' + resultadoIntegridad);;
   }
 
   private async cerrarConexion(): Promise<void> {
