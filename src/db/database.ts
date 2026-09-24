@@ -183,6 +183,7 @@ class Database {
       { version: 4, ejecutar: () => this.migrarVersion4() },
       { version: 5, ejecutar: () => this.migrarVersion5() },
       { version: 6, ejecutar: () => this.migrarVersion6() },
+      { version: 7, ejecutar: () => this.migrarVersion7() },
     ];
     for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
@@ -302,6 +303,13 @@ class Database {
       FOREIGN KEY (cliente_id) REFERENCES clientes(id)
     );`);
     await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_seguimiento_recordar ON seguimiento_clientes(recordar_hasta);');
+  }
+
+  private async migrarVersion7(): Promise<void> {
+    const rutas = await this.columnasDeTabla('rutas');
+    if (!rutas.has('paquetes_sobrantes')) {
+      await this.conn().execute('ALTER TABLE rutas ADD COLUMN paquetes_sobrantes INTEGER NOT NULL DEFAULT 0;');
+    }
   }
 
   private async verificarEsquemaCompleto(): Promise<void> {
