@@ -52,7 +52,10 @@ function migrate3(db) {
       db.run('DROP INDEX IF EXISTS idx_ventas_fecha;');
       db.run('ALTER TABLE ventas RENAME TO ventas_migracion_v3;');
       db.run("CREATE TABLE ventas (id INTEGER PRIMARY KEY AUTOINCREMENT,cliente_id INTEGER NOT NULL,ruta_id INTEGER,producto_nombre TEXT NOT NULL,cantidad INTEGER NOT NULL DEFAULT 1,precio_aplicado INTEGER NOT NULL,costo_aplicado INTEGER NOT NULL,total INTEGER NOT NULL,utilidad INTEGER NOT NULL,fecha TEXT NOT NULL,hora TEXT NOT NULL,estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE',fecha_pago TEXT,metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO',monto_pagado INTEGER NOT NULL DEFAULT 0,operacion_id TEXT UNIQUE,FOREIGN KEY(cliente_id) REFERENCES clientes(id),FOREIGN KEY(ruta_id) REFERENCES rutas(id),CHECK(monto_pagado>=0 AND monto_pagado<=total));");
-      db.run("INSERT INTO ventas SELECT id,cliente_id,ruta_id,producto_nombre,cantidad,CAST(ROUND(precio_aplicado) AS INTEGER),CAST(ROUND(costo_aplicado) AS INTEGER),CAST(ROUND(total) AS INTEGER),CAST(ROUND(utilidad) AS INTEGER),fecha,hora,estado_pago,fecha_pago,COALESCE(metodo_pago,CASE WHEN estado_pago='PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END),MIN(MAX(CAST(ROUND(COALESCE(monto_pagado,0)) AS INTEGER),0),CAST(ROUND(total) AS INTEGER)),operacion_id FROM ventas_migracion_v3;");
+      const metodo = v.has('metodo_pago') ? "COALESCE(metodo_pago,CASE WHEN estado_pago='PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END)" : "CASE WHEN estado_pago='PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END";
+      const monto = v.has('monto_pagado') ? "MIN(MAX(CAST(ROUND(COALESCE(monto_pagado,0)) AS INTEGER),0),CAST(ROUND(total) AS INTEGER))" : "CASE WHEN estado_pago='PAGADA' THEN CAST(ROUND(total) AS INTEGER) ELSE 0 END";
+      const operacion = v.has('operacion_id') ? 'operacion_id' : 'NULL';
+      db.run("INSERT INTO ventas SELECT id,cliente_id,ruta_id,producto_nombre,cantidad,CAST(ROUND(precio_aplicado) AS INTEGER),CAST(ROUND(costo_aplicado) AS INTEGER),CAST(ROUND(total) AS INTEGER),CAST(ROUND(utilidad) AS INTEGER),fecha,hora,estado_pago,fecha_pago,"+metodo+","+monto+","+operacion+" FROM ventas_migracion_v3;");
       db.run('DROP TABLE ventas_migracion_v3;');
     }
   } finally { db.run('PRAGMA foreign_keys=ON;'); }
