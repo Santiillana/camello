@@ -258,7 +258,15 @@ export default function Configuracion({ onConfigChanged }: Props) {
           <input type="number" min={0} step={1} placeholder="Presupuesto mensual" value={nuevoGastoCat.presupuesto} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,presupuesto:e.target.value})}/>
           <button className="boton-primario" onClick={async()=>{await database.crearCategoriaGasto({nombre:nuevoGastoCat.nombre,tipo:nuevoGastoCat.tipo,naturaleza:nuevoGastoCat.naturaleza,presupuesto_mensual:nuevoGastoCat.presupuesto?Number(nuevoGastoCat.presupuesto):null});setNuevoGastoCat({...nuevoGastoCat,nombre:'',presupuesto:''});await cargar();}}>Crear categoría</button>
         </div>
-        <ul className="lista-resumen">{categoriasGasto.map(c=><li key={c.id}><span>{c.nombre} · {c.tipo} · {c.naturaleza}</span><button className="boton-texto peligro-texto" disabled={!c.activa} onClick={()=>void database.archivarCategoriaGasto(c.id).then(cargar)}>Archivar</button></li>)}</ul>
+        <ul className="lista-resumen">{categoriasGasto.map((c, index)=><li key={c.id}>
+          <span>{c.nombre} · {c.tipo} · {c.naturaleza}{c.presupuesto_mensual!=null ? ' · presupuesto '+formatoMoneda(Number(c.presupuesto_mensual)) : ''}</span>
+          <span className="fila-botones">
+            <button className="boton-texto" type="button" onClick={()=>{const nombre=window.prompt('Nombre de la categoría',c.nombre);if(nombre&&nombre.trim()!==c.nombre)void database.actualizarCategoriaGasto(c.id,{nombre:nombre.trim()}).then(cargar);}}>Editar</button>
+            <button className="boton-texto" type="button" disabled={index===0} aria-label="Subir categoría" onClick={()=>void database.reordenarCategoriaGasto(c.id,'arriba').then(cargar)}>↑</button>
+            <button className="boton-texto" type="button" disabled={index===categoriasGasto.length-1} aria-label="Bajar categoría" onClick={()=>void database.reordenarCategoriaGasto(c.id,'abajo').then(cargar)}>↓</button>
+            <button className="boton-texto peligro-texto" disabled={!c.activa} onClick={()=>void database.archivarCategoriaGasto(c.id).then(cargar)}>Archivar</button>
+          </span>
+        </li>)}</ul>
       </section>
       <section className="tarjeta">
         <h2>Gastos fijos / recurrentes</h2>
