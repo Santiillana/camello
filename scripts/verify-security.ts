@@ -20,4 +20,28 @@ assert.equal(await descifrarRespaldo(cifrado,'contraseña-segura'),plano);
 await assert.rejects(()=>descifrarRespaldo(cifrado,'otra-contraseña'));
 const alterado = JSON.stringify({...JSON.parse(cifrado),ciphertext:'AAAA'});
 await assert.rejects(()=>descifrarRespaldo(alterado,'contraseña-segura'));
-console.log('verify-security: PASÓ — PBKDF2/PIN, AES-GCM, contraseña incorrecta y alteración rechazadas.');
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const files = [];
+function walk(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = resolve(dir, entry.name);
+    if (entry.isDirectory()) walk(path);
+    else if (/\.(ts|tsx|mjs)$/.test(entry.name)) files.push(path);
+  }
+}
+walk(resolve('src'));
+
+for (const file of files) {
+  const text = readFileSync(file, 'utf8');
+  if (/innerHTML|dangerouslySetInnerHTML/.test(text)) throw new Error('Seguridad: HTML dinámico inseguro en ' + file);
+  if (/\b(console\.log|console\.error)\s*\(/.test(text)) throw new Error('Seguridad: log de datos potencialmente sensibles en ' + file);
+  if (/\b(?:fetch|XMLHttpRequest|sendBeacon)\s*\(/.test(text) && !/utils\/ubicacion/.test(file)) {
+    throw new Error('Seguridad: conexión externa fuera del módulo permitido en ' + file);
+  }
+}
+const dbText = readFileSync(resolve('src/db/database.ts'), 'utf8');
+if (/SELECT[^;]*\+\s*\w|INSERT[^;]*\+\s*\w|UPDATE[^;]*\+\s*\w/i.test(dbText)) throw new Error('Seguridad: posible SQL por concatenación en database.ts');
+console.log('verify-security: PASÓ — PBKDF2/PIN, AES-GCM, entradas peligrosas, HTML dinámico, logs y SQL.');
+
