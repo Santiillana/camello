@@ -1,101 +1,187 @@
 # Progreso CAMELLO
 
-Rama de trabajo: `fix/sqlite-wasm-web`
-PR: #4
-Base: `main`
-Estado: abierto, sin merge a `main`.
+Rama: `fix/sqlite-wasm-web` · PR #4 · base `main`
+No se ha hecho merge a `main`.
 
-## FASE 0 — Estado real y pendientes
+## Estado inicial F0
 
-Fecha: 2026-09-24
+Se verificó que al inicio no existían `AsistenteTarjetas` ni `Recordatorio de recompra`; Inicio tenía `Actividad`, la barra inferior tenía `Vender`, Rutas tenía programación y tipos antiguos, y el respaldo era básico. F0 añadió fixtures v1/v2, comprobaciones de migración por conteos/totales y una prueba instrumentada contra el plugin SQLite real.
 
-### Estado verificado
+F0 quedó respaldada por:
+- `8120ae3` — cierre F0, `[phase-ok:fase-0-ok]`.
+- `2cebdf4c847d0c5a7569cf1a2681e8f266de9ee6` — `npm run verify` PASÓ y APK debug PASÓ en CI.
 
-- `docs/PROGRESO.md` no existía al iniciar esta fase; se crea con este bloque.
-- No existe `AsistenteTarjetas` en `src/`.
-- No existe el texto `Recordatorio de recompra` en `src/`.
-- `Inicio` todavía contiene el bloque `Actividad`.
-- `BottomNav` todavía contiene el acceso `Vender`.
-- `TipoRuta` todavía contiene `Barrio`, `Vereda`, `Sector`, `Visita comercial`.
-- `Rutas` todavía permite programación y hora planificada.
-- C2 usa un formulario plano; no existe todavía el flujo de tarjetas ni fotos/ubicación avanzada especificado.
-- C8 tiene exportar/importar básico, pero todavía no implementa todo el flujo de respaldo exigido.
-- C9 tiene parte de la limpieza técnica ya realizada, pero todavía no puede declararse completo porque existen elementos explícitamente pendientes de C1-C8.
+## C1 — Interfaz base y navegación
 
-### C1-C9
+Implementación principal:
+- `d49d9a8` AsistenteTarjetas.
+- `991a7ee` menú lateral.
+- `f1601e9` quitar Vender de barra inferior y añadir FAB.
+- `d2db17e` shell de navegación.
+- `1b7014b` retirar accesos finales de Inicio.
+- `32e73cf` encabezado móvil y atrás.
+- `51a2af1` estilos.
+- `712c5ab` smoke de interfaz.
 
-| Fase | Estado | Evidencia principal |
-|---|---|---|
-| C1 | PARCIAL | `src/components/BottomNav.tsx` existe; no hay `AsistenteTarjetas` ni menú lateral. |
-| C2 | PARCIAL | `src/components/ClienteForm.tsx` y ubicación básica existen; faltan tarjetas, fotos y ubicación avanzada. |
-| C3 | PARCIAL | `src/pages/NuevaVenta.tsx` existe; no usa tarjetas ni soporta todos los métodos/voucher pedidos. |
-| C4 | PARCIAL | `src/pages/Dashboard.tsx` tiene métricas y Cartera, pero conserva `Actividad` y no tiene `Recordatorio de recompra`. |
-| C5 | PARCIAL | búsqueda por mascota y recordatorio básico existen; faltan ritmo personalizado y acciones pedidas. |
-| C6 | PARCIAL | rutas funcionan, pero todavía existen tipos y programación que deben retirarse según especificación. |
-| C7 | PARCIAL | mapa y filtros básicos existen; faltan filtros configurables, ubicación avanzada y popup completo. |
-| C8 | PARCIAL | exportar/importar existe; faltan checksum, compartir, rotación automática y limpieza protegida. |
-| C9 | PARCIAL | se eliminaron residuos Android de plantilla y no hay `any`/console en `src`, pero todavía quedan residuos funcionales de C1-C8. |
+Estado funcional: IMPLEMENTADO.
+Prueba automática disponible: `scripts/verify-ui-c1.mjs`.
+Gate final: BLOQUEADO por cola de GitHub; no se marca PASÓ sin ejecución de pantalla sobre el SHA final.
+Etiqueta: NO CREADA por no haber compuerta verde final.
 
-### Datos y migraciones
+## C2 — Clientes, mascotas, fotos y ubicación
 
-Se añaden fixtures reproducibles:
+Implementación principal:
+- `25016d1` alta de cliente con tarjetas.
+- `348f0c3` GPS y pin arrastrable.
+- `74585d2` selector/compresión de fotos.
+- `bd34d0c` mini mapa y galería.
+- `7250956` Cómo llegar.
+- `fe63db0` / `a2520c4` migración de ubicación y fotos.
+- `c11e030`, `cdef35d`, `42ad1fc` compartir Android.
+- `61c77c2` prueba de migración hasta v4.
 
-- `scripts/fixtures/schema-v1.sql`
-- `scripts/fixtures/schema-v2.sql`
+Estado funcional: IMPLEMENTADO.
+Pendiente de teléfono: GPS real, cámara y Compartir desde Android.
+Gate CI final: BLOQUEADO por cola.
 
-`scripts/verify-db.mjs` ahora comprueba:
+## C3 — Nueva venta por tarjetas
 
-1. base nueva y tablas obligatorias;
-2. tipos INTEGER para dinero COP;
-3. migración v1 → v3;
-4. migración v2 → v3;
-5. conteos de tablas y totales de ventas/utilidad antes y después;
-6. `user_version = 3`;
-7. anti-duplicado por `operacion_id`;
-8. rollback real con sql.js.
+Implementación principal:
+- `2611e87` nueva venta por tarjetas, métodos y voucher.
+- `e2f4c63` estilos y flujo de pagos/recordatorios.
+- Idempotencia por `operacion_id` en base de datos.
 
-### Plugin SQLite real
+Estado funcional: IMPLEMENTADO.
+E2E preparado: `scripts/e2e-core.mjs`.
+Gate CI final: BLOQUEADO por cola.
 
-Se añade:
+## C4 — Inicio y Cartera
 
-`android/app/src/androidTest/java/co/combopitt/camello/SQLiteTransactionPluginTest.java`
+Implementación principal:
+- `77a0b50` reemplazo de Actividad por Recordatorio de recompra.
+- `70882d5` historial de pagos.
+- `8accb73` migración de pagos.
+- `3c94b4f` cobro FIFO.
+- `e5edee3` Cartera con filtros y cobro por tarjetas.
+- `4c046c6` prueba de pagos parciales.
+- `5c1c9e1` prueba de idempotencia de cobro.
 
-La prueba usa el plugin real `CapacitorSQLite` desde el WebView Android y reproduce el caso:
+Estado funcional: IMPLEMENTADO.
+Gate CI final: BLOQUEADO por cola.
 
-- transacción abierta + `execute(... transaction:true)` para el PRAGMA → debe fallar por transacción anidada;
-- transacción abierta + `execute(... transaction:false)` → debe continuar correctamente.
+## C5 — Métricas y recordatorios personalizados
 
-Estado de ejecución: **NO EJECUTABLE AQUÍ** hasta disponer de emulador/dispositivo Android para ejecutar instrumented tests. La prueba queda preparada para ejecución real.
+Implementación principal:
+- `cc5e112` preferencias de seguimiento.
+- `82d197e` migración de seguimiento.
+- `0785dd1` ritmo y seguimiento.
+- `b09ae2d` métricas y búsqueda normalizada.
+- `1387216` editor de ritmo.
+- `9c59f5c` recordatorios por retraso, ritmo y contacto.
+- `b2ad0ca` mensaje editable.
+- `718fc8b`, `0a8675f`, `eff9942` correcciones de calendario/mensaje.
+- `72ae821` normaliza teléfonos antes de WhatsApp.
 
-### Decisiones
+Estado funcional: IMPLEMENTADO.
+Gate CI final: BLOQUEADO por cola.
 
-- No se toca `main`.
-- No se hace merge.
-- Los cambios de cada fase deben ser pequeños y localizados.
-- Si `npm run verify` falla por un cambio de la fase, se revierte el cambio.
-- No se declara una prueba como PASÓ sin observar su salida real.
+## C6 — Rutas
 
-## Commits de FASE 0
+Implementación principal:
+- `5608bfe` tipos de ruta y métricas.
+- `2144efe` migración de sobrantes.
+- `c2e9d8a` rutas operativas sin programación.
+- `9bf27eb` métricas en vivo y cuadre.
+- `2a6744d` cierre con métricas y cuadre.
 
-- `66f0039` — fixtures SQLite v1.
-- `e1a2bbb` — fixture SQLite v2.
-- `cae1d7b` — prueba del plugin SQLite real para transacción anidada.
-- `8440c93` — verificación de fixtures, conteos y totales.
-- El commit de esta documentación se registra en el siguiente estado de la rama.
+Estado funcional: IMPLEMENTADO.
+Rutas válidas: Puerta a puerta y Venta local móvil.
+Estado de ruta: EN_CURSO / FINALIZADA / CANCELADA.
+Gate CI final: BLOQUEADO por cola.
 
-## Cierre FASE 0
+## C7 — Mapa
 
-- Este commit contiene el cierre documental de F0. La etiqueta se crea automáticamente por CI con el marcador `[phase-ok:fase-0-ok]`.
-- `npm run verify`: PASÓ en CI sobre `2cebdf4c847d0c5a7569cf1a2681e8f266de9ee6`.
-- `npm ls sql.js`: PASÓ.
-- `npm audit --audit-level=high`: PASÓ — 0 vulnerabilidades.
-- `npm run lint`: PASÓ — 0 warnings y 0 errors.
-- `npm run verify:db`: PASÓ — v1→v3 y v2→v3 conservan conteos, total_ventas y total_utilidad; enteros COP, pago atómico, anti-duplicado y rollback SQL.js.
-- `npm run build`: PASÓ.
-- Prueba con plugin SQLite nativo: NO EJECUTABLE AQUÍ (instrumented test preparado, requiere emulador/dispositivo Android).
-- Comprobación en pantalla de F0: NO EJECUTABLE AQUÍ como criterio visual de C1-C9; F0 es auditoría y cobertura de datos.
+Implementación principal:
+- `c16f3f6` popup DOM seguro.
+- `bd384c9` filtros persistentes y ubicación.
+- `b9884e3` listeners y clientes sin ubicación.
+- `3fc1332` foto segura en popup.
+- `38c6da7`, `017783ce` reparación del estado omitido y del botón de centrado.
 
-## Próxima fase
+Estado funcional: IMPLEMENTADO.
+Comprobación estática: popup sin HTML construido con datos de usuario.
+Gate CI final: BLOQUEADO por cola.
 
-C1 — Interfaz base y navegación.
+## C8 — Respaldo
 
+Implementación principal:
+- `d773860` checksum SHA-256.
+- `8db0daf` restauración protegida.
+- `3e43d03` compartir y limpieza protegida.
+- `026dada` / `19b8c6b` rotación automática.
+- `8cf8711` compartir archivo.
+- `ebc89e2` historial automático.
+- `aa42519`, `bea99c2` evitar exportaciones automáticas innecesarias.
+
+Estado funcional: IMPLEMENTADO.
+Respaldo: fecha, versión, checksum; restauración validada; limpieza con verificación + confirmación BORRAR.
+Gate CI final: BLOQUEADO por cola.
+
+## C9 — Limpieza
+
+Implementación principal:
+- `f1e03b8` eliminación de programación del esquema actual.
+- `cfbffff` / `a91d133` eliminación de código/tipos heredados.
+- `3f6dbe4`, `13feba2`, `8ca783d` selector de pago reutilizable.
+- `5bdea8b`, `f52917c`, `9bebb35`, `73761cc` limpieza y pruebas del esquema v8.
+- Residuos Android de plantilla también fueron eliminados.
+- Auditoría final corrigió `allowBackup=false`, benchmark y Mapa/WhatsApp.
+
+Estado funcional: IMPLEMENTADO.
+Búsqueda estática actual: sin `any`, `console.log`, TODO/FIXME/XXX, `innerHTML` o `dangerouslySetInnerHTML` en `src`.
+Gate CI final: BLOQUEADO por cola.
+
+## Auditoría A1-A7
+
+### A1 — C1-C9
+Todas las funcionalidades pedidas aparecen implementadas en el árbol actual. No se declara ninguna como PASÓ en pantalla mientras la corrida final de CI permanezca en cola.
+
+### A2 — hallazgos
+- CRÍTICO: ninguno encontrado en revisión estática.
+- IMPORTANTE: popup del mapa y estado de filtros llegaron a quedar incompletos en una rama intermedia; corregidos.
+- IMPORTANTE: `allowBackup=true` era una vía adicional para datos sensibles; corregido a `false`.
+- MENOR: normalización de teléfono de WhatsApp en Recordatorios; corregida.
+- Pendiente: validación física Android y firma release con secretos reales.
+
+### A3 — rendimiento
+`scripts/benchmark-db.mjs` siembra 2.000 clientes, 5.000 mascotas y 20.000 ventas y prueba consultas representativas de Inicio, Clientes, Cartera, Rutas, Informes y Mapa. Se incorporó a `npm run verify`.
+Estado de ejecución: BLOQUEADO por runner de GitHub en cola.
+
+### A4 — E2E
+`scripts/e2e-core.mjs` cubre base limpia E2E, cliente, venta, doble toque, ruta, cuadre y respaldo. La matriz completa también contempla casos manuales de GPS/cámara/WhatsApp/apagado/actualización.
+Estado automático final: BLOQUEADO por runner.
+Estado manual: NO EJECUTABLE AQUÍ.
+
+### A5 — Android
+Release firmado preparado en `.github/workflows/build-release.yml`.
+Secretos requeridos:
+- `CAMELLO_RELEASE_KEYSTORE_B64`
+- `CAMELLO_KEYSTORE_PASSWORD`
+- `CAMELLO_KEY_ALIAS`
+- `CAMELLO_KEY_PASSWORD`
+No se guardan en el repo.
+Estado: PENDIENTE DE SECRETO Y EJECUCIÓN DEL RELEASE.
+
+### A6 — Documentación
+Actualizados: README, ARQUITECTURA, DATOS, DECISIONES, PRUEBAS, RELEASE, PROGRESO y CHANGELOG.
+
+### A7 — entrega
+El informe final incluye hashes, estado CI/APK, Intacto verificado, Pendiente de decidir y guía manual.
+
+## Compuerta final
+
+HEAD de la rama al cerrar esta auditoría: `72ae8214034a6b338ebd760cbaae5623f56de562` o posterior si la documentación final agrega un commit.
+
+CI del HEAD final: EN COLA en GitHub Actions; por honestidad se reporta como NO PASÓ / NO EJECUTABLE, no como verde.
+
+No se ha tocado `main` ni se ha hecho merge.
