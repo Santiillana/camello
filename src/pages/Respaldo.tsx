@@ -168,8 +168,8 @@ export default function Respaldo() {
       <section className="tarjeta">
         <h2>Exportar</h2>
         <div className="fila-botones">
-          <button className="boton-primario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>
-            {exportando ? 'Generando…' : '⬇️ Descargar respaldo cifrado'}
+          <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>
+            {exportando ? 'Generando…' : '⬇️ Descargar respaldo sin cifrar'}
           </button>
           <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
           <button className="boton-secundario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>Descargar cifrado</button>
