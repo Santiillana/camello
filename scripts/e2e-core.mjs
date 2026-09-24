@@ -78,15 +78,8 @@ async function crearCliente(page) {
   await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
 }
 
-async function expectOption(page, select, label) {
-  await page.waitForFunction(({ selector, expected }) => {
-    const element = document.querySelector(selector);
-    return !!element && [...element.options].some((option) => option.textContent?.trim() === expected);
-  }, { selector: await select.evaluate((el) => {
-    if (el.id) return '#' + el.id;
-    const all = [...document.querySelectorAll('select')];
-    return 'select:nth-of-type(' + (all.indexOf(el) + 1) + ')';
-  }), expected: label }, { timeout: 20000 });
+async function expectOption(_page, select, label) {
+  await select.locator('option').filter({ hasText: label }).waitFor({ state: 'attached', timeout: 20000 });
 }
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
