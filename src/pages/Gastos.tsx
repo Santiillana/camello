@@ -82,7 +82,7 @@ async function compartirCSV(items: Gasto[]) {
   const archivo = new File([csv], 'camello-gastos.csv', { type: 'text/csv;charset=utf-8' });
   try {
     await navigator.share({ title: 'Gastos CAMELLO', text: 'Exportación de gastos', files: [archivo] });
-  } catch {}
+  } catch { /* El error de lectura auxiliar no impide continuar con la pantalla de gastos. */ }
 }
 
 function crearCSV(items: Gasto[]) {
