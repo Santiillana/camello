@@ -22,6 +22,7 @@ export default function Gastos(){
   const [mostrar,setMostrar]=useState(params.get('nuevo')==='1');
   const [error,setError]=useState<string|null>(null);
   const [periodo,setPeriodo]=useState<ResultadoMes|null>(null);
+  const [gastoEditando,setGastoEditando]=useState<Gasto|null>(null);
 
   async function cargar(){
     try{
@@ -44,6 +45,7 @@ export default function Gastos(){
       <div><p className="texto-kicker">Operación</p><h1>Gastos</h1></div>
       <button className="boton-primario" onClick={()=>{setMostrar(true);setParams({nuevo:'1'});}}>+ Nuevo gasto</button>
     </header>
+    {gastoEditando&&<EditorGasto gasto={gastoEditando} categorias={categorias} onGuardado={()=>{setGastoEditando(null);void cargar();}} onCancelar={()=>setGastoEditando(null)} />}
     {mostrar&&<FormularioGasto categorias={categorias} onCategoriaCreada={async()=>{await cargar();}} onGuardado={()=>{setMostrar(false);setParams({});void cargar();}} onCancelar={()=>{setMostrar(false);setParams({});}} />}
     <section className="periodo-selector">{(['hoy','semana','mes'] as FiltroPeriodo[]).map(x=><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
     <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><div className="fila-botones"><strong>{formatoMoneda(total)}</strong><button type="button" className="boton-secundario" onClick={()=>descargarCSV(gastos)}>Exportar CSV</button>
@@ -64,7 +66,7 @@ export default function Gastos(){
     </div>}</section>
     <section className="tarjeta"><h2>Listado</h2>{gastos.length===0?<p className="texto-vacio">No hay gastos en este periodo.</p>:<ul className="lista-resumen">{gastos.map(g=><li key={g.id} className="fila-cartera">
       <div><strong>{g.categoria_nombre}</strong><span>{g.fecha} · {g.estado}{g.estado==='pendiente' && g.fecha_limite ? ' · '+(g.fecha_limite < hoyISO() ? 'Vencido' : 'vence '+g.fecha_limite) : ''}</span><span>{g.proveedor||g.descripcion||'Sin detalle'}</span></div>
-      <div className="lado-derecho-cliente"><strong>{formatoMoneda(g.monto)}</strong>{g.estado==='pendiente'&&<button className="boton-chip" onClick={async()=>{const monto=Number(window.prompt('Monto real pagado',String(g.monto)));if(Number.isInteger(monto)&&monto>0){await database.pagarGasto(g.id,monto,'EFECTIVO');void cargar();}}}>Pagar</button>}<button className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación');if(motivo) {await database.anularGastoConMotivo(g.id,motivo);void cargar();}}}>Anular</button></div>
+      <div className="lado-derecho-cliente"><strong>{formatoMoneda(g.monto)}</strong><button className="boton-chip" onClick={()=>setGastoEditando(g)}>Editar</button>{g.estado==='pendiente'&&<button className="boton-chip" onClick={async()=>{const monto=Number(window.prompt('Monto real pagado',String(g.monto)));if(Number.isInteger(monto)&&monto>0){await database.pagarGasto(g.id,monto,'EFECTIVO');void cargar();}}}>Pagar</button>}<button className="boton-texto" onClick={async()=>{await database.archivarGasto(g.id);void cargar();}}>Archivar</button><button className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación');if(motivo) {await database.anularGastoConMotivo(g.id,motivo);void cargar();}}}>Anular</button></div>
     </li>)}</ul>}</section>
     {error&&<p className="texto-error">{error}</p>}
   </div>
@@ -118,4 +120,18 @@ function FormularioGasto({categorias,onCategoriaCreada,onGuardado,onCancelar}:{c
             setMonto(p.datos.monto);setCategoria(p.datos.categoria);setFecha(p.datos.fecha);
             setEstado(p.datos.estado);setMetodo(p.datos.metodo);setFechaLimite(p.datos.fechaLimite);
             setNota(p.datos.nota);setProveedor(p.datos.proveedor);setFoto(p.datos.foto);setRuta(p.datos.ruta);setPaso(paso);}}/>}<AsistenteTarjetas titulo="Nuevo gasto" tarjetas={tarjetas} onCompletar={guardar} onCancelar={onCancelar} textoFinal={guardando?'Guardando…':'CONFIRMAR GASTO'} pasoInicial={paso} onPasoChange={setPaso} onGuardarBorrador={borrador.guardarAhora} onDescartarBorrador={borrador.descartar}/></>
+}
+
+function EditorGasto({gasto,categorias,onGuardado,onCancelar}:{gasto:Gasto;categorias:CategoriaGasto[];onGuardado:()=>void;onCancelar:()=>void}){
+  const [monto,setMonto]=useState(String(gasto.monto));const [categoria,setCategoria]=useState(String(gasto.categoria_id));const [fecha,setFecha]=useState(gasto.fecha);const [nota,setNota]=useState(gasto.descripcion??'');const [proveedor,setProveedor]=useState(gasto.proveedor??'');const [limite,setLimite]=useState(gasto.fecha_limite??'');
+  const [paso,setPaso]=useState(0);
+  const tarjetas=[
+    {id:'monto',titulo:'Monto',contenido:<input type="number" min={1} value={monto} onChange={e=>setMonto(e.target.value)}/>},
+    {id:'categoria',titulo:'Categoría',contenido:<select value={categoria} onChange={e=>setCategoria(e.target.value)}>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select>},
+    {id:'fecha',titulo:'Fecha',contenido:<input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/>},
+    {id:'detalle',titulo:'Detalle',contenido:<div className="formulario"><label>Nota<textarea maxLength={500} value={nota} onChange={e=>setNota(e.target.value)}/></label><label>Proveedor<input maxLength={160} value={proveedor} onChange={e=>setProveedor(e.target.value)}/></label><label>Fecha límite<input type="date" value={limite} onChange={e=>setLimite(e.target.value)}/></label></div>},
+    {id:'confirmar',titulo:'Confirmar',contenido:<div className="lista-resumen"><div><span>Monto</span><strong>{formatoMoneda(Number(monto))}</strong></div><div><span>Categoría</span><strong>{categorias.find(c=>String(c.id)===categoria)?.nombre}</strong></div></div>},
+  ];
+  async function guardar(){await database.editarGasto(gasto.id,{monto:Number(monto),categoria_id:Number(categoria),fecha,descripcion:nota,proveedor,fecha_limite:limite||null});onGuardado();}
+  return <AsistenteTarjetas titulo="Editar gasto" tarjetas={tarjetas} onCompletar={guardar} onCancelar={onCancelar} pasoInicial={paso} onPasoChange={setPaso} textoFinal="Guardar cambios"/>;
 }
