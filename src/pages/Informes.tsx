@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { database } from '../db/database';
 import type { ResumenPeriodo } from '../types';
-import { formatoMoneda, hoyISO, inicioMesISO, inicioSemanaISO } from '../utils/format';
+import { formatoMoneda, hoyISO, inicioMesISO, inicioSemanaISO, sumarDiasISO } from '../utils/format';
 
 export default function Informes() {
   const [hoy, setHoy] = useState<ResumenPeriodo | null>(null);
   const [semana, setSemana] = useState<ResumenPeriodo | null>(null);
   const [mes, setMes] = useState<ResumenPeriodo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [desde,setDesde]=useState(inicioMesISO()); const [hasta,setHasta]=useState(hoyISO()); const [rango,setRango]=useState<ResumenPeriodo|null>(null);
 
   useEffect(() => {
     const fin = hoyISO();
