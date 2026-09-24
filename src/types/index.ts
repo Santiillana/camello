@@ -33,6 +33,8 @@ export interface ConfiguracionApp {
   mensaje_recordatorio?: string;
   pin_habilitado?: boolean;
   pin_lock_minutos?: number;
+  privacy_accepted_at?: string | null;
+  privacy_responsable?: string;
 }
 
 export interface CarteraItem {
