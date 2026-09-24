@@ -106,7 +106,7 @@ export default function Respaldo() {
     if (navigator.share) {
       await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: 'Respaldo verificado · SHA-256 ' + (ver.checksum ?? 'sin checksum'),
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
       });
       setMensaje('El dispositivo no permitió adjuntar el archivo; comparte también el archivo descargado.');
       return;
