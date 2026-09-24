@@ -135,6 +135,10 @@ class Database {
     await this.abrirConexion();
     await this.prepararEsquema();
     await this.seedProductosSiVacio();
+    const { crearContexto } = await import('../modulos/runtime');
+    for (const modulo of (await import('../modulos/runtime')).listarModulos()) {
+      try { await crearContexto(this).limpiar(modulo.id); } catch {}
+    }
     await this.persist();
   }
 
@@ -2016,14 +2020,16 @@ class Database {
   async exportarRespaldo(): Promise<string> {
     const json = await this.conn().exportToJson('full');
     if (!json.export) throw new Error('SQLite no devolvió un respaldo válido.');
-    const payload = JSON.stringify(json.export);
-    const checksum = await calcularChecksum(payload);
+    const { crearContexto } = await import('../modulos/runtime');
+    const modulos = await crearContexto(this).exportarTodo();
+    const checksum = await calcularChecksum(JSON.stringify({ data: json.export, modulos }));
     const envelope = {
       camello_backup_version: 1,
       database: DB_NAME,
       schema_version: DB_VERSION,
       exported_at: new Date().toISOString(),
       checksum,
+      modulos,
       data: json.export,
     };
     return JSON.stringify(envelope, null, 2);
@@ -2046,7 +2052,11 @@ class Database {
       const exportData = data.data as Record<string, unknown>;
       const checksum = String(data.checksum ?? '');
       if (!checksum) throw new Error('El respaldo no tiene checksum.');
-      const calculado = await calcularChecksum(JSON.stringify(exportData));
+      const calculado = await calcularChecksum(JSON.stringify(
+        data.modulos && typeof data.modulos === 'object'
+          ? { data: exportData, modulos: data.modulos }
+          : exportData,
+      ));
       if (calculado !== checksum) throw new Error('El respaldo fue alterado o está corrupto.');
       const version = Number(data.schema_version);
       if (!Number.isInteger(version) || version < 1 || version > DB_VERSION) {
@@ -2098,6 +2108,10 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
+      if (data.modulos && typeof data.modulos === 'object') {
+        const { crearContexto } = await import('../modulos/runtime');
+        await crearContexto(this).importarTodo(data.modulos);
+      }
       await this.persist();
     }
   }
