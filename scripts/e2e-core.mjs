@@ -56,6 +56,8 @@ try {
     await omitir(page);
     await omitir(page);
     await omitir(page);
+    await omitir(page);
+    await omitir(page);
 
     await page.getByRole('heading', { name: 'Clientes' }).waitFor().catch(() => {});
     await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
