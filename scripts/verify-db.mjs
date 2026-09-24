@@ -2,7 +2,7 @@ import initSqlJs from 'sql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const REQUIRED_TABLES = [
   'clientes',
   'mascotas',
@@ -124,6 +124,15 @@ const SCHEMA_STATEMENTS = [
     clave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
   );`,
+  `CREATE TABLE IF NOT EXISTS borradores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,
+    clave TEXT NOT NULL,
+    json TEXT NOT NULL,
+    paso INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    UNIQUE(tipo, clave)
+  );`,
   'CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);',
   'CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);',
   'CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);',
@@ -132,6 +141,7 @@ const SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);',
   'CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);',
   'CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);',
+  'CREATE INDEX IF NOT EXISTS idx_borradores_updated ON borradores(updated_at);',
 ];
 
 function applySchema(db) {
