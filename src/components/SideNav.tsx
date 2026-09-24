@@ -29,7 +29,7 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
   useEffect(()=>{
     let activo=true;
     Promise.all(listarModulos().map(async modulo=>({to:modulo.ruta,label:modulo.nombre,icon: 'M12 3C7 3 4 7 4 12s3 9 8 9 8-4 8-9-5-9-8-9Z',enabled:await database.obtenerModuloHabilitado(modulo.id)})))
-      .then(items=>{if(activo)setModulos(items.filter(item=>item.enabled).map(({enabled,...item})=>item));})
+      .then(items=>{if(activo)setModulos(items.filter(item=>item.enabled).map(item=>({to:item.to,label:item.label,icon:item.icon})));})
       .catch(()=>undefined);
     return()=>{activo=false;};
   },[]);
