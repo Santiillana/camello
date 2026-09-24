@@ -232,16 +232,115 @@ function versionMayorTest(SQL){
 }
 
 const SQL=await initSqlJs({locateFile:file=>fileURLToPath(new URL('../node_modules/sql.js/dist/'+file,import.meta.url))});
-const fresh=new SQL.Database(); initialize(fresh); initialize(fresh); flujo(fresh,'fresh');
-transactionalFailureTest(SQL);
-versionMayorTest(SQL); gastosTest(fresh); anulacionesTest(fresh);
-const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
-const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
-const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
-const dañada=fixture(SQL,'schema-v8-damaged.sql');
-const brokenDDL=dañada.exec("SELECT name,sql FROM sqlite_master WHERE sql LIKE '%\\_migracion\\_%' ESCAPE '\\'")[0]?.values??[];
-if(!brokenDDL.some(r=>String(r[0])==='ventas'&&String(r[1]).includes('rutas_migracion_v8')))throw new Error('La fixture dañada no reproduce rutas_migracion_v8.');
-const beforeD=resumen(dañada); initialize(dañada); same(beforeD,resumen(dañada),'damaged'); flujo(dañada,'damaged');
-for(const db of [fresh,v1,v2,v7,dañada]){health(db,'final');db.close();}
-console.log('verify-db: OK');
-console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',idempotencia:'PASÓ',version_mayor:'PASÓ',rollback_transaccional_simulado:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
+
+function carteraScenario(SQL) {
+  const db = new SQL.Database();
+  initialize(db);
+  const cid = Number(db.exec("SELECT id FROM clientes LIMIT 1")[0]?.values?.[0]?.[0] ?? 0);
+  db.run("INSERT INTO ventas(cliente_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,metodo_pago,monto_pagado,operacion_id) VALUES (?, 'Cartera',1,10000,4000,10000,6000,'2026-09-24','13:00','PENDIENTE','FIADO',0,'cartera-vitest');",[cid]);
+  const before = Number(db.exec("SELECT total-monto_pagado FROM ventas WHERE operacion_id='cartera-vitest'")[0].values[0][0]);
+  assertEq(before,10000,'cartera inicial');
+  db.run("UPDATE ventas SET monto_pagado=4000, estado_pago='PENDIENTE', metodo_pago='EFECTIVO' WHERE operacion_id='cartera-vitest';");
+  const after = Number(db.exec("SELECT total-monto_pagado FROM ventas WHERE operacion_id='cartera-vitest'")[0].values[0][0]);
+  assertEq(after,6000,'cartera después de pago');
+  db.close();
+}
+
+function utilidadScenario(SQL) {
+  const db = new SQL.Database();
+  initialize(db);
+  flujo(db,'utilidad');
+  const row = db.exec("SELECT total, utilidad, (precio_aplicado-costo_aplicado)*cantidad AS esperada FROM ventas WHERE operacion_id='utilidad-venta';")[0]?.values?.[0];
+  if (!row) throw new Error('No se creó la venta de utilidad.');
+  assertEq(Number(row[1]), Number(row[2]), 'utilidad calculada');
+  db.close();
+}
+
+function persistenciaScenario(SQL) {
+  const db = new SQL.Database();
+  initialize(db);
+  flujo(db,'persistencia');
+  const exported = db.export();
+  db.close();
+  const restored = new SQL.Database(exported);
+  health(restored,'persistencia restaurada');
+  assertEq(Number(restored.exec("SELECT COUNT(*) FROM clientes WHERE nombre='persistencia cliente';")[0].values[0][0]),1,'persistencia cliente');
+  assertEq(Number(restored.exec("SELECT COUNT(*) FROM ventas WHERE operacion_id='persistencia-venta';")[0].values[0][0]),1,'persistencia venta');
+  restored.close();
+}
+
+async function runScenario(scenario) {
+  switch (scenario) {
+    case 'migraciones-vacia': {
+      const db = new SQL.Database();
+      initialize(db);
+      health(db,'migraciones base vacía');
+      db.close();
+      break;
+    }
+    case 'idempotencia': {
+      const db = new SQL.Database();
+      initialize(db);
+      initialize(db);
+      health(db,'idempotencia');
+      db.close();
+      break;
+    }
+    case 'version-mayor':
+      versionMayorTest(SQL);
+      break;
+    case 'ventas': {
+      const db = new SQL.Database();
+      initialize(db);
+      flujo(db,'ventas');
+      db.close();
+      break;
+    }
+    case 'cartera':
+      carteraScenario(SQL);
+      break;
+    case 'utilidad':
+      utilidadScenario(SQL);
+      break;
+    case 'persistencia':
+      persistenciaScenario(SQL);
+      break;
+    case 'indexeddb-vacia':
+      console.log('indexeddb-vacia: verificada por la prueba Vitest con fake-indexeddb.');
+      break;
+    case 'base-ya-migrada': {
+      const db = new SQL.Database();
+      initialize(db);
+      const bytes = db.export();
+      db.close();
+      const migrada = new SQL.Database(bytes);
+      initialize(migrada);
+      health(migrada,'base ya migrada');
+      migrada.close();
+      break;
+    }
+    case 'all':
+    case '':
+    case undefined: {
+      const fresh=new SQL.Database(); initialize(fresh); initialize(fresh); flujo(fresh,'fresh');
+      transactionalFailureTest(SQL);
+      versionMayorTest(SQL); gastosTest(fresh); anulacionesTest(fresh);
+      const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
+      const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
+      const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
+      const dañada=fixture(SQL,'schema-v8-damaged.sql');
+      const brokenDDL=dañada.exec("SELECT name,sql FROM sqlite_master WHERE sql LIKE '%\\_migracion\\_%' ESCAPE '\\\\'")[0]?.values??[];
+      if(!brokenDDL.some(r=>String(r[0])==='ventas'&&String(r[1]).includes('rutas_migracion_v8')))throw new Error('La fixture dañada no reproduce rutas_migracion_v8.');
+      const beforeD=resumen(dañada); initialize(dañada); same(beforeD,resumen(dañada),'damaged'); flujo(dañada,'damaged');
+      for(const db of [fresh,v1,v2,v7,dañada]){health(db,'final');db.close();}
+      console.log('verify-db: OK');
+      console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',idempotencia:'PASÓ',version_mayor:'PASÓ',rollback_transaccional_simulado:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
+      break;
+    }
+    default:
+      throw new Error('Escenario Vitest desconocido: '+scenario);
+  }
+}
+
+const scenario = process.env.CAMELLO_DB_SCENARIO;
+await runScenario(scenario);
