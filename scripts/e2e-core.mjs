@@ -75,7 +75,7 @@ async function crearCliente(page) {
 
   await siguiente(page);
   for (let i = 0; i < 6; i += 1) await omitir(page);
-  await page.getByRole('heading', { name: 'Clientes' }).waitFor();
+  await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
 }
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
