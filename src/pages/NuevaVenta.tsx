@@ -4,6 +4,8 @@ import { database } from '../db/database';
 import type { ClienteConResumen, Producto, Ruta } from '../types';
 import { fechaLocalISO, formatoMoneda, horaLocalHHMM } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
+import BorradorPendiente from '../components/BorradorPendiente';
+import { useBorrador } from '../hooks/useBorrador';
 import ClienteForm from '../components/ClienteForm';
 import MetodoPagoSelector, { type MetodoPagoVenta } from '../components/MetodoPagoSelector';
 
@@ -38,7 +40,26 @@ export default function NuevaVenta() {
   const [error, setError] = useState<string | null>(null);
   const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
   const [voucher, setVoucher] = useState<Voucher | null>(null);
+  const [pasoInicial, setPasoInicial] = useState(0);
   const operacionIdRef = useRef<string | null>(null);
+
+  type DatosBorradorVenta = {
+    clienteId: number | '';
+    busquedaCliente: string;
+    productoId: number | '';
+    cantidad: number;
+    metodo: Metodo;
+    montoParcial: string;
+  };
+  const datosBorrador: DatosBorradorVenta = {
+    clienteId, busquedaCliente, productoId, cantidad, metodo, montoParcial,
+  };
+  const borrador = useBorrador<DatosBorradorVenta>({
+    tipo: 'venta-nueva',
+    clave: 'nueva',
+    datos: datosBorrador,
+    paso: pasoInicial,
+  });
 
   useEffect(() => {
     Promise.all([
@@ -233,6 +254,7 @@ export default function NuevaVenta() {
         operacion_id: operacionIdRef.current,
       });
 
+      await borrador.limpiar();
       setVoucher({
         id,
         cliente: cliente?.nombre ?? '',
@@ -300,6 +322,25 @@ export default function NuevaVenta() {
     <div className="pantalla">
       <header className="encabezado"><h1>Nueva venta</h1></header>
       {error && <p className="texto-error">{error}</p>}
+      {borrador.pendiente && (
+        <BorradorPendiente
+          fecha={borrador.pendiente.updated_at}
+          onDescartar={() => void borrador.descartar()}
+          onContinuar={async () => {
+            const pendiente = borrador.pendiente;
+            if (!pendiente) return;
+            const paso = await borrador.continuar();
+            const datos = pendiente.datos;
+            setClienteId(datos.clienteId);
+            setBusquedaCliente(datos.busquedaCliente);
+            setProductoId(datos.productoId);
+            setCantidad(datos.cantidad);
+            setMetodo(datos.metodo);
+            setMontoParcial(datos.montoParcial);
+            setPasoInicial(paso);
+          }}
+        />
+      )}
       <AsistenteTarjetas
         titulo="Nueva venta"
         tarjetas={tarjetas}
@@ -308,6 +349,10 @@ export default function NuevaVenta() {
         }}
         onCancelar={() => navigate(-1)}
         textoFinal="CONFIRMAR VENTA"
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
       />
     </div>
   );
