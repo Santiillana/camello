@@ -23,7 +23,7 @@ jobs:
           tag="$(printf '%s\n' "${{ github.event.head_commit.message }}" | sed -n 's/.*\[phase-ok:\([^]]*\)\].*/\1/p' | head -n1)"
           test -n "$tag"
           case "$tag" in
-            fase-[a-z0-9-]*-ok) ;;
+            fase-[a-z0-9-]*-ok|rescate-ok|antes-de-v1) ;;
             *) echo "Etiqueta no permitida: $tag"; exit 1 ;;
           esac
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
