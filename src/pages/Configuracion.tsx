@@ -292,16 +292,6 @@ export default function Configuracion({ onConfigChanged }: Props) {
       </section>
 
       <section className="tarjeta">
-        <h2>Privacidad y datos personales</h2>
-        <p className="texto-vacio">Los datos de clientes permanecen en el dispositivo salvo una exportación, restauración, compartir o conexión explícitamente iniciada. CAMELLO no incorpora analítica ni telemetría.</p>
-        <p className="texto-vacio">Responsable del tratamiento: {negocio || 'tu negocio'}. La app ofrece herramientas de consentimiento; no constituye una declaración de cumplimiento legal. Consulta a un abogado sobre las obligaciones aplicables a tu negocio en Colombia.</p>
-        <label className="fila-checkbox">
-          <input type="checkbox" checked={privacyAceptada} onChange={e=>setPrivacyAceptada(e.target.checked)} />
-          Confirmo que he leído el aviso de privacidad y autorizo el tratamiento local de los datos registrados en CAMELLO.
-        </label>
-      </section>
-
-            <section className="tarjeta">
         <h2>Aviso de privacidad y datos</h2>
         <p className="texto-vacio">CAMELLO ofrece herramientas para documentar y gestionar datos personales. Este aviso no constituye certificación de cumplimiento legal; el responsable del negocio debe revisarlo con asesoría jurídica.</p>
         <label className="fila-checkbox"><input type="checkbox" checked={privacidadHabilitada} onChange={e=>{setPrivacidadHabilitada(e.target.checked);void database.guardarConfiguracion({privacidad_habilitada:e.target.checked});}}/> Mostrar aviso al abrir CAMELLO</label>
