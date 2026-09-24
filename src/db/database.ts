@@ -1063,6 +1063,15 @@ class Database {
 
     const ahora = new Date();
     const op = operacionId?.trim() || null;
+    if (op) {
+      const previo = await this.conn().query(
+        "SELECT COALESCE(SUM(monto),0) as n FROM pagos WHERE operacion_id LIKE ?;",
+        [op + '-%'],
+      );
+      const yaRegistrado = Number(previo.values?.[0]?.n ?? 0);
+      if (yaRegistrado > 0) return yaRegistrado;
+    }
+
     const ventas = await this.conn().query(
       `SELECT id, total, COALESCE(monto_pagado,0) as monto_pagado
        FROM ventas
@@ -1087,18 +1096,6 @@ class Database {
         if (abono <= 0) continue;
 
         const pagoOperacion = op ? op + '-' + ventaId : null;
-        if (pagoOperacion) {
-          const previo = await this.conn().query(
-            'SELECT id FROM pagos WHERE operacion_id = ?;',
-            [pagoOperacion],
-          );
-          if (previo.values?.length) {
-            restante -= abono;
-            aplicado += abono;
-            continue;
-          }
-        }
-
         await this.conn().run(
           'INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?);',
           [
