@@ -165,6 +165,8 @@ export interface RutaConResumen extends Ruta {
   fiado?: number;
   ticket_promedio?: number;
   ventas_por_hora?: number;
+  gastos_asociados?: number;
+  utilidad_neta?: number;
 }
 
 export interface ResumenPeriodo {
