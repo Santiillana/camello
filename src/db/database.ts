@@ -73,10 +73,12 @@ class Database {
 
     if (Capacitor.getPlatform() === 'web') {
       const jeepEl = document.querySelector('jeep-sqlite');
-      if (jeepEl) {
-        await customElements.whenDefined('jeep-sqlite');
-        await this.sqlite.initWebStore();
+      if (!jeepEl) {
+        throw new Error('SQLite web no está listo: no se encontró <jeep-sqlite> en el DOM.');
       }
+
+      await customElements.whenDefined('jeep-sqlite');
+      await this.sqlite.initWebStore();
     }
 
     await this.abrirConexion();
