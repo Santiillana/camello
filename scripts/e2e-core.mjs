@@ -82,6 +82,14 @@ async function expectOption(_page, select, label) {
   await select.locator('option').filter({ hasText: label }).waitFor({ state: 'attached', timeout: 20000 });
 }
 
+async function sql(page, query, params = []) {
+  return page.evaluate(async ({ query: sqlQuery, params: sqlParams }) => {
+    const fn = window.__CAMELLO_TEST_SQL__;
+    if (!fn) throw new Error('No existe la API SQLite E2E.');
+    return fn(sqlQuery, sqlParams);
+  }, { query, params });
+}
+
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.locator('select').first();
@@ -176,6 +184,10 @@ try {
     const parcial = await venta(page, 'PARCIAL', 1);
     if (!parcial.includes('Pendiente')) throw new Error('La venta parcial no dejó pendiente.');
 
+    const ventasBase = await sql(page, "SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
+    if (Number(ventasBase[0]?.n) !== 4) throw new Error('E2E: no quedaron 4 ventas activas en SQLite.');
+    if (Number(ventasBase[0]?.total) <= 0) throw new Error('E2E: total vendido en SQLite inválido.');
+
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('link', { name: 'Pagar' }).first().click();
     await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor().catch(() => {});
@@ -184,6 +196,8 @@ try {
       await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
     }
     await page.getByText(/Cobro registrado|Cartera/).first().waitFor();
+    const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
+    if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
 
     await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
@@ -193,6 +207,9 @@ try {
     await page.goto('http://127.0.0.1:5173/#/rutas/1', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Ruta E2E' }).waitFor();
     await cerrarRuta(page, 4);
+    const rutaBase = await sql(page, "SELECT estado, paquetes_llevados, paquetes_sobrantes FROM rutas WHERE id=1;");
+    if (rutaBase[0]?.estado !== 'FINALIZADA') throw new Error('E2E: la ruta no quedó finalizada en SQLite.');
+    if (Number(rutaBase[0]?.paquetes_llevados) - Number(rutaBase[0]?.paquetes_sobrantes) < 0) throw new Error('E2E: cuadre de ruta inválido.');
 
     await page.goto('http://127.0.0.1:5173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const filtros = page.getByRole('button').filter({ hasText: /Filtro|Ubicación|Días|Ruta/ });
@@ -205,6 +222,8 @@ try {
     await page.getByRole('button', { name: /Descargar respaldo/ }).click();
     await download;
     await page.getByText(/Respaldo generado|Respaldo/).first().waitFor();
+    const backupBase = await sql(page, "SELECT COUNT(*) AS n FROM clientes;");
+    if (Number(backupBase[0]?.n) < 1) throw new Error('E2E: la base no conserva clientes antes del respaldo.');
 
     await probarUbicacionWeb(page);
 
