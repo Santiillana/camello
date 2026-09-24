@@ -29,6 +29,14 @@ export function crearContexto(runtimeApi: {
       await modulo.limpiar(await runtimeApi.crearContextoModulo(id));
       await runtimeApi.limpiarModuloDatosPrefijados(id);
     },
+    async limpiarTodo() {
+      for (const modulo of modulos) {
+        try {
+          await modulo.limpiar(await runtimeApi.crearContextoModulo(modulo.id));
+          await runtimeApi.limpiarModuloDatosPrefijados(modulo.id);
+        } catch {}
+      }
+    },
     async migrarTodo() {
       for (const modulo of modulos) {
         try {
@@ -69,3 +77,4 @@ export function crearContexto(runtimeApi: {
 export async function inicializarModulos(runtimeApi: Parameters<typeof crearContexto>[0]): Promise<void> {
   await crearContexto(runtimeApi).migrarTodo();
 }
+
