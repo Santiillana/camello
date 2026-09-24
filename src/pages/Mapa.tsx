@@ -43,7 +43,15 @@ function cargarFiltrosGuardados(): FiltrosMapa {
     if (!raw) return FILTROS_DEFAULT;
     const parsedUnknown: unknown = JSON.parse(raw);
     if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) return FILTROS_DEFAULT;
-    const parsed = parsedUnknown as Record<string, unknown>;
+    if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) return FILTROS_DEFAULT;
+    const parsed: { estado?: unknown; texto?: unknown; rutaId?: unknown; minDias?: unknown; maxDias?: unknown; recompraVencida?: unknown } = {
+      estado: 'estado' in parsedUnknown ? parsedUnknown.estado : undefined,
+      texto: 'texto' in parsedUnknown ? parsedUnknown.texto : undefined,
+      rutaId: 'rutaId' in parsedUnknown ? parsedUnknown.rutaId : undefined,
+      minDias: 'minDias' in parsedUnknown ? parsedUnknown.minDias : undefined,
+      maxDias: 'maxDias' in parsedUnknown ? parsedUnknown.maxDias : undefined,
+      recompraVencida: 'recompraVencida' in parsedUnknown ? parsedUnknown.recompraVencida : undefined,
+    };
     const estado = parsed.estado;
     const filtroEstado: Filtro = estado === 'ACTIVO' || estado === 'POR_CONTACTAR' || estado === 'INACTIVO' || estado === 'pendientes'
       ? estado
