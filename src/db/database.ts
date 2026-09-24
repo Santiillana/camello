@@ -139,10 +139,6 @@ class Database {
     await this.abrirConexion();
     await this.prepararEsquema();
     await this.seedProductosSiVacio();
-    const { crearContexto } = await import('../modulos/runtime');
-    for (const modulo of (await import('../modulos/runtime')).listarModulos()) {
-      try { await crearContexto(this).limpiar(modulo.id); } catch {}
-    }
     await this.persist();
   }
 
