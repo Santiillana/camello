@@ -192,7 +192,7 @@ async function sql(page, query, params = []) {
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  const clienteSelect = page.getByLabel('Cliente', { exact: true });
+  const clienteSelect = page.locator('select').first();
   await page.getByLabel('Buscar cliente o mascota').waitFor({ state: 'visible', timeout: 15000 });
   const clienteRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
   if (clienteRow.length !== 1) throw new Error('E2E: Cliente E2E no existe en SQLite antes de la venta.');
@@ -275,7 +275,7 @@ try {
     await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
     await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    const clienteVenta = page.getByLabel('Cliente', { exact: true });
+    const clienteVenta = page.locator('select').first();
     const clienteVentaRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
     if (clienteVentaRow.length !== 1) throw new Error('E2E: Cliente E2E no existe antes de abrir ventas.');
     await clienteVenta.selectOption(String(clienteVentaRow[0].id));
