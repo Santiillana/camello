@@ -107,11 +107,11 @@ export class WebSqliteConnection {
     db.exec(sql);
   }
 
-  async execute(sql: string): Promise<void> {
+  async execute(sql: string, _transaction = true): Promise<void> {
     await this.executeStatements(sql);
   }
 
-  async run(sql: string, params: unknown[] = []): Promise<{ changes: { changes: number; lastId: number } }> {
+  async run(sql: string, params: unknown[] = [], _transaction = true): Promise<{ changes: { changes: number; lastId: number } }> {
     const db = this.getDb();
     db.run(sql, params as (string | number | Uint8Array | null | undefined)[]);
     const result = db.exec('SELECT changes() AS changes, last_insert_rowid() AS lastId;');
