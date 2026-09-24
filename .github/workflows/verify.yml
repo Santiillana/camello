@@ -25,3 +25,18 @@ jobs:
           cache: npm
       - name: Instalar y verificar en clon limpio
         run: npm ci && npm run verify
+
+  modulo-sin-carpeta:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Comprobar núcleo sin el módulo opcional
+        run: |
+          rm -rf src/modulos/sorpresa
+          npm run build
