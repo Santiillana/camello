@@ -46,6 +46,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
   const [lng, setLng] = useState<number | undefined>();
   const [precision, setPrecision] = useState<number | undefined>();
   const [fuente, setFuente] = useState<'gps' | 'whatsapp' | 'manual' | undefined>();
+  const [fechaUbicacion, setFechaUbicacion] = useState<string | undefined>();
   const [fotos, setFotos] = useState<FotoBorrador[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,12 +64,13 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
     lng?: number;
     precision?: number;
     fuente?: 'gps' | 'whatsapp' | 'manual';
+    fechaUbicacion?: string;
     fotos: FotoBorrador[];
   };
 
   const datosBorrador: DatosBorradorCliente = {
     nombre, telefono1, telefono2, cumpleDia, cumpleMes, observaciones,
-    mascotas, lat, lng, precision, fuente, fotos,
+    mascotas, lat, lng, precision, fuente, fechaUbicacion, fotos,
   };
   const borrador = useBorrador<DatosBorradorCliente>({
     tipo: 'cliente-nuevo',
@@ -219,12 +221,14 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
             setLng(value.lng);
             setPrecision(value.precision_m);
             setFuente(value.fuente);
+            setFechaUbicacion(value.fecha);
           }}
           onOmitir={() => {
             setLat(undefined);
             setLng(undefined);
             setPrecision(undefined);
             setFuente(undefined);
+            setFechaUbicacion(undefined);
           }}
         />
       ),
@@ -237,7 +241,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
         <FotosSelector fotos={fotos} onChange={setFotos} onOmitir={() => setFotos([])} />
       ),
     },
-  ], [nombre, telefono1, telefono2, cumpleDia, cumpleMes, observaciones, mascotas, lat, lng, precision, fuente, fotos]);
+  ], [nombre, telefono1, telefono2, cumpleDia, cumpleMes, observaciones, mascotas, lat, lng, precision, fuente, fechaUbicacion, fotos]);
 
   async function guardar() {
     setGuardando(true);
@@ -255,7 +259,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
           lng,
           ubicacion_precision_m: precision,
           ubicacion_fuente: fuente,
-          ubicacion_fecha: lat != null && lng != null ? new Date().toISOString() : undefined,
+          ubicacion_fecha: lat != null && lng != null ? (fechaUbicacion ?? new Date().toISOString()) : undefined,
         },
         mascotas.map((m): Omit<Mascota, 'id' | 'estado'> => ({
           cliente_id: 0,
@@ -320,6 +324,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
             setLng(datos.lng);
             setPrecision(datos.precision);
             setFuente(datos.fuente);
+            setFechaUbicacion(datos.fechaUbicacion);
             setFotos(datos.fotos);
             setPasoInicial(paso);
           }}
