@@ -137,51 +137,6 @@ async function crearCliente(page) {
 }
 
 
-async function webStoreSnapshot(page) {
-  return page.evaluate(async () => {
-    const bases = await indexedDB.databases();
-    const result = [];
-    for (const base of bases) {
-      if (!base.name) continue;
-      const request = indexedDB.open(base.name);
-      const db = await new Promise((resolve, reject) => {
-        request.onerror = () => reject(request.error ?? new Error('No se pudo abrir IndexedDB.'));
-        request.onsuccess = () => resolve(request.result);
-      });
-      const stores = Array.from(db.objectStoreNames);
-      const dbResult = { name: base.name, stores, keys: {}, sizes: {} };
-      for (const storeName of stores) {
-        const keys = await new Promise((resolve, reject) => {
-          const tx = db.transaction(storeName, 'readonly');
-          const req = tx.objectStore(storeName).getAllKeys();
-          req.onerror = () => reject(req.error ?? new Error('No se pudieron leer claves IndexedDB.'));
-          req.onsuccess = () => resolve(req.result.map((value) => String(value)));
-        });
-        dbResult.keys[storeName] = keys;
-        if (storeName === 'databases') {
-          const value = await new Promise((resolve, reject) => {
-            const tx = db.transaction(storeName, 'readonly');
-            const req = tx.objectStore(storeName).get('camelloSQLite.db');
-            req.onerror = () => reject(req.error ?? new Error('No se pudo leer camelloSQLite.db.'));
-            req.onsuccess = () => resolve(req.result);
-          });
-          if (value instanceof Uint8Array) {
-            const texto = new TextDecoder().decode(value);
-            dbResult.sizes[storeName] = value.byteLength;
-            dbResult.containsClienteE2E = texto.includes('Cliente E2E');
-          } else {
-            dbResult.sizes[storeName] = value && typeof value === 'object' && 'byteLength' in value ? Number(value.byteLength) : value == null ? null : -1;
-            dbResult.containsClienteE2E = false;
-          }
-        }
-      }
-      db.close();
-      result.push(dbResult);
-    }
-    return result;
-  });
-}
-
 async function sql(page, query, params = []) {
   return page.evaluate(async ({ query: sqlQuery, params: sqlParams }) => {
     const fn = window.__CAMELLO_TEST_SQL__;
