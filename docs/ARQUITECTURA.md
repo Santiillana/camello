@@ -6,7 +6,8 @@
 - `src/components/`: componentes reutilizables.
 - `src/db/schema.ts`: esquema SQLite actual.
 - `src/db/database.ts`: acceso a datos, migraciones y reglas de negocio.
-- `src/utils/`: fechas COP, tema, respaldo, ubicación y rotación automática.
+- `src/utils/`: fechas COP, tema, respaldo, ubicación, parser de coordenadas y rotación automática.
+- `src/hooks/`: persistencia de borradores y ciclo de vida de Capacitor.
 - `android/`: proyecto Capacitor Android.
 - `scripts/`: verificación de datos, UI y rendimiento.
 - `.github/workflows/`: CI, APK y smoke de interfaz.
@@ -27,7 +28,17 @@ v4: precisión/fuente/fecha de ubicación y fotos.
 v5: historial de pagos.
 v6: preferencias de ritmo/seguimiento.
 v7: sobrantes de ruta.
-v8: eliminación de programación de rutas y normalización de PROGRAMADA a CANCELADA.
+v8: eliminación de programación de rutas y normalización de PROGRAMADA a CANCELADA; reconstrucción segura sin RENAME sobre tablas referenciadas.
+v9: reparación idempotente de referencias a tablas temporales de migración, foreign_key_check e integrity_check.
+v10: borradores persistentes con tipo, clave, JSON, paso y fecha; purga a 7 días.
+
+## Formularios y borradores
+
+Los formularios y asistentes usan la tabla local `borradores`, con debounce de 300 ms y guardado al ocultar la página o la app. Al volver aparece Continuar/Descartar y se restaura el paso exacto.
+
+## Ubicación
+
+`ubicacionParser.ts` es un parser puro para coordenadas, geo:, Google Maps y texto de WhatsApp. En Android, `ubicacion.ts` usa Geolocation para permisos/GPS y CapacitorHttp para resolver enlaces cortos con límite de redirecciones y lista de dominios permitidos.
 
 ## Mapa
 
