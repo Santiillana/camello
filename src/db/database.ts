@@ -33,6 +33,7 @@ import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO 
 import { initWebSqlite } from './initWebSqlite';
 import { calcularChecksum } from '../utils/respaldo';
 import { crearContexto } from '../modulos/runtime';
+import { guardarEspejoSqlite, leerEspejoSqlite } from './webMirror';
 
 type SqliteExportData = Record<string, unknown> & {
   database: string;
@@ -1311,7 +1312,7 @@ class Database {
     await this.abrirConexion();
   }
 
-  private async seedProductosSiVacio(): Promise<void {
+  private async seedProductosSiVacio(): Promise<void> {
     const r = await this.conn().query('SELECT COUNT(*) as n FROM productos;');
     const n = Number(r.values?.[0]?.n ?? 0);
     if (n === 0) {
