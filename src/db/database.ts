@@ -2344,10 +2344,26 @@ class Database {
   // RESPALDO
 
   async exportarRespaldo(): Promise<string> {
-    const json = await this.conn().exportToJson('full');
-    if (!json.export) throw new Error('SQLite no devolvió un respaldo válido.');
+    let exportData: SqliteExportData;
+    if (Capacitor.getPlatform() === 'web') {
+      if (!this.webDb) throw new Error('SQLite web no está inicializado.');
+      exportData = {
+        database: DB_NAME,
+        version: DB_VERSION,
+        overwrite: true,
+        encrypted: false,
+        mode: 'full',
+        format: 'sqlite-binary',
+        bytes_base64: bytesToBase64(this.webDb.exportBytes()),
+      };
+    } else {
+      const json = await (this.conn() as SQLiteDBConnection).exportToJson('full');
+      if (!json.export) throw new Error('SQLite no devolvió un respaldo válido.');
+      exportData = json.export as SqliteExportData;
+    }
+
     const modulos = await crearContexto(this).exportarTodo();
-    const checksum = await calcularChecksum(JSON.stringify({ data: json.export, modulos }));
+    const checksum = await calcularChecksum(JSON.stringify({ data: exportData, modulos }));
     const envelope = {
       camello_backup_version: 1,
       database: DB_NAME,
@@ -2355,7 +2371,7 @@ class Database {
       exported_at: new Date().toISOString(),
       checksum,
       modulos,
-      data: json.export,
+      data: exportData,
     };
     return JSON.stringify(envelope, null, 2);
   }
@@ -2399,7 +2415,7 @@ class Database {
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
-    if (!this.sqlite) throw new Error('SQLite no está inicializado.');
+    if (!this.db) throw new Error('SQLite no está inicializado.');
     const valido = await this.validarRespaldo(jsonTexto);
     const data: SqliteExportData = { ...valido.exportData, database: this.activeDbName };
 
@@ -2408,13 +2424,39 @@ class Database {
     }
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
     if (data.encrypted === true) throw new Error('No se admiten respaldos cifrados en esta versión.');
-    if (!Array.isArray(data.tables)) throw new Error('El respaldo está incompleto.');
 
+    if (Capacitor.getPlatform() === 'web') {
+      if (!this.webDb) throw new Error('SQLite web no está inicializado.');
+      const respaldoActual = this.webDb.exportBytes();
+
+      try {
+        if (data.format === 'sqlite-binary') {
+          if (!data.bytes_base64) throw new Error('El respaldo binario no contiene datos SQLite.');
+          await this.webDb.replaceFromBytes(base64ToBytes(data.bytes_base64));
+        } else {
+          if (!Array.isArray(data.tables)) throw new Error('El respaldo JSON está incompleto.');
+          await this.webDb.replaceFromJson(data, valido.version);
+        }
+
+        await this.prepararEsquema();
+        await this.verificarSalud();
+        await this.seedProductosSiVacio();
+        await this.persist();
+      } catch (error) {
+        await this.webDb.replaceFromBytes(respaldoActual);
+        this.db = this.webDb;
+        throw error;
+      }
+      return;
+    }
+
+    if (!Array.isArray(data.tables)) throw new Error('El respaldo está incompleto.');
+    if (!this.sqlite) throw new Error('SQLite nativo no está inicializado.');
     const serialized = JSON.stringify(data);
     const estructural = await this.sqlite.isJsonValid(serialized);
     if (!estructural.result) throw new Error('El archivo de respaldo no tiene una estructura SQLite válida.');
 
-    const actual = await this.conn().exportToJson('full');
+    const actual = await (this.conn() as SQLiteDBConnection).exportToJson('full');
     if (!actual.export) throw new Error('No se pudo crear un respaldo de seguridad antes de restaurar.');
     const actualSerialized = JSON.stringify(actual.export);
 
@@ -2434,9 +2476,6 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
-      // Los datos propios del módulo ya forman parte del export SQLite completo.
-      // La sección modulos del sobre se conserva para versionado/auditoría; no se reinyecta
-      // para evitar duplicar filas. Las migraciones del módulo se ejecutan al arrancar.
       await this.persist();
     }
   }
@@ -2445,10 +2484,22 @@ class Database {
     if (!this.db) throw new Error('SQLite no está inicializado.');
     const valido = await this.validarRespaldo(respaldoVerificado);
     if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
-    await this.db.delete();
-    this.db = null;
-    this.activeDbName = DB_NAME;
-    await this.abrirConexion();
+
+    if (Capacitor.getPlatform() === 'web') {
+      if (!this.webDb) throw new Error('SQLite web no está inicializado.');
+      await this.webDb.deletePersistedDatabase();
+      this.db = null;
+      this.webDb = new WebSqliteConnection(DB_NAME, import.meta.env.BASE_URL + 'assets');
+      await this.webDb.open();
+      this.db = this.webDb;
+      this.activeDbName = DB_NAME;
+    } else {
+      await (this.db as SQLiteDBConnection).delete();
+      this.db = null;
+      this.activeDbName = DB_NAME;
+      await this.abrirConexion();
+    }
+
     await this.prepararEsquema();
     await this.seedProductosSiVacio();
     const runtime = crearContexto(this);
