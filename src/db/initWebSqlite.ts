@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import localForage from 'localforage';
 
 function marcarEtapa(etapa: string): void {
   if (import.meta.env.VITE_E2E === '1') document.documentElement.dataset.camelloSqliteStage = etapa;
@@ -38,5 +39,22 @@ export async function initWebSqlite(): Promise<void> {
   if (!(await jeepEl.isStoreOpen?.().catch(() => false) ?? false)) {
     throw new Error('jeep-sqlite no abrió el WebStore a tiempo.');
   }
+  try {
+    const store = localForage.createInstance({
+      name: 'jeepSqliteStore',
+      storeName: 'databases',
+      driver: [localForage.INDEXEDDB],
+      version: 1,
+    });
+    const persisted = await store.getItem<Uint8Array>('camelloSQLite.db');
+    if (persisted instanceof Uint8Array) {
+      await store.setItem('camelloSQLite.db', new Uint8Array(persisted));
+    } else if (persisted instanceof ArrayBuffer) {
+      await store.setItem('camelloSQLite.db', new Uint8Array(persisted));
+    }
+  } catch {
+    // La normalización es preventiva; jeep-sqlite seguirá gestionando su WebStore.
+  }
+
   marcarEtapa('ready');
 }
