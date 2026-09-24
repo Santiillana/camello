@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { crearHashPin } from '../utils/seguridad';
 import { listarModulos } from '../modulos/runtime';
 import { database } from '../db/database';
+function esTipoGasto(value: string): value is 'fijo' | 'variable' {
+  return value === 'fijo' || value === 'variable';
+}
+function esNaturalezaGasto(value: string): value is 'operativo' | 'compra_insumos' | 'retiro_dueno' {
+  return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno';
+}
+
 import { aplicarTema } from '../utils/theme';
 import { formatoMoneda } from '../utils/format';
 import type { ConfiguracionApp, Producto } from '../types';
@@ -32,7 +39,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [privacyAceptada,setPrivacyAceptada]=useState(false);
   const [categoriasGasto, setCategoriasGasto] = useState<Awaited<ReturnType<typeof database.listarCategoriasGasto>>>([]);
   const [recurrentes, setRecurrentes] = useState<Awaited<ReturnType<typeof database.listarGastosRecurrentes>>>([]);
-  const [nuevoGastoCat, setNuevoGastoCat] = useState({nombre:'',tipo:'variable' as 'fijo'|'variable',naturaleza:'operativo' as 'operativo'|'compra_insumos'|'retiro_dueno',presupuesto:''});
+  const [nuevoGastoCat, setNuevoGastoCat] = useState({nombre:'',tipo:'variable',naturaleza:'operativo',presupuesto:''});
   const [nuevoFijo, setNuevoFijo] = useState({categoria:'',nombre:'',monto:'',dia:'1'});
 
   async function cargar() {
@@ -258,8 +265,8 @@ export default function Configuracion({ onConfigChanged }: Props) {
         <div className="formulario">
           <input placeholder="Nombre" value={nuevoGastoCat.nombre} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,nombre:e.target.value})}/>
           <div className="grid-dos-columnas">
-            <select value={nuevoGastoCat.tipo} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,tipo:e.target.value as 'fijo'|'variable'})}><option value="fijo">Fijo</option><option value="variable">Variable</option></select>
-            <select value={nuevoGastoCat.naturaleza} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,naturaleza:e.target.value as 'operativo'|'compra_insumos'|'retiro_dueno'})}><option value="operativo">Operativo</option><option value="compra_insumos">Compra de insumos</option><option value="retiro_dueno">Retiro del dueño</option></select>
+            <select value={nuevoGastoCat.tipo} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,tipo:esTipoGasto(e.target.value)?e.target.value:nuevoGastoCat.tipo})}><option value="fijo">Fijo</option><option value="variable">Variable</option></select>
+            <select value={nuevoGastoCat.naturaleza} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,naturaleza:esNaturalezaGasto(e.target.value)?e.target.value:nuevoGastoCat.naturaleza})}><option value="operativo">Operativo</option><option value="compra_insumos">Compra de insumos</option><option value="retiro_dueno">Retiro del dueño</option></select>
           </div>
           <input type="number" min={0} step={1} placeholder="Presupuesto mensual" value={nuevoGastoCat.presupuesto} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,presupuesto:e.target.value})}/>
           <button className="boton-primario" onClick={async()=>{await database.crearCategoriaGasto({nombre:nuevoGastoCat.nombre,tipo:nuevoGastoCat.tipo,naturaleza:nuevoGastoCat.naturaleza,presupuesto_mensual:nuevoGastoCat.presupuesto?Number(nuevoGastoCat.presupuesto):null});setNuevoGastoCat({...nuevoGastoCat,nombre:'',presupuesto:''});await cargar();}}>Crear categoría</button>
