@@ -2426,6 +2426,8 @@ class Database {
     await this.abrirConexion();
     await this.prepararEsquema();
     await this.seedProductosSiVacio();
+    const runtime = crearContexto(this);
+    await runtime.limpiarTodo();
     await this.persist();
   }
 }
