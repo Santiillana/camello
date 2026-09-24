@@ -15,6 +15,7 @@ import Respaldo from './pages/Respaldo';
 export default function App() {
   const [listo, setListo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reintentando, setReintentando] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -27,13 +28,31 @@ export default function App() {
     return () => { activo = false; };
   }, []);
 
+  async function reintentar() {
+    setReintentando(true);
+
+    try {
+      await database.reintentar();
+      setError(null);
+      setListo(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReintentando(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="pantalla-carga">
         <strong>No se pudo abrir la base de datos.</strong>
         <p className="texto-error">{error}</p>
-        <button className="boton-secundario" onClick={() => window.location.reload()}>
-          Reintentar
+        <button
+          className="boton-secundario"
+          disabled={reintentando}
+          onClick={() => void reintentar()}
+        >
+          {reintentando ? 'Reintentando…' : 'Reintentar'}
         </button>
       </div>
     );

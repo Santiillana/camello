@@ -12,6 +12,7 @@ async function bootstrap() {
     const { defineCustomElements } = await import('jeep-sqlite/loader');
     defineCustomElements(window);
     const jeepEl = document.createElement('jeep-sqlite');
+    jeepEl.setAttribute('wasmpath', '/assets');
     document.body.appendChild(jeepEl);
     await customElements.whenDefined('jeep-sqlite');
   }
