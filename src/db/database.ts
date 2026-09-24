@@ -150,6 +150,10 @@ function juliandayDiff(desde: string, hasta: string): number {
   return (a - b) / 86400000;
 }
 
+function marcarEtapaSqlite(etapa: string): void {
+  if (import.meta.env.VITE_E2E === '1') document.documentElement.dataset.camelloSqliteStage = etapa;
+}
+
 class Database {
   private sqlite: SQLiteConnection | null = null;
   private db: SQLiteDBConnection | null = null;
@@ -162,17 +166,24 @@ class Database {
   }
 
   private async _init(): Promise<void> {
+    marcarEtapaSqlite('connection');
     this.sqlite = new SQLiteConnection(CapacitorSQLite);
 
     if (Capacitor.getPlatform() === 'web') {
       await initWebSqlite();
+      marcarEtapaSqlite('webstore');
       await this.sqlite.initWebStore();
     }
 
+    marcarEtapaSqlite('open');
     await this.abrirConexion();
+    marcarEtapaSqlite('schema');
     await this.prepararEsquema();
+    marcarEtapaSqlite('health');
     await this.verificarSalud();
+    marcarEtapaSqlite('seed');
     await this.seedProductosSiVacio();
+    marcarEtapaSqlite('persist');
     await this.persist();
   }
 
