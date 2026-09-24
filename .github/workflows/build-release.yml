@@ -1,0 +1,79 @@
+name: Compilar APK release de CAMELLO
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: camello-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run verify
+      - run: npx cap sync android
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          accept-android-sdk-licenses: "true"
+
+      - name: Requerir secretos de firma
+        env:
+          KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_B64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+
+      - name: Materializar keystore temporal
+        env:
+          KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > android/camello-release.jks
+
+      - name: Compilar release firmado
+        working-directory: android
+        env:
+          STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon             -PversionCodeOverride="${{ github.run_number }}"             -PversionNameOverride="${{ github.ref_name }}"             -PRELEASE_STORE_FILE="camello-release.jks"             -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD"             -PRELEASE_KEY_ALIAS="$KEY_ALIAS"             -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
+
+      - name: Publicar APK release
+        uses: actions/upload-artifact@v4
+        with:
+          name: camello-release-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Limpiar keystore
+        if: always()
+        run: rm -f android/camello-release.jks
