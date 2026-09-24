@@ -2,6 +2,8 @@ package co.combopitt.camello;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.WindowManager;
+import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -11,6 +13,10 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (!BuildConfig.DEBUG) {
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+            WebView.setWebContentsDebuggingEnabled(false);
+        }
         emitirCompartidoCuandoEsteListo(getIntent());
     }
 
