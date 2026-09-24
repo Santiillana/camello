@@ -219,7 +219,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   }
   await siguiente(page);
 
-  const confirm = page.getByRole('button', { name: 'CONFIRMAR VENTA' });
+  const confirm = page.getByRole('article').getByRole('button', { name: 'CONFIRMAR VENTA' });
   if (doble) await confirm.dblclick();
   else await confirm.click();
 
