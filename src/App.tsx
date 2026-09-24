@@ -30,10 +30,10 @@ export default function App() {
 
   async function reintentar() {
     setReintentando(true);
-    setError(null);
 
     try {
       await database.reintentar();
+      setError(null);
       setListo(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
