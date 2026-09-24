@@ -71,5 +71,5 @@ try {
     await browser.close();
   }
 } finally {
-  server.kill('SIGTERM');
+  server.kill('SIGKILL');
 }
