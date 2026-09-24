@@ -882,14 +882,18 @@ class Database {
     const hasta=periodo+'-31';
     const ventas = await this.conn().query(
       `SELECT COALESCE(SUM(total),0) ventas, COALESCE(SUM(costo_aplicado*cantidad),0) costos,
-              COALESCE((SELECT SUM(monto) FROM pagos WHERE fecha BETWEEN ? AND ?),0) cobrado
-       FROM ventas WHERE fecha BETWEEN ? AND ? AND estado_pago IN ('PAGADA','PENDIENTE');`,
+              COALESCE((SELECT SUM(monto) FROM pagos WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa'),0) cobrado
+       FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa';`,
       [desde,hasta,desde,hasta]
     );
     const gastos = await this.conn().query(
       `SELECT COALESCE(SUM(CASE WHEN c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) operativo,
               COALESCE(SUM(CASE WHEN g.estado='pendiente' AND c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) pendientes,
-              COALESCE(SUM(CASE WHEN g.estado='pagado' THEN g.monto ELSE 0 END),0) pagados
+              COALESCE(SUM(CASE WHEN g.estado='pagado' THEN g.monto ELSE 0 END),0) pagados,
+              COALESCE(SUM(CASE WHEN g.estado='pagado' AND c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) pagados_operativo,
+              COALESCE(SUM(CASE WHEN c.naturaleza='compra_insumos' THEN g.monto ELSE 0 END),0) compras_insumos,
+              COALESCE(SUM(CASE WHEN c.naturaleza='retiro_dueno' THEN g.monto ELSE 0 END),0) retiros_dueno,
+              COALESCE(SUM(CASE WHEN c.tipo='fijo' AND c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) gastos_fijos
        FROM gastos g JOIN categorias_gasto c ON c.id=g.categoria_id
        WHERE g.periodo=? AND g.archivado=0 AND g.estado <> 'anulado';`,
       [periodo]
