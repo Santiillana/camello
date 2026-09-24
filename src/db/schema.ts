@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 11
+export const DB_VERSION = 12
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -81,6 +81,9 @@ export const SCHEMA_STATEMENTS: string[] = [
     metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO',
     monto_pagado INTEGER NOT NULL DEFAULT 0,
     operacion_id TEXT UNIQUE,
+    estado_registro TEXT NOT NULL DEFAULT 'activa' CHECK (estado_registro IN ('activa','anulada')),
+    motivo_anulacion TEXT,
+    anulada_at TEXT,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (ruta_id) REFERENCES rutas(id),
     CHECK (monto_pagado >= 0 AND monto_pagado <= total)
@@ -113,6 +116,9 @@ export const SCHEMA_STATEMENTS: string[] = [
     hora TEXT NOT NULL,
     metodo_pago TEXT NOT NULL,
     operacion_id TEXT UNIQUE,
+    estado_registro TEXT NOT NULL DEFAULT 'activa' CHECK (estado_registro IN ('activa','anulada')),
+    motivo_anulacion TEXT,
+    anulada_at TEXT,
     FOREIGN KEY (venta_id) REFERENCES ventas(id),
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     CHECK (monto > 0)
@@ -145,6 +151,8 @@ export const SCHEMA_STATEMENTS: string[] = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     archivado INTEGER NOT NULL DEFAULT 0,
+    motivo_anulacion TEXT,
+    anulado_at TEXT,
     FOREIGN KEY (categoria_id) REFERENCES categorias_gasto(id),
     FOREIGN KEY (ruta_id) REFERENCES rutas(id),
     CHECK (monto > 0)

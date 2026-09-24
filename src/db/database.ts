@@ -193,6 +193,7 @@ class Database {
       { version: 8, ejecutar: () => this.migrarVersion8() },
       { version: 10, ejecutar: () => this.migrarVersion10() },
       { version: 11, ejecutar: () => this.migrarVersion11() },
+      { version: 12, ejecutar: () => this.migrarVersion12() },
     ];
     for (const migracion of migraciones) {
       if (version < migracion.version) await migracion.ejecutar();
@@ -873,6 +874,85 @@ class Database {
     };
   }
 
+  private async migrarVersion12(): Promise<void> {
+    const add = async (table: string, column: string, ddl: string) => {
+      const columns = await this.columnasDeTabla(table);
+      if (!columns.has(column)) await this.conn().execute('ALTER TABLE ' + table + ' ADD COLUMN ' + ddl + ';');
+    };
+    await add('ventas', 'estado_registro', "estado_registro TEXT NOT NULL DEFAULT 'activa'");
+    await add('ventas', 'motivo_anulacion', 'motivo_anulacion TEXT');
+    await add('ventas', 'anulada_at', 'anulada_at TEXT');
+    await add('pagos', 'estado_registro', "estado_registro TEXT NOT NULL DEFAULT 'activa'");
+    await add('pagos', 'motivo_anulacion', 'motivo_anulacion TEXT');
+    await add('pagos', 'anulada_at', 'anulada_at TEXT');
+    await add('gastos', 'motivo_anulacion', 'motivo_anulacion TEXT');
+    await add('gastos', 'anulado_at', 'anulado_at TEXT');
+    await this.conn().execute("UPDATE ventas SET estado_registro='activa' WHERE estado_registro IS NULL OR estado_registro='';", false);
+    await this.conn().execute("UPDATE pagos SET estado_registro='activa' WHERE estado_registro IS NULL OR estado_registro='';", false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_ventas_estado_registro ON ventas(estado_registro);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pagos_estado_registro ON pagos(estado_registro);', false);
+  }
+
+  async anularVenta(id: number, motivo: string): Promise<void> {
+    const m = textoObligatorio(motivo, 'El motivo de anulación').slice(0, 300);
+    const fecha = new Date().toISOString();
+    await this.conn().beginTransaction();
+    try {
+      const venta = await this.conn().query("SELECT estado_registro FROM ventas WHERE id=?;", [id]);
+      if (!venta.values?.length) throw new Error('La venta no existe.');
+      if (String(venta.values[0].estado_registro ?? 'activa') === 'anulada') return;
+      await this.conn().run(
+        "UPDATE pagos SET estado_registro='anulada', motivo_anulacion=?, anulada_at=? WHERE venta_id=? AND COALESCE(estado_registro,'activa')='activa';",
+        [m, fecha, id],
+        false,
+      );
+      await this.conn().run(
+        "UPDATE ventas SET estado_registro='anulada', motivo_anulacion=?, anulada_at=? WHERE id=?;",
+        [m, fecha, id],
+        false,
+      );
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch {}
+      throw error;
+    }
+  }
+
+  async anularPago(id: number, motivo: string): Promise<void> {
+    const m = textoObligatorio(motivo, 'El motivo de anulación').slice(0, 300);
+    const fecha = new Date().toISOString();
+    await this.conn().beginTransaction();
+    try {
+      const r = await this.conn().query("SELECT venta_id, monto, estado_registro FROM pagos WHERE id=?;", [id]);
+      const row = r.values?.[0];
+      if (!row) throw new Error('El pago no existe.');
+      if (String(row.estado_registro ?? 'activa') === 'anulada') return;
+      await this.conn().run("UPDATE pagos SET estado_registro='anulada', motivo_anulacion=?, anulada_at=? WHERE id=?;", [m, fecha, id], false);
+      const venta = await this.conn().query("SELECT total, monto_pagado FROM ventas WHERE id=?;", [Number(row.venta_id)]);
+      const v = venta.values?.[0];
+      if (v) {
+        const nuevo = Math.max(0, Number(v.monto_pagado ?? 0) - Number(row.monto));
+        await this.conn().run(
+          "UPDATE ventas SET monto_pagado=?, estado_pago=?, fecha_pago=? WHERE id=? AND estado_registro='activa';",
+          [nuevo, nuevo >= Number(v.total) ? 'PAGADA' : 'PENDIENTE', nuevo >= Number(v.total) ? fechaLocalISO() : null, Number(row.venta_id)],
+          false,
+        );
+      }
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch {}
+      throw error;
+    }
+  }
+
+  async anularGastoConMotivo(id: number, motivo: string): Promise<void> {
+    const m=textoObligatorio(motivo,'El motivo de anulación').slice(0,300);
+    await this.conn().run("UPDATE gastos SET estado='anulado', motivo_anulacion=?, anulado_at=?, updated_at=? WHERE id=?;",[m,new Date().toISOString(),new Date().toISOString(),id]);
+    await this.persist();
+  }
+
   private async verificarEsquemaCompleto(): Promise<void> {
     const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes', 'borradores'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
@@ -1175,7 +1255,7 @@ class Database {
                 COALESCE(SUM(cantidad),0) as paquetes,
                 COUNT(*) as compras,
                 COUNT(CASE WHEN total > COALESCE(monto_pagado,0) THEN 1 END) as ventas_pendientes
-         FROM ventas WHERE cliente_id = ?;`,
+         FROM ventas WHERE cliente_id = ? AND COALESCE(estado_registro,'activa')='activa';`,
         [c.id]
       ),
       this.obtenerSeguimientoCliente(c.id),
@@ -1462,7 +1542,7 @@ class Database {
        FROM ventas v
        JOIN clientes c ON c.id = v.cliente_id
        JOIN rutas r ON r.id = v.ruta_id
-       WHERE v.ruta_id = ?;`,
+       WHERE v.ruta_id = ? AND COALESCE(v.estado_registro,'activa')='activa';`,
       [ruta.id]
     );
     const row = r.values?.[0] ?? {};
@@ -1536,7 +1616,7 @@ class Database {
     const ahora = new Date();
     await this.conn().beginTransaction();
     try {
-      const res = await this.conn().run(`INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [v.cliente_id, v.ruta_id ?? null, productoNombre, cantidad, precio, costo, total, utilidad, fechaLocalISO(ahora), horaLocalHHMM(ahora), estado, estado === 'PAGADA' ? fechaLocalISO(ahora) : null, metodo, montoPagado, operacionId], false);
+      const res = await this.conn().run(`INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id, estado_registro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [v.cliente_id, v.ruta_id ?? null, productoNombre, cantidad, precio, costo, total, utilidad, fechaLocalISO(ahora), horaLocalHHMM(ahora), estado, estado === 'PAGADA' ? fechaLocalISO(ahora) : null, metodo, montoPagado, operacionId, estadoRegistro], false);
       await this.conn().commitTransaction();
       await this.persist();
       return Number(res.changes?.lastId ?? 0);
@@ -1676,7 +1756,7 @@ class Database {
               COALESCE((SELECT SUM(p.monto) FROM pagos p WHERE p.fecha BETWEEN ? AND ?),0) as pagado,
               COALESCE(SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END),0) as pendiente,
               COUNT(*) as numero_ventas
-       FROM ventas WHERE fecha BETWEEN ? AND ?;`,
+       FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa';`,
       [desde, hasta, desde, hasta]
     );
     const row = r.values?.[0] ?? {};
@@ -1702,7 +1782,7 @@ class Database {
       "SELECT COUNT(*) as n FROM rutas WHERE estado = 'FINALIZADA' AND fecha BETWEEN ? AND ?;",
       [desde, hasta]
     );
-    const cartera = await this.conn().query("SELECT COALESCE(SUM(total - COALESCE(monto_pagado,0)),0) as n FROM ventas WHERE total > COALESCE(monto_pagado,0);");
+    const cartera = await this.conn().query("SELECT COALESCE(SUM(total - COALESCE(monto_pagado,0)),0) as n FROM ventas WHERE total > COALESCE(monto_pagado,0) AND COALESCE(estado_registro,'activa')='activa';");
 
     const gastos = await this.conn().query(
       `SELECT

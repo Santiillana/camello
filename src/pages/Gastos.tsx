@@ -64,7 +64,7 @@ export default function Gastos(){
     </div>}</section>
     <section className="tarjeta"><h2>Listado</h2>{gastos.length===0?<p className="texto-vacio">No hay gastos en este periodo.</p>:<ul className="lista-resumen">{gastos.map(g=><li key={g.id} className="fila-cartera">
       <div><strong>{g.categoria_nombre}</strong><span>{g.fecha} · {g.estado}</span><span>{g.proveedor||g.descripcion||'Sin detalle'}</span></div>
-      <div className="lado-derecho-cliente"><strong>{formatoMoneda(g.monto)}</strong>{g.estado==='pendiente'&&<button className="boton-chip" onClick={async()=>{const monto=Number(window.prompt('Monto real pagado',String(g.monto)));if(Number.isInteger(monto)&&monto>0){await database.pagarGasto(g.id,monto,'EFECTIVO');void cargar();}}}>Pagar</button>}<button className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación');if(motivo) {await database.anularGasto(g.id,motivo);void cargar();}}}>Anular</button></div>
+      <div className="lado-derecho-cliente"><strong>{formatoMoneda(g.monto)}</strong>{g.estado==='pendiente'&&<button className="boton-chip" onClick={async()=>{const monto=Number(window.prompt('Monto real pagado',String(g.monto)));if(Number.isInteger(monto)&&monto>0){await database.pagarGasto(g.id,monto,'EFECTIVO');void cargar();}}}>Pagar</button>}<button className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación');if(motivo) {await database.anularGastoConMotivo(g.id,motivo);void cargar();}}}>Anular</button></div>
     </li>)}</ul>}</section>
     {mensaje&&<p className="banner-exito">{mensaje}</p>}{error&&<p className="texto-error">{error}</p>}
   </div>

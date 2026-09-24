@@ -4,6 +4,7 @@
 export type EstadoCliente = 'activo' | 'archivado';
 export type EstadoMascota = 'activo' | 'archivado';
 export type EstadoPago = 'PAGADA' | 'PENDIENTE';
+export type EstadoRegistro = 'activa' | 'anulada';
 export type MetodoPago = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
 export type EstadoRuta = 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
 export type TipoRuta = 'Puerta a puerta' | 'Venta local móvil';
@@ -117,6 +118,9 @@ export interface Venta {
   metodo_pago?: MetodoPago | string;
   monto_pagado?: number;
   operacion_id?: string | null;
+  estado_registro?: EstadoRegistro;
+  motivo_anulacion?: string | null;
+  anulada_at?: string | null;
 }
 
 // Vistas compuestas usadas en la UI (no son tablas)
@@ -194,6 +198,20 @@ export interface CategoriaGasto {
   orden: number;
 }
 
+export interface Pago {
+  id: number;
+  venta_id: number;
+  cliente_id: number;
+  monto: number;
+  fecha: string;
+  hora: string;
+  metodo_pago: string;
+  operacion_id?: string | null;
+  estado_registro: EstadoRegistro;
+  motivo_anulacion?: string | null;
+  anulada_at?: string | null;
+}
+
 export interface Gasto {
   id: number;
   fecha: string;
@@ -213,6 +231,8 @@ export interface Gasto {
   created_at: string;
   updated_at: string;
   archivado: 0 | 1;
+  motivo_anulacion?: string | null;
+  anulado_at?: string | null;
   categoria_nombre?: string;
   naturaleza?: NaturalezaGasto;
 }
