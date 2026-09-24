@@ -233,3 +233,40 @@ Después de ese SHA se hizo un ajuste técnico menor en AsistenteTarjetas (5103d
 - E2E run 155: QUEUED.
 - Tags B0-B6: no creados; no existe una compuerta verde observada.
 - No merge a main.
+
+## Cierre técnico de la ejecución autónoma — 2026-09-24
+
+HEAD de código de esta ejecución antes del cierre documental: 19a911a766d3968a81a0c5c6219244006dfff63a.
+PR #4 permanece abierto, mergeable=true, sin merge a main.
+
+### Gate real observado
+- Verify CAMELLO run 789 sobre a5d57fe33b1895c74c49dce9043359b9a47220c9: PASÓ.
+- npm ci: PASÓ.
+- npm ls sql.js: PASÓ, sql.js 1.11.0.
+- npm audit --audit-level=high: 0 vulnerabilidades.
+- oxlint: 0 errores y 0 warnings.
+- verify:ubicacion: PASÓ.
+- verify:security: PASÓ tras corregir el falso positivo del detector SQL.
+- verify:modulos: PASÓ.
+- verify:db: PASÓ.
+- benchmark:db: PASÓ.
+- benchmark:scale: PASÓ en la corrida verde integrada.
+- build: PASÓ.
+- Después de ese verde se corrigió el selector accesible del cliente para E2E y se añadió la auditoría histórica de secretos. Las corridas posteriores de Actions sobre 6ac363a y 19a911a terminaron repetidamente con jobs sin pasos (steps=null) y sin logs descargables; se registran como BLOQUEO DE INFRAESTRUCTURA DE GITHUB ACTIONS.
+- E2E 495 falló con evidencia real: selector frágil del primer select. Se sustituyó por label=Cliente; E2E 503 posterior volvió a fallar antes de ejecutar pasos.
+- APK 796/802/804 y UI 673/679/681 también presentan fallos sin pasos/logs. No se declara Artifact final válido.
+- Supply-chain run 37 ejecutó árbol + historial y detectó un patrón histórico; se corrigió el alcance para auditar únicamente el linaje de HEAD y mostrar coincidencias. El run 39 terminó sin pasos.
+- El clon físico en el entorno local es NO EJECUTABLE AQUÍ: resolución de github.com no disponible. La evidencia de clon limpio proviene de Actions.
+
+### Estado por fase
+F0: implementada y con tag histórico fase-0-ok; gate verde real observado.
+R: corregida en f081eb5; gate final de ese commit no observado.
+B0-B5/P/G/S/C/U/M: implementadas en el HEAD integrado; regresión final exacta bloqueada por infraestructura.
+C1-C9/A1-A7: documentación y controles presentes; no se crean tags fase-*-ok sin evidencia verde del gate exacto.
+A7: documentación final actualizada; Artifact debug firmado/no firmado queda condicionado a que Actions vuelva a ejecutar correctamente.
+
+### Limitaciones que siguen explícitas
+- GPS real, permisos Android, cámara, compartir desde WhatsApp/Google Maps, apagado físico, reinstalación, poco espacio real, actualización sobre una instalación existente y biometría siguen siendo pruebas manuales.
+- SQLCipher se deja desactivado por defecto porque la migración/restauración entre teléfonos reales no puede certificarse sin dispositivo.
+- Release firmado requiere los cuatro secretos de GitHub; el workflow ya no falla si faltan y publica debug como fallback, pero no existe un release firmado verificado en esta ejecución.
+- No se afirma cumplimiento jurídico; el aviso configurable de privacidad indica consultar asesoría jurídica y responsabilidad del negocio.
