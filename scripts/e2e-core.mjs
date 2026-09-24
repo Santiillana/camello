@@ -39,7 +39,7 @@ async function siguiente(page) {
 }
 
 async function omitir(page) {
-  await page.getByRole('button', { name: 'Omitir' }).click();
+  await page.getByRole('button', { name: 'Omitir' }).first().click();
 }
 
 async function crearCliente(page) {
