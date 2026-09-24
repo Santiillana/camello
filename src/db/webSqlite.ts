@@ -1,11 +1,20 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 
+type SqlValue = string | number | Uint8Array | null;
 type StoredValue = Uint8Array | ArrayBuffer | Blob | number[] | Record<string, unknown> | null | undefined;
 
 const STORE_DB = 'camelloWebSqlite';
 const STORE_NAME = 'databases';
 const STORE_KEY = 'camelloSQLite.db';
 const LEGACY_STORE_DB = 'jeepSqliteStore';
+
+function toSqlParams(params: unknown[]): SqlValue[] {
+  return params.map((value) => {
+    if (value == null) return null;
+    if (typeof value === 'string' || typeof value === 'number' || value instanceof Uint8Array) return value;
+    throw new TypeError('Parámetro SQLite no soportado.');
+  });
+}
 
 function toBytes(value: StoredValue): Promise<Uint8Array | null> {
   if (value == null) return Promise.resolve(null);
@@ -113,7 +122,7 @@ export class WebSqliteConnection {
 
   async run(sql: string, params: unknown[] = [], _transaction = true): Promise<{ changes: { changes: number; lastId: number } }> {
     const db = this.getDb();
-    db.run(sql, params as (string | number | Uint8Array | null | undefined)[]);
+    db.run(sql, toSqlParams(params));
     const result = db.exec('SELECT changes() AS changes, last_insert_rowid() AS lastId;');
     const row = result[0]?.values?.[0] ?? [];
     return {
@@ -128,7 +137,7 @@ export class WebSqliteConnection {
     const db = this.getDb();
     const statement = db.prepare(sql);
     try {
-      statement.bind(params as (string | number | Uint8Array | null | undefined)[]);
+      statement.bind(toSqlParams(params));
       const values: Record<string, unknown>[] = [];
       const columns = statement.getColumnNames();
       while (statement.step()) {
