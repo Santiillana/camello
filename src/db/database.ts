@@ -362,6 +362,8 @@ class Database {
         notas
       FROM rutas_migracion_v8;`, false);
       await db.execute('DROP TABLE rutas_migracion_v8;', false);
+      const fk = await db.query('PRAGMA foreign_key_check;');
+      if ((fk.values ?? []).length > 0) throw new Error('La migración de rutas rompió claves foráneas.');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);', false);
       await db.commitTransaction();
     } catch (error) {
