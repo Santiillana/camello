@@ -151,13 +151,6 @@ export default function Dashboard({ config }: Props) {
         )}
       </section>
 
-      <section className="accesos-secundarios">
-        <Link to="/clientes">Clientes</Link>
-        <Link to="/informes">Informes</Link>
-        <Link to="/recordatorios">Recordatorios</Link>
-        <Link to="/mapa">Mapa</Link>
-        <Link to="/respaldo">Respaldo</Link>
-      </section>
     </div>
   );
 }
