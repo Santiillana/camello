@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
+import initSqlJs from 'sql.js';
 
 const { chromium } = await import('playwright');
 
