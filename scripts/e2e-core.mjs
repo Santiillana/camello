@@ -175,6 +175,14 @@ try {
     const efectivo = await venta(page, 'EFECTIVO', 1, true);
     if (!efectivo.includes('Efectivo') && !efectivo.includes('Pagado')) throw new Error('No se generó voucher de efectivo.');
 
+    const anulable = await venta(page, 'EFECTIVO', 1);
+    if (!anulable.includes('Venta #')) throw new Error('No se generó venta anulable.');
+    page.once('dialog', async (dialog) => { await dialog.accept('Prueba E2E de anulación'); });
+    await page.getByRole('button', { name: 'Anular venta' }).click();
+    await page.getByText('Venta anulada').waitFor();
+    const anulada = await sql(page, "SELECT estado_registro,motivo_anulacion FROM ventas WHERE id=(SELECT MAX(id) FROM ventas);");
+    if (anulada[0]?.estado_registro !== 'anulada' || !anulada[0]?.motivo_anulacion) throw new Error('E2E: anulación sin auditoría.');
+
     const transferencia = await venta(page, 'TRANSFERENCIA_NEQUI', 1);
     if (!transferencia.includes('Venta #')) throw new Error('No se generó voucher de transferencia.');
 
