@@ -447,7 +447,7 @@ class Database {
           paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
           notas TEXT
         );`, false);
-        for (const row of snapshot.values ?? []) {
+        for (const row of (snapshot.values ?? []) as unknown[][]) {
           await db.run(
             `INSERT INTO rutas (
               id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
