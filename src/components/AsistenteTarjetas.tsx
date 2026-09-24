@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export type TarjetaAsistente = {
@@ -15,6 +15,10 @@ type Props = {
   onCompletar: () => Promise<void> | void;
   onCancelar: () => void;
   textoFinal?: string;
+  pasoInicial?: number;
+  onPasoChange?: (paso: number) => void;
+  onGuardarBorrador?: () => Promise<void> | void;
+  onDescartarBorrador?: () => Promise<void> | void;
 };
 
 export default function AsistenteTarjetas({
@@ -23,12 +27,26 @@ export default function AsistenteTarjetas({
   onCompletar,
   onCancelar,
   textoFinal = 'Guardar',
+  pasoInicial = 0,
+  onPasoChange,
+  onGuardarBorrador,
+  onDescartarBorrador,
 }: Props) {
-  const [paso, setPaso] = useState(0);
+  const [paso, setPasoState] = useState(Math.max(0, pasoInicial));
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [tieneCambios, setTieneCambios] = useState(false);
+  const contenidoRef = useRef<HTMLDivElement>(null);
   const actual = tarjetas[paso];
+
+  function setPaso(valor: number | ((anterior: number) => number)) {
+    setPasoState((anterior) => {
+      const siguiente = typeof valor === 'function' ? valor(anterior) : valor;
+      const acotado = Math.min(Math.max(0, siguiente), Math.max(0, tarjetas.length - 1));
+      onPasoChange?.(acotado);
+      return acotado;
+    });
+  }
   const porcentaje = useMemo(
     () => Math.round(((paso + 1) / Math.max(1, tarjetas.length)) * 100),
     [paso, tarjetas.length],
@@ -58,9 +76,30 @@ export default function AsistenteTarjetas({
     setPaso((valor) => Math.max(0, valor - 1));
   }
 
-  function cancelar() {
-    if (tieneCambios && !window.confirm('¿Descartar los cambios escritos?')) return;
+  async function cancelar() {
+    if (!tieneCambios) {
+      onCancelar();
+      return;
+    }
+    const descartar = window.confirm('¿Descartar el borrador?\n\nAceptar = Descartar\nCancelar = Guardar borrador');
+    if (descartar) {
+      await onDescartarBorrador?.();
+      onCancelar();
+      return;
+    }
+    await onGuardarBorrador?.();
     onCancelar();
+  }
+
+  useEffect(() => {
+    const primerCampo = contenidoRef.current?.querySelector<HTMLElement>('input, textarea, select, button');
+    primerCampo?.focus();
+  }, [paso]);
+
+  function manejarEnter(event: React.KeyboardEvent) {
+    if (event.key !== 'Enter' || (event.target instanceof HTMLTextAreaElement)) return;
+    event.preventDefault();
+    siguiente();
   }
 
   async function completar() {
@@ -76,13 +115,19 @@ export default function AsistenteTarjetas({
   }
 
   return (
-    <section className="asistente-tarjetas" aria-label={titulo}>
+    <section
+      className="asistente-tarjetas asistente-overlay"
+      aria-label={titulo}
+      role="dialog"
+      aria-modal="true"
+      onKeyDown={manejarEnter}
+    >
       <div className="asistente-encabezado">
         <div>
           <p className="texto-kicker">Asistente</p>
           <h2>{titulo}</h2>
         </div>
-        <button type="button" className="boton-texto" onClick={cancelar}>Cancelar</button>
+        <button type="button" className="boton-texto asistente-cerrar" aria-label="Cerrar" onClick={() => void cancelar()}>×</button>
       </div>
 
       <div className="asistente-progreso" aria-label={`Paso ${paso + 1} de ${tarjetas.length}`}>
@@ -97,7 +142,7 @@ export default function AsistenteTarjetas({
           <p className="texto-kicker">Tarjeta {paso + 1}</p>
           <h3>{actual.titulo}</h3>
         </header>
-        <div className="asistente-contenido">{actual.contenido}</div>
+        <div className="asistente-contenido" ref={contenidoRef}>{actual.contenido}</div>
         {actual.opcional && (
           <button
             type="button"
