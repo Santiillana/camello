@@ -70,6 +70,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
         mensaje_recordatorio: mensajeRecordatorio.trim(),
         privacy_accepted_at: privacyAceptada ? (config?.privacy_accepted_at ?? new Date().toISOString()) : undefined,
         privacy_responsable: negocio.trim(),
+      });
       const cfg = await database.obtenerConfiguracion();
       setConfig(cfg);
       aplicarTema(cfg.color_acento);
