@@ -7,6 +7,7 @@ const STORE_DB = 'camelloWebSqlite';
 const STORE_NAME = 'databases';
 const STORE_KEY = 'camelloSQLite.db';
 const LEGACY_STORE_DB = 'jeepSqliteStore';
+const LOCAL_STORAGE_KEY = 'camello.sqlite.v1';
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -79,6 +80,13 @@ async function readStore(name: string, key: string): Promise<Uint8Array | null> 
 }
 
 async function writeStore(name: string, key: string, bytes: Uint8Array): Promise<void> {
+  const base64 = bytesToBase64(bytes);
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, base64);
+  } catch {
+    // IndexedDB sigue siendo la fuente principal cuando localStorage no tiene espacio.
+  }
+
   const db = await openStore(name);
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -121,7 +129,16 @@ export class WebSqliteConnection {
     const SQL = await initSqlJs({
       locateFile: (file) => this.wasmBasePath + file,
     });
-    const persisted = await readStore(STORE_DB, STORE_KEY) ?? await readStore(LEGACY_STORE_DB, this.databaseName + 'SQLite.db');
+    let persisted = await readStore(STORE_DB, STORE_KEY);
+    if (!persisted) {
+      try {
+        const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (local) persisted = base64ToBytes(local);
+      } catch {
+        // Si localStorage no está disponible, intentamos la compatibilidad legacy.
+      }
+    }
+    if (!persisted) persisted = await readStore(LEGACY_STORE_DB, this.databaseName + 'SQLite.db');
     this.db = persisted && persisted.byteLength > 0 ? new SQL.Database(persisted) : new SQL.Database();
   }
 
@@ -302,5 +319,6 @@ export class WebSqliteConnection {
     }
     await eraseStore(STORE_DB, STORE_KEY);
     await eraseStore(LEGACY_STORE_DB, this.databaseName + 'SQLite.db');
+    try { localStorage.removeItem(LOCAL_STORAGE_KEY); } catch { /* localStorage no disponible. */ }
   }
 }
