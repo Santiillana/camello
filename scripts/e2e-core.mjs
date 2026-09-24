@@ -46,7 +46,13 @@ async function crearCliente(page) {
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await configurarPrimeraVez(page);
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.getByLabel('Nombre completo').waitFor({ timeout: 15000 });
+  try {
+    await page.getByLabel('Nombre completo').waitFor({ timeout: 15000 });
+  } catch (error) {
+    const texto = await page.locator('body').innerText().catch(() => '');
+    await page.screenshot({ path: 'e2e-fallo-clientes.png', fullPage: true }).catch(() => {});
+    throw new Error('No apareció Nombre completo. Texto de pantalla:\n' + texto.slice(0, 5000) + '\nCausa: ' + String(error));
+  }
 
   await page.getByLabel('Nombre completo').fill('Cliente E2E');
   await siguiente(page);
