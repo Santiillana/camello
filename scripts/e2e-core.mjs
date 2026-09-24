@@ -33,7 +33,7 @@ async function omitir(page) {
 
 async function crearCliente(page) {
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.getByRole('heading', { name: 'Nuevo cliente' }).waitFor();
+  await page.getByLabel('Nombre completo').waitFor();
 
   await page.getByLabel('Nombre completo').fill('Cliente E2E');
   await siguiente(page);
@@ -53,11 +53,7 @@ async function crearCliente(page) {
   });
 
   await siguiente(page);
-  await omitir(page);
-  await omitir(page);
-  await omitir(page);
-  await omitir(page);
-  await omitir(page);
+  for (let i = 0; i < 6; i += 1) await omitir(page);
   await page.getByRole('heading', { name: 'Clientes' }).waitFor();
 }
 
@@ -150,7 +146,7 @@ try {
 
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('link', { name: 'Pagar' }).first().click();
-    await page.getByRole('heading', { name: 'Pagar cartera' }).waitFor().catch(() => {});
+    await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor().catch(() => {});
     await page.getByRole('button', { name: 'Efectivo' }).click().catch(() => {});
     if (await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).count()) {
       await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
