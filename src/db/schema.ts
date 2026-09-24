@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 13
+export const DB_VERSION = 14
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -21,6 +21,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     ubicacion_fuente TEXT,
     ubicacion_fecha TEXT,
     observaciones TEXT,
+    nombre_normalizado TEXT NOT NULL DEFAULT '',
     estado TEXT NOT NULL DEFAULT 'activo'
   );`,
 
@@ -35,6 +36,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     tamano TEXT,
     preferencias TEXT,
     observaciones TEXT,
+    nombre_normalizado TEXT NOT NULL DEFAULT '',
     estado TEXT NOT NULL DEFAULT 'activo',
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
   );`,
@@ -192,6 +194,8 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);`,
+  `CREATE INDEX IF NOT EXISTS idx_clientes_nombre_norm ON clientes(nombre_normalizado);`,
+  `CREATE INDEX IF NOT EXISTS idx_mascotas_nombre_norm ON mascotas(nombre_normalizado);`,
   `CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);`,
