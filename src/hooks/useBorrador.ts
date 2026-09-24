@@ -20,6 +20,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   const datosRef = useRef(datos);
   const pasoRef = useRef(paso);
   const listoRef = useRef(false);
+  const decididoRef = useRef(false);
   const timerRef = useRef<number | null>(null);
   const [pendiente, setPendiente] = useState<BorradorPendiente<T> | null>(null);
 
@@ -34,7 +35,8 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     void database.obtenerBorrador<T>(tipo, clave).then((existente) => {
       if (cancelado) return;
       setPendiente(existente);
-      listoRef.current = true;
+      listoRef.current = !existente;
+      decididoRef.current = !existente;
     });
     return () => {
       cancelado = true;
@@ -42,7 +44,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   }, [activo, tipo, clave]);
 
   useEffect(() => {
-    if (!activo || !listoRef.current) return undefined;
+    if (!activo || !listoRef.current || !decididoRef.current) return undefined;
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current).catch(() => undefined);
@@ -86,12 +88,18 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   async function continuar(): Promise<number> {
     if (!pendiente) return paso;
     setPendiente(null);
+    listoRef.current = true;
+    decididoRef.current = true;
     return pendiente.paso;
   }
 
   async function descartar(): Promise<void> {
     await database.eliminarBorrador(tipo, clave);
     setPendiente(null);
+    listoRef.current = true;
+    decididoRef.current = true;
+    listoRef.current = true;
+    decididoRef.current = true;
   }
 
   async function limpiar(): Promise<void> {
