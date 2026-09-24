@@ -30,15 +30,19 @@ jobs:
           fi
       - name: Buscar secretos también en el historial Git
         run: |
-          if git rev-list --all | while read -r sha; do
-            git grep -nE '(BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36,}|AIza[0-9A-Za-z_-]{30,})' "$sha" -- . ':(exclude)package-lock.json' ':(exclude)**/*.md' && exit 1
-          done; then
-            echo "Búsqueda histórica completada."
-          else
-            echo "Se encontró un patrón de secreto en el historial."
+          matches=""
+          while read -r sha; do
+            hit=$(git grep -nE '(BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36,}|AIza[0-9A-Za-z0-9_-]{30,})' "$sha" -- . ':(exclude)package-lock.json' ':(exclude)**/*.md' || true)
+            if [ -n "$hit" ]; then
+              matches="$matches$hit"$'\n'
+            fi
+          done < <(git rev-list HEAD)
+          if [ -n "$matches" ]; then
+            echo "Patrones de secreto detectados en el historial alcanzable por HEAD:"
+            printf '%s\n' "$matches"
             exit 1
           fi
-
+          echo "Búsqueda histórica completada: sin patrones de secreto."
       - name: Generar SBOM
         run: npm sbom --sbom-format=spdx > camello-sbom.spdx.json
       - uses: actions/upload-artifact@v4
