@@ -199,6 +199,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   await clienteSelect.selectOption(String(clienteRow[0].id));
 
   await siguiente(page);
+  await siguiente(page);
   const cantidadPlus = page.getByRole('button', { name: '+' });
   if (cantidad > 1) {
     for (let i = 1; i < cantidad; i += 1) await cantidadPlus.click();
