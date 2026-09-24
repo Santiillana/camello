@@ -28,6 +28,12 @@ function toSqlParams(params: unknown[]): SqlValue[] {
   });
 }
 
+function isSqlValueArray(value: unknown): value is SqlValue[] {
+  return Array.isArray(value) && value.every((item) =>
+    item == null || typeof item === 'string' || typeof item === 'number' || item instanceof Uint8Array
+  );
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunkSize = 0x8000;
