@@ -18,6 +18,9 @@ import type {
   RutaConResumen,
   ResumenPeriodo,
   EstadoSeguimiento,
+  CategoriaFoto,
+  Foto,
+  FuenteUbicacion,
 } from '../types';
 import { diasDesdeISO, fechaLocalISO, horaLocalHHMM } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
@@ -65,6 +68,9 @@ const CAMPOS_CLIENTE_EDITABLES = new Set([
   'fecha_registro',
   'lat',
   'lng',
+  'ubicacion_precision_m',
+  'ubicacion_fuente',
+  'ubicacion_fecha',
   'observaciones',
   'estado',
 ]);
@@ -172,6 +178,7 @@ class Database {
     const migraciones = [
       { version: 2, ejecutar: () => this.migrarVersion2() },
       { version: 3, ejecutar: () => this.migrarVersion3() },
+      { version: 4, ejecutar: () => this.migrarVersion4() },
     ];
     for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
@@ -230,8 +237,25 @@ class Database {
     }
   }
 
+  private async migrarVersion4(): Promise<void> {
+    const clientes = await this.columnasDeTabla('clientes');
+    if (!clientes.has('ubicacion_precision_m')) await this.conn().execute('ALTER TABLE clientes ADD COLUMN ubicacion_precision_m REAL;');
+    if (!clientes.has('ubicacion_fuente')) await this.conn().execute('ALTER TABLE clientes ADD COLUMN ubicacion_fuente TEXT;');
+    if (!clientes.has('ubicacion_fecha')) await this.conn().execute('ALTER TABLE clientes ADD COLUMN ubicacion_fecha TEXT;');
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS fotos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cliente_id INTEGER NOT NULL,
+      categoria TEXT NOT NULL,
+      referencia TEXT,
+      data_url TEXT NOT NULL,
+      creado_at TEXT NOT NULL,
+      FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+    );`);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);');
+  }
+
   private async verificarEsquemaCompleto(): Promise<void> {
-    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app'];
+    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
     const r = await this.conn().query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');');
     const existentes = new Set((r.values ?? []).map((row) => String(row.name)));
@@ -349,9 +373,9 @@ class Database {
 
     await this.conn().beginTransaction();
     try {
-      const res = await this.conn().run(
-        "INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
-        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones?.trim() || null],
+        const res = await this.conn().run(
+        "INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, ubicacion_precision_m, ubicacion_fuente, ubicacion_fecha, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
+        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.ubicacion_precision_m ?? null, c.ubicacion_fuente ?? null, c.ubicacion_fecha ?? null, c.observaciones?.trim() || null],
         false
       );
       const clienteId = Number(res.changes?.lastId ?? 0);
@@ -369,6 +393,60 @@ class Database {
       try { await this.conn().rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       throw error;
     }
+  }
+
+  async listarFotosCliente(clienteId: number): Promise<Foto[]> {
+    const r = await this.conn().query(
+      'SELECT id, cliente_id, categoria, referencia, data_url, creado_at FROM fotos WHERE cliente_id = ? ORDER BY id ASC;',
+      [clienteId],
+    );
+    return (r.values ?? []).map((row) => ({
+      id: Number(row.id),
+      cliente_id: Number(row.cliente_id),
+      categoria: String(row.categoria) as CategoriaFoto,
+      referencia: row.referencia ? String(row.referencia) : undefined,
+      data_url: String(row.data_url),
+      creado_at: String(row.creado_at),
+    }));
+  }
+
+  async guardarFotosCliente(
+    clienteId: number,
+    fotos: Array<{ categoria: CategoriaFoto; referencia?: string; data_url: string }>,
+  ): Promise<void> {
+    if (!Number.isInteger(clienteId) || clienteId <= 0) throw new Error('Cliente inválido.');
+    await this.conn().beginTransaction();
+    try {
+      for (const foto of fotos) {
+        if (!/^data:image\/(jpeg|webp|png);base64,/.test(foto.data_url)) {
+          throw new Error('Una foto no tiene un formato de imagen válido.');
+        }
+        await this.conn().run(
+          'INSERT INTO fotos (cliente_id, categoria, referencia, data_url, creado_at) VALUES (?, ?, ?, ?, ?);',
+          [clienteId, foto.categoria, foto.referencia?.trim() || null, foto.data_url, new Date().toISOString()],
+          false,
+        );
+      }
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch {}
+      throw error;
+    }
+  }
+
+  async actualizarFotoCliente(fotoId: number, data_url: string): Promise<void> {
+    if (!Number.isInteger(fotoId) || fotoId <= 0) throw new Error('Foto inválida.');
+    if (!/^data:image\/(jpeg|webp|png);base64,/.test(data_url)) throw new Error('Formato de imagen no válido.');
+    const res = await this.conn().run('UPDATE fotos SET data_url = ? WHERE id = ?;', [data_url, fotoId]);
+    if (!res.changes?.changes) throw new Error('La foto no existe.');
+    await this.persist();
+  }
+
+  async eliminarFotoCliente(fotoId: number): Promise<void> {
+    if (!Number.isInteger(fotoId) || fotoId <= 0) throw new Error('Foto inválida.');
+    await this.conn().run('DELETE FROM fotos WHERE id = ?;', [fotoId]);
+    await this.persist();
   }
 
   async actualizarCliente(id: number, c: Partial<Cliente>): Promise<void> {
