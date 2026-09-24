@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { database } from '../db/database';
-import type { CarteraItem } from '../types';
+import type { CarteraItem, Pago } from '../types';
 import { formatoMoneda, hoyISO, inicioMesISO, inicioSemanaISO } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import MetodoPagoSelector, { type MetodoPagoCobro } from '../components/MetodoPagoSelector';
@@ -146,6 +146,9 @@ function PagoCartera({
   const [error, setError] = useState<string | null>(null);
   const [pasoInicial, setPasoInicial] = useState(0);
   const operacionRef = useRef<string | null>(null);
+  const [pagos, setPagos] = useState<Pago[]>([]);
+  useEffect(() => { void database.listarPagosCliente(item.cliente_id).then(setPagos).catch(() => setPagos([])); }, [item.cliente_id]);
+
   const datosBorrador = { monto, metodo };
   const borrador = useBorrador<typeof datosBorrador>({
     tipo: 'pago-cartera',
@@ -263,6 +266,16 @@ function PagoCartera({
           }}
         />
       )}
+      <section className="tarjeta">
+        <h3>Últimos cobros</h3>
+        {pagos.length===0 ? <p className="texto-vacio">No hay cobros registrados.</p> :
+          <ul className="lista-resumen">{pagos.slice(0,10).map((p)=>(
+            <li key={p.id} className="fila-cartera">
+              <div><strong>{formatoMoneda(p.monto)}</strong><span>{p.fecha} · {p.hora} · {p.metodo_pago}</span>{p.estado_registro==='anulada'&&<span className="texto-alerta">Anulado: {p.motivo_anulacion}</span>}</div>
+              {p.estado_registro!=='anulada' && <button type="button" className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación del cobro');if(!motivo)return;await database.anularPago(p.id,motivo);setPagos(await database.listarPagosCliente(item.cliente_id));}}>Anular cobro</button>}
+            </li>
+          ))}</ul>}
+      </section>
       <AsistenteTarjetas
         titulo={'Pagar a ' + item.nombre}
         tarjetas={tarjetas}
