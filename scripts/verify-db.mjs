@@ -113,7 +113,6 @@ function migrate9(db) {
       if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)db.run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
     }
   } finally { db.run('PRAGMA foreign_keys=ON;'); }
-  for(const statement of CURRENT_SCHEMA.filter(s=>/^CREATE INDEX IF NOT EXISTS/i.test(s.trim())))db.run(statement);
   health(db,'v9');
 }
 function migrate10(db){ db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS borradores')) ?? ''); }
