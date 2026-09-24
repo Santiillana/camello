@@ -27,12 +27,12 @@ export default function Gastos(){
     try{
       const hoy=hoyISO();
       const desde=filtro==='hoy'?hoy:filtro==='semana'?inicioSemana(hoy):inicioMes(hoy);
+      await database.sincronizarGastosRecurrentes(hoy.slice(0,7));
       const [gs,cs,res]=await Promise.all([
         database.listarGastos({desde,hasta:hoy,categoriaId:categoriaId?Number(categoriaId):undefined,estado:estado||undefined}),
         database.listarCategoriasGasto(),
         database.resultadoMes(hoy.slice(0,7)),
       ]);
-      await database.sincronizarGastosRecurrentes(hoy.slice(0,7));
       setGastos(gs); setCategorias(cs); setPeriodo(res); setError(null);
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
