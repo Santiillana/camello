@@ -78,10 +78,22 @@ async function crearCliente(page) {
   await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
 }
 
+async function expectOption(page, select, label) {
+  await page.waitForFunction(({ selector, expected }) => {
+    const element = document.querySelector(selector);
+    return !!element && [...element.options].some((option) => option.textContent?.trim() === expected);
+  }, { selector: await select.evaluate((el) => {
+    if (el.id) return '#' + el.id;
+    const all = [...document.querySelectorAll('select')];
+    return 'select:nth-of-type(' + (all.indexOf(el) + 1) + ')';
+  }), expected: label }, { timeout: 20000 });
+}
+
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.locator('select').first();
-  await page.getByRole('option', { name: 'Cliente E2E', exact: true }).waitFor({ state: 'attached', timeout: 15000 });
+  await page.getByLabel('Buscar cliente o mascota').waitFor({ state: 'visible', timeout: 15000 });
+  await expectOption(page, clienteSelect, 'Cliente E2E');
   await clienteSelect.selectOption({ label: 'Cliente E2E' });
 
   await siguiente(page);
@@ -153,6 +165,11 @@ try {
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
     await crearCliente(page);
+
+    await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
+    await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await expectOption(page, page.locator('select').first(), 'Cliente E2E');
 
     const efectivo = await venta(page, 'EFECTIVO', 1, true);
     if (!efectivo.includes('Efectivo') && !efectivo.includes('Pagado')) throw new Error('No se generó voucher de efectivo.');
