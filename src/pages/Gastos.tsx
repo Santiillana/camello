@@ -21,7 +21,6 @@ export default function Gastos(){
   const [estado,setEstado]=useState<EstadoGasto|''>('');
   const [mostrar,setMostrar]=useState(params.get('nuevo')==='1');
   const [error,setError]=useState<string|null>(null);
-  const [mensaje,setMensaje]=useState<string|null>(null);
   const [periodo,setPeriodo]=useState<ResultadoMes|null>(null);
 
   async function cargar(){
@@ -66,15 +65,10 @@ export default function Gastos(){
       <div><strong>{g.categoria_nombre}</strong><span>{g.fecha} · {g.estado}</span><span>{g.proveedor||g.descripcion||'Sin detalle'}</span></div>
       <div className="lado-derecho-cliente"><strong>{formatoMoneda(g.monto)}</strong>{g.estado==='pendiente'&&<button className="boton-chip" onClick={async()=>{const monto=Number(window.prompt('Monto real pagado',String(g.monto)));if(Number.isInteger(monto)&&monto>0){await database.pagarGasto(g.id,monto,'EFECTIVO');void cargar();}}}>Pagar</button>}<button className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación');if(motivo) {await database.anularGastoConMotivo(g.id,motivo);void cargar();}}}>Anular</button></div>
     </li>)}</ul>}</section>
-    {mensaje&&<p className="banner-exito">{mensaje}</p>}{error&&<p className="texto-error">{error}</p>}
+    {error&&<p className="texto-error">{error}</p>}
   </div>
 }
 
-function descargarCSV(gastos:Gasto[]) {
-  const filas=[['fecha','categoria','monto','estado','metodo','proveedor','descripcion'],...gastos.map(g=>[g.fecha,g.categoria_nombre??'',String(g.monto),g.estado,g.metodo_pago??'',g.proveedor??'',g.descripcion??''])];
-  const csv=filas.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\n');
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='camello-gastos.csv';a.click();URL.revokeObjectURL(a.href);
-}
 
 function FormularioGasto({categorias,onGuardado,onCancelar}:{categorias:CategoriaGasto[];onGuardado:()=>void;onCancelar:()=>void}){
   const [monto,setMonto]=useState(''); const [categoria,setCategoria]=useState(''); const [fecha,setFecha]=useState(hoyISO()); const [estado,setEstado]=useState<EstadoGasto>('pagado'); const [metodo,setMetodo]=useState('EFECTIVO'); const [fechaLimite,setFechaLimite]=useState(''); const [nota,setNota]=useState(''); const [proveedor,setProveedor]=useState(''); const [foto,setFoto]=useState(''); const [ruta,setRuta]=useState<number|undefined>();
