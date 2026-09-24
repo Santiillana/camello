@@ -19,6 +19,22 @@ export type Coordenadas = {
 
 const LAT_DEFAULT = 4.142;
 const LNG_DEFAULT = -73.6266;
+export function parsearUbicacion(texto: string): { lat: number; lng: number } | null {
+  return parsearUbicacionPura(texto);
+}
+
+export function advertenciaCoordenadas(lat: number, lng: number): string | null {
+  return advertenciaCoordenadasPura(lat, lng);
+}
+
+export function coordenadasParecenInvertidas(lat: number, lng: number): boolean {
+  return advertenciaCoordenadasPura(lat, lng)?.startsWith('Las coordenadas parecen estar invertidas') ?? false;
+}
+
+function estaEnColombia(lat: number, lng: number): boolean {
+  return advertenciaCoordenadasPura(lat, lng) == null;
+}
+
 const DOMINIOS_GOOGLE = new Set([
   'maps.app.goo.gl',
   'goo.gl',
@@ -39,7 +55,7 @@ export async function resolverUbicacionPegada(texto: string): Promise<Coordenada
   const directa = parsearUbicacion(texto);
   if (directa) return { ...directa, fuente: 'whatsapp', fecha: new Date().toISOString() };
 
-  const enlaces = texto.match(/https?://[^s<>"']+/gi) ?? [];
+  const enlaces = texto.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
   const corto = enlaces.find((enlace) => {
     try {
       const host = new URL(enlace).hostname.toLowerCase();
