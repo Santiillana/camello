@@ -15,7 +15,7 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 };
 
 function esTipoRuta(valor: string): TipoRuta {
-  return valor === 'Puerta a puerta' || valor === 'Programada' ? valor : 'Puerta a puerta';
+  return valor === 'Puerta a puerta' || valor === 'Venta local móvil' ? valor : 'Puerta a puerta';
 }
 
 export default function Rutas() {
