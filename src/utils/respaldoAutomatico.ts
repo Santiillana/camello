@@ -54,6 +54,13 @@ async function eliminar(id: string): Promise<void> {
   });
 }
 
+export async function necesitaRespaldoAutomatico(ahora = new Date()): Promise<boolean> {
+  const fecha = ahora.toISOString().slice(0, 10);
+  const tipo: BackupItem['kind'] = ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
+  const items = await listar();
+  return !items.some((item) => item.kind === tipo && item.date.slice(0, 10) === fecha);
+}
+
 export async function guardarRespaldoAutomatico(json: string, ahora = new Date()): Promise<void> {
   const fecha = ahora.toISOString();
   const dia = fecha.slice(0, 10);
