@@ -179,6 +179,7 @@ class Database {
       { version: 2, ejecutar: () => this.migrarVersion2() },
       { version: 3, ejecutar: () => this.migrarVersion3() },
       { version: 4, ejecutar: () => this.migrarVersion4() },
+      { version: 5, ejecutar: () => this.migrarVersion5() },
     ];
     for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
@@ -254,8 +255,42 @@ class Database {
     await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);');
   }
 
+  private async migrarVersion5(): Promise<void> {
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS pagos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      venta_id INTEGER NOT NULL,
+      cliente_id INTEGER NOT NULL,
+      monto INTEGER NOT NULL,
+      fecha TEXT NOT NULL,
+      hora TEXT NOT NULL,
+      metodo_pago TEXT NOT NULL,
+      operacion_id TEXT UNIQUE,
+      FOREIGN KEY (venta_id) REFERENCES ventas(id),
+      FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+      CHECK (monto > 0)
+    );`);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);');
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);');
+    const pagosExistentes = await this.conn().query('SELECT COUNT(*) as n FROM pagos;');
+    const hayPagos = Number(pagosExistentes.values?.[0]?.n ?? 0) > 0;
+    if (!hayPagos) {
+      const pagadas = await this.conn().query(`
+        SELECT id, cliente_id, total, fecha, hora, COALESCE(metodo_pago, 'EFECTIVO') as metodo_pago
+        FROM ventas
+        WHERE estado_pago = 'PAGADA' AND COALESCE(monto_pagado, total) > 0;
+      `);
+      for (const row of pagadas.values ?? []) {
+        await this.conn().run(
+          'INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago) VALUES (?, ?, ?, ?, ?, ?);',
+          [Number(row.id), Number(row.cliente_id), Number(row.total), String(row.fecha), String(row.hora), String(row.metodo_pago || 'EFECTIVO')],
+          false,
+        );
+      }
+    }
+  }
+
   private async verificarEsquemaCompleto(): Promise<void> {
-    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos'];
+    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
     const r = await this.conn().query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');');
     const existentes = new Set((r.values ?? []).map((row) => String(row.name)));
