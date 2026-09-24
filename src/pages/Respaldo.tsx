@@ -220,7 +220,7 @@ export default function Respaldo() {
           <ul className="lista-resumen">
             {automaticos.map((item) => (
               <li key={item.id} className="fila-recordatorio">
-                <span>{item.kind === 'weekly' ? 'Semanal' : 'Diario'} · {item.date}</span>
+                <span>{item.kind === 'monthly' ? 'Mensual' : item.kind === 'weekly' ? 'Semanal' : 'Diario'} · {item.date}</span>
                 <button
                   className="boton-chip"
                   onClick={() => {
