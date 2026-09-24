@@ -101,7 +101,10 @@ export default function Clientes() {
             void cargar();
             navigate(`/clientes/${id}`);
           }}
-          onCancelar={() => setMostrarForm(false)}
+          onCancelar={() => {
+            setMostrarForm(false);
+            navigate('/clientes');
+          }}
         />
       )}
 
