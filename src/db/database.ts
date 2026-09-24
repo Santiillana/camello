@@ -27,6 +27,7 @@ import type {
   TipoCategoriaGasto,
   NaturalezaGasto,
   EstadoGasto,
+  Pago,
 } from '../types';
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
