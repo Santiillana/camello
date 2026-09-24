@@ -12,6 +12,16 @@ const DB_NAME = 'camello-backups';
 const STORE = 'backups';
 const VERSION = 1;
 
+function esBackupItem(valor: unknown): valor is BackupItem {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
+  const registro = valor as Record<string, unknown>;
+  return typeof registro.id === 'string'
+    && (registro.kind === 'daily' || registro.kind === 'weekly' || registro.kind === 'monthly')
+    && typeof registro.date === 'string'
+    && typeof registro.json === 'string'
+    && typeof registro.checksum === 'string';
+}
+
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, VERSION);
@@ -29,7 +39,11 @@ async function listar(): Promise<BackupItem[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve((req.result as BackupItem[]).sort((a, b) => b.date.localeCompare(a.date)));
+    req.onsuccess = () => {
+      const resultado: unknown = req.result;
+      const items = Array.isArray(resultado) ? resultado.filter(esBackupItem) : [];
+      resolve(items.sort((a, b) => b.date.localeCompare(a.date)));
+    };
     req.onerror = () => reject(req.error);
   });
 }
