@@ -11,7 +11,7 @@ function BrokenComponent(): never {
 describe('RootErrorBoundary', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    document.body.innerHTML = '';
+    while (document.body.firstChild) document.body.removeChild(document.body.firstChild);
   });
 
   it('captura un error real y muestra recuperación en vez de pantalla blanca', async () => {
