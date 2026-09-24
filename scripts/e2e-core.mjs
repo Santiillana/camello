@@ -5,11 +5,21 @@ import initSqlJs from 'sql.js';
 
 const { chromium } = await import('playwright');
 
-const server = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1'], {
+let serverLog = '';
+
+const build = spawn('npm', ['run', 'build'], {
   stdio: ['ignore', 'pipe', 'pipe'],
 });
+build.stdout.on('data', (chunk) => { serverLog += chunk.toString(); });
+build.stderr.on('data', (chunk) => { serverLog += chunk.toString(); });
+const buildCode = await new Promise((resolve) => {
+  build.on('close', resolve);
+});
+if (buildCode !== 0) throw new Error('Build de producción falló antes del E2E.\\n' + serverLog);
 
-let serverLog = '';
+const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173'], {
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 server.stdout.on('data', (chunk) => { serverLog += chunk.toString(); });
 server.stderr.on('data', (chunk) => { serverLog += chunk.toString(); });
 
@@ -75,7 +85,7 @@ async function omitir(page) {
 }
 
 async function crearCliente(page) {
-  await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:4173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
     undefined,
@@ -83,7 +93,7 @@ async function crearCliente(page) {
   );
   await configurarPrimeraVez(page);
   await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:4173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   try {
     await page.getByLabel('Nombre completo').waitFor({ timeout: 70000 });
   } catch (error) {
@@ -257,7 +267,7 @@ async function sql(page, query, params = []) {
 }
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
-  await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:4173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ });
   await page.getByLabel('Buscar cliente o mascota').waitFor({ state: 'visible', timeout: 15000 });
   await expectOption(clienteSelect, 'Cliente E2E');
@@ -286,7 +296,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
 }
 
 async function crearRuta(page) {
-  await page.goto('http://127.0.0.1:5173/#/rutas?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:4173/#/rutas?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('heading', { name: 'Nueva ruta' }).waitFor();
 
   await page.getByLabel('Nombre de la ruta').fill('Ruta E2E');
@@ -309,8 +319,8 @@ async function cerrarRuta(page, sobrantes) {
 }
 
 async function probarUbicacionWeb(page) {
-  await page.goto('http://127.0.0.1:5173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:4173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+  await page.goto('http://127.0.0.1:4173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const locationButton = page.getByRole('button', { name: /Usar mi ubicación/ });
   if (await locationButton.count()) {
     await locationButton.click();
@@ -319,7 +329,7 @@ async function probarUbicacionWeb(page) {
 }
 
 try {
-  await esperarServidor('http://127.0.0.1:5173');
+  await esperarServidor('http://127.0.0.1:4173');
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -337,9 +347,9 @@ try {
     if (clienteCreado.length !== 1 || clienteCreado[0]?.estado !== 'activo') {
       throw new Error('E2E: el cliente creado por la UI no quedó persistido: ' + JSON.stringify(clienteCreado));
     }
-    await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
-    await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await expectOption(page.getByLabel('Cliente'), 'Cliente E2E');
 
     const efectivo = await venta(page, 'EFECTIVO', 1, true);
@@ -366,7 +376,7 @@ try {
     if (Number(ventasBase[0]?.n) !== 4) throw new Error('E2E: no quedaron 4 ventas activas en SQLite.');
     if (Number(ventasBase[0]?.total) <= 0) throw new Error('E2E: total vendido en SQLite inválido.');
 
-    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('link', { name: 'Pagar' }).first().click();
     await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor().catch(() => {});
     await page.getByRole('button', { name: 'Efectivo' }).click().catch(() => {});
@@ -377,25 +387,25 @@ try {
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
 
-    await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
 
     await crearRuta(page);
     await venta(page, 'EFECTIVO', 1);
-    await page.goto('http://127.0.0.1:5173/#/rutas/1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/rutas/1', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Ruta E2E' }).waitFor();
     await cerrarRuta(page, 4);
     const rutaBase = await sql(page, "SELECT estado, paquetes_llevados, paquetes_sobrantes FROM rutas WHERE id=1;");
     if (rutaBase[0]?.estado !== 'FINALIZADA') throw new Error('E2E: la ruta no quedó finalizada en SQLite.');
     if (Number(rutaBase[0]?.paquetes_llevados) - Number(rutaBase[0]?.paquetes_sobrantes) < 0) throw new Error('E2E: cuadre de ruta inválido.');
 
-    await page.goto('http://127.0.0.1:5173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const filtros = page.getByRole('button').filter({ hasText: /Filtro|Ubicación|Días|Ruta/ });
     if (await filtros.count() === 0) {
       await page.getByRole('heading', { name: 'Mapa' }).waitFor().catch(() => {});
     }
 
-    await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:4173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: /Descargar respaldo/ }).click();
     await download;
