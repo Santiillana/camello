@@ -695,3 +695,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .side-nav-toggle { display: none; }
   .side-nav-marca { margin-right: auto; }
 }
+
+/* --- C2 ubicación y fotos --- */
+.ubicacion-selector { display: flex; flex-direction: column; gap: 10px; }
+.ubicacion-paste { display: flex; flex-direction: column; gap: 8px; }
+.ubicacion-mini-mapa, .mini-mapa { height: 240px; min-height: 240px; }
+.ubicacion-datos, .ubicacion-ficha-datos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-texto-suave);
+}
+.ubicacion-ficha { display: flex; flex-direction: column; gap: 8px; }
+.ubicacion-ficha-datos { flex-direction: row; justify-content: space-between; align-items: center; }
+.boton-archivo { position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.input-oculto { position: absolute; width: 1px !important; height: 1px !important; opacity: 0; overflow: hidden; pointer-events: none; }
+.fotos-selector { display: flex; flex-direction: column; gap: 12px; }
+.fotos-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.foto-preview {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  background: var(--color-superficie);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.foto-preview img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #f3f4f6;
+}
+.foto-preview figcaption {
+  font-size: 11px;
+  color: var(--color-texto-suave);
+}
+.asistente-lista-mascotas { display: flex; flex-direction: column; gap: 10px; }
