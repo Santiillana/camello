@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { database } from './db/database';
 import BottomNav from './components/BottomNav';
+import SideNav from './components/SideNav';
 import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import { aplicarTema } from './utils/theme';
 import type { ConfiguracionApp } from './types';
@@ -38,6 +39,50 @@ function inicializarBaseDeDatosConTimeout(): Promise<void> {
 
 function CargandoPagina() {
   return <div className="pantalla"><p className="texto-vacio">Cargando…</p></div>;
+}
+
+function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp; onConfigChanged: (config: ConfiguracionApp) => void }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [menuExpandido, setMenuExpandido] = useState(false);
+
+  return (
+    <div className="app-shell">
+      <SideNav
+        abierto={menuAbierto}
+        expandido={menuExpandido}
+        onCerrar={() => setMenuAbierto(false)}
+        onAlternarExpandido={() => setMenuExpandido((valor) => !valor)}
+      />
+      <button
+        type="button"
+        className="app-menu-boton"
+        aria-label="Abrir menú"
+        onClick={() => setMenuAbierto(true)}
+      >
+        ☰
+      </button>
+      <main className="app-contenido">
+        <Suspense fallback={<CargandoPagina />}>
+          <Routes>
+            <Route path="/" element={<Dashboard config={config} />} />
+            <Route path="/clientes" element={<Clientes />} />
+            <Route path="/clientes/:id" element={<ClienteDetalle />} />
+            <Route path="/venta-nueva" element={<NuevaVenta />} />
+            <Route path="/rutas" element={<Rutas />} />
+            <Route path="/rutas/:id" element={<RutaDetalle />} />
+            <Route path="/mapa" element={<Mapa />} />
+            <Route path="/informes" element={<Informes />} />
+            <Route path="/cartera" element={<Cartera />} />
+            <Route path="/recordatorios" element={<Recordatorios />} />
+            <Route path="/configuracion" element={<Configuracion onConfigChanged={onConfigChanged} />} />
+            <Route path="/respaldo" element={<Respaldo />} />
+            <Route path="*" element={<Dashboard config={config} />} />
+          </Routes>
+        </Suspense>
+      </main>
+      <BottomNav />
+    </div>
+  );
 }
 
 export default function App() {
@@ -97,31 +142,13 @@ export default function App() {
 
   return (
     <HashRouter>
-      <div className="app-shell">
-        <main className="app-contenido">
-          <Suspense fallback={<CargandoPagina />}>
-            <Routes>
-              <Route path="/" element={<Dashboard config={config} />} />
-              <Route path="/clientes" element={<Clientes />} />
-              <Route path="/clientes/:id" element={<ClienteDetalle />} />
-              <Route path="/venta-nueva" element={<NuevaVenta />} />
-              <Route path="/rutas" element={<Rutas />} />
-              <Route path="/rutas/:id" element={<RutaDetalle />} />
-              <Route path="/mapa" element={<Mapa />} />
-              <Route path="/informes" element={<Informes />} />
-              <Route path="/cartera" element={<Cartera />} />
-              <Route path="/recordatorios" element={<Recordatorios />} />
-              <Route path="/configuracion" element={<Configuracion onConfigChanged={(resultado) => {
-                setConfig(resultado);
-                aplicarTema(resultado.color_acento);
-              }} />} />
-              <Route path="/respaldo" element={<Respaldo />} />
-              <Route path="*" element={<Dashboard config={config} />} />
-            </Routes>
-          </Suspense>
-        </main>
-        <BottomNav />
-      </div>
+      <NavegacionShell
+        config={config}
+        onConfigChanged={(resultado) => {
+          setConfig(resultado);
+          aplicarTema(resultado.color_acento);
+        }}
+      />
     </HashRouter>
   );
 }
