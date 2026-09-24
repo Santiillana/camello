@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { database } from '../db/database';
+function esEstadoGasto(value: string): value is EstadoGasto {
+  return value === 'pagado' || value === 'pendiente' || value === 'anulado';
+}
+function esNaturalezaGasto(value: string): value is 'operativo' | 'compra_insumos' | 'retiro_dueno' {
+  return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno';
+}
+
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
@@ -47,12 +54,12 @@ export default function Gastos(){
     </header>
     {gastoEditando&&<EditorGasto gasto={gastoEditando} categorias={categorias} onGuardado={()=>{setGastoEditando(null);void cargar();}} onCancelar={()=>setGastoEditando(null)} />}
     {mostrar&&<FormularioGasto categorias={categorias} onCategoriaCreada={async()=>{await cargar();}} onGuardado={()=>{setMostrar(false);setParams({});void cargar();}} onCancelar={()=>{setMostrar(false);setParams({});}} />}
-    <section className="periodo-selector">{(['hoy','semana','mes'] as FiltroPeriodo[]).map(x=><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
+    <section className="periodo-selector">{['hoy','semana','mes'].map((x: FiltroPeriodo).map(x=><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
     <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><div className="fila-botones"><strong>{formatoMoneda(total)}</strong><button type="button" className="boton-secundario" onClick={()=>descargarCSV(gastos)}>Exportar CSV</button>
 <button type="button" className="boton-secundario" onClick={()=>void compartirCSV(gastos)}>Compartir CSV</button></div></div>
       <div className="grid-dos-columnas">
         <label>Categoría<select value={categoriaId} onChange={e=>setCategoriaId(e.target.value)}><option value="">Todas</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
-        <label>Estado<select value={estado} onChange={e=>setEstado(e.target.value as EstadoGasto|'')}><option value="">Todos</option><option value="pagado">Pagado</option><option value="pendiente">Por pagar</option><option value="anulado">Anulado</option></select></label>
+        <label>Estado<select value={estado} onChange={e=>setEstado(e.target.value===''?'':esEstadoGasto(e.target.value)?e.target.value:estado)}><option value="">Todos</option><option value="pagado">Pagado</option><option value="pendiente">Por pagar</option><option value="anulado">Anulado</option></select></label>
       </div>
     </section>
     <section className="tarjeta"><h2>Resultado del mes</h2>{periodo&&<div className="lista-resumen">
@@ -105,7 +112,7 @@ function FormularioGasto({categorias,onCategoriaCreada,onGuardado,onCancelar}:{c
   useEffect(()=>{void database.obtenerRutaActiva().then(r=>setPendienteRutas(r?[{id:r.id,nombre:r.nombre}]:[]));},[]);
   const tarjetas=[
     {id:'monto',titulo:'Monto',contenido:<label>Monto<input type="number" min={1} step={1} value={monto} onChange={e=>setMonto(e.target.value)} inputMode="numeric"/></label>,validar:()=>Number.isSafeInteger(Number(monto))&&Number(monto)>0?null:'Escribe un monto entero mayor que 0.'},
-    {id:'cat',titulo:'Categoría',contenido:<div className="formulario"><label>Categoría<select value={categoria} onChange={e=>setCategoria(e.target.value)}><option value="">Selecciona</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label><button type="button" className="boton-texto" onClick={async()=>{const nombre=window.prompt('Nombre de la nueva categoría');if(!nombre?.trim())return;const tipo=(window.prompt('Tipo: fijo o variable','variable')==='fijo'?'fijo':'variable');const naturaleza=window.prompt('Naturaleza: operativo, compra_insumos o retiro_dueno','operativo')||'operativo';const id=await database.crearCategoriaGasto({nombre:nombre.trim(),tipo:naturaleza==='operativo'?tipo:(tipo==='fijo'?'fijo':'variable'),naturaleza:naturaleza as 'operativo'|'compra_insumos'|'retiro_dueno'});await onCategoriaCreada();setCategoria(String(id));}}>+ Nueva categoría</button></div>,validar:()=>categoria?null:'Selecciona una categoría.'},
+    {id:'cat',titulo:'Categoría',contenido:<div className="formulario"><label>Categoría<select value={categoria} onChange={e=>setCategoria(e.target.value)}><option value="">Selecciona</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label><button type="button" className="boton-texto" onClick={async()=>{const nombre=window.prompt('Nombre de la nueva categoría');if(!nombre?.trim())return;const tipo=(window.prompt('Tipo: fijo o variable','variable')==='fijo'?'fijo':'variable');const naturaleza=window.prompt('Naturaleza: operativo, compra_insumos o retiro_dueno','operativo')||'operativo';const id=await database.crearCategoriaGasto({nombre:nombre.trim(),tipo:naturaleza==='operativo'?tipo:(tipo==='fijo'?'fijo':'variable'),naturaleza:esNaturalezaGasto(naturaleza)?naturaleza:'operativo'});await onCategoriaCreada();setCategoria(String(id));}}>+ Nueva categoría</button></div>,validar:()=>categoria?null:'Selecciona una categoría.'},
     {id:'fecha',titulo:'Fecha',contenido:<label>Fecha<input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></label>},
     {id:'pago',titulo:'Estado del pago',contenido:<div className="fila-botones"><button type="button" className={'boton-chip'+(estado==='pagado'?' activo':'')} onClick={()=>setEstado('pagado')}>Ya pagué</button><button type="button" className={'boton-chip'+(estado==='pendiente'?' activo':'')} onClick={()=>setEstado('pendiente')}>Por pagar</button></div>},
     {id:'metodo',titulo:'Método',opcional:estado!=='pagado',contenido:<select value={metodo} onChange={e=>setMetodo(e.target.value)}><option>Efectivo</option><option>Transferencia</option><option>Otro</option></select>},
