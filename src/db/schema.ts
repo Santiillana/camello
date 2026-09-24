@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 6;
+export const DB_VERSION = 7
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -62,6 +62,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     lat_fin REAL,
     lng_fin REAL,
     paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+    paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
     notas TEXT
   );`,
 
