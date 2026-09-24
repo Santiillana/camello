@@ -237,9 +237,7 @@ export default function NuevaVenta() {
     setGuardando(true);
     setError(null);
     if (!operacionIdRef.current) {
-      operacionIdRef.current = typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : 'venta-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      operacionIdRef.current = crypto.randomUUID();
     }
 
     try {
