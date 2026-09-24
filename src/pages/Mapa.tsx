@@ -110,6 +110,20 @@ export default function Mapa() {
         acciones.appendChild(llegar);
       }
       popup.appendChild(acciones);
+      marcador.on('popupopen', () => {
+        void database.listarFotosCliente(c.id).then((fotos) => {
+          if (!fotos.length) return;
+          const foto = fotos[0];
+          const img = document.createElement('img');
+          img.src = foto.data_url;
+          img.alt = 'Foto de ' + c.nombre;
+          img.style.width = '96px';
+          img.style.height = '96px';
+          img.style.objectFit = 'cover';
+          img.style.borderRadius = '8px';
+          popup.prepend(img);
+        });
+      });
       marcador.bindPopup(popup);
       marcador.addTo(capaMarcadoresRef.current!);
     });
