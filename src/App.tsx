@@ -115,7 +115,17 @@ export default function App() {
     }
 
     inicializarBaseDeDatosConTimeout()
-      .then(() => database.obtenerConfiguracion())
+      .then(async () => {
+        const resultado = await database.obtenerConfiguracion();
+        if (import.meta.env.VITE_E2E === '1' && !resultado.negocio_nombre) {
+          await database.guardarConfiguracionInicial(
+            { negocio_nombre: 'CAMELLO E2E', usuario_nombre: 'Prueba', color_acento: '#c2642b' },
+            { nombre: 'Galletas E2E', precio: 13000, costo: 7000 },
+          );
+          return database.obtenerConfiguracion();
+        }
+        return resultado;
+      })
       .then((resultado) => {
         if (!activo) return;
         setConfig(resultado);
