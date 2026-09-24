@@ -270,3 +270,6 @@ A7: documentación final actualizada; Artifact debug firmado/no firmado queda co
 - SQLCipher se deja desactivado por defecto porque la migración/restauración entre teléfonos reales no puede certificarse sin dispositivo.
 - Release firmado requiere los cuatro secretos de GitHub; el workflow ya no falla si faltan y publica debug como fallback, pero no existe un release firmado verificado en esta ejecución.
 - No se afirma cumplimiento jurídico; el aviso configurable de privacidad indica consultar asesoría jurídica y responsabilidad del negocio.
+
+## Auditoría total 2026-09-24
+HEAD de consolidación: 8076cb4cc21f967afec92db307e44066246ed492. Las corridas anteriores con errores pertenecen a intents previos del PR; esta sección se mantiene como trazabilidad y no se considera verde hasta que una corrida asociada al HEAD actual pase completa.
