@@ -29,20 +29,27 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor();
+    page.setDefaultTimeout(7000);
+    console.log('ui-c1: abrir app');
+    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    console.log('ui-c1: comprobar Inicio');
+    await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor({ timeout: 7000 });
+    console.log('ui-c1: comprobar menú');
 
     await page.getByRole('button', { name: 'Abrir menú' }).click();
+    console.log('ui-c1: contar secciones');
     const menuLinks = page.locator('.side-nav .side-nav-item');
     if (await menuLinks.count() !== 10) throw new Error('C1: el menú lateral no muestra las 10 secciones.');
     if (await page.getByRole('link', { name: 'Vender' }).count() !== 0) throw new Error('C1: todavía existe Vender en la barra inferior.');
     await page.locator('.side-nav-cerrar').click();
+    console.log('ui-c1: comprobar +');
     const fab = page.getByRole('button', { name: 'Nueva acción' });
     if (await fab.count() !== 1) throw new Error('C1: falta el botón flotante +.');
     await fab.click();
     if (await page.getByRole('menu').getByRole('button', { name: /Nueva venta/ }).count() !== 1) throw new Error('C1: falta Nueva venta en el +.');
     if (await page.getByRole('menu').getByRole('button', { name: /Nueva ruta/ }).count() !== 1) throw new Error('C1: falta Nueva ruta en el +.');
 
+    console.log('ui-c1: comprobar escritorio');
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.reload({ waitUntil: 'domcontentloaded' });
     const nav = page.locator('.side-nav');
