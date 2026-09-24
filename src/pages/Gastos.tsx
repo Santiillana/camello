@@ -62,13 +62,20 @@ export default function Gastos(){
       <div><span>Por pagar</span><strong>{formatoMoneda(periodo.gastos_pendientes)}</strong></div>
     </div>}</section>
     <section className="tarjeta"><h2>Listado</h2>{gastos.length===0?<p className="texto-vacio">No hay gastos en este periodo.</p>:<ul className="lista-resumen">{gastos.map(g=><li key={g.id} className="fila-cartera">
-      <div><strong>{g.categoria_nombre}</strong><span>{g.fecha} · {g.estado}</span><span>{g.proveedor||g.descripcion||'Sin detalle'}</span></div>
+      <div><strong>{g.categoria_nombre}</strong><span>{g.fecha} · {g.estado}{g.estado==='pendiente' && g.fecha_limite ? ' · '+(g.fecha_limite < hoyISO() ? 'Vencido' : 'vence '+g.fecha_limite) : ''}</span><span>{g.proveedor||g.descripcion||'Sin detalle'}</span></div>
       <div className="lado-derecho-cliente"><strong>{formatoMoneda(g.monto)}</strong>{g.estado==='pendiente'&&<button className="boton-chip" onClick={async()=>{const monto=Number(window.prompt('Monto real pagado',String(g.monto)));if(Number.isInteger(monto)&&monto>0){await database.pagarGasto(g.id,monto,'EFECTIVO');void cargar();}}}>Pagar</button>}<button className="boton-texto peligro-texto" onClick={async()=>{const motivo=window.prompt('Motivo de anulación');if(motivo) {await database.anularGastoConMotivo(g.id,motivo);void cargar();}}}>Anular</button></div>
     </li>)}</ul>}</section>
     {error&&<p className="texto-error">{error}</p>}
   </div>
 }
 
+
+function descargarCSV(items: Gasto[]) {
+  const filas=[['fecha','categoria','monto','estado','metodo','proveedor','descripcion'],...items.map(g=>[g.fecha,g.categoria_nombre??'',String(g.monto),g.estado,g.metodo_pago??'',g.proveedor??'',g.descripcion??''])];
+  const csv=filas.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='camello-gastos.csv'; a.click(); URL.revokeObjectURL(url);
+}
 
 function FormularioGasto({categorias,onGuardado,onCancelar}:{categorias:CategoriaGasto[];onGuardado:()=>void;onCancelar:()=>void}){
   const [monto,setMonto]=useState(''); const [categoria,setCategoria]=useState(''); const [fecha,setFecha]=useState(hoyISO()); const [estado,setEstado]=useState<EstadoGasto>('pagado'); const [metodo,setMetodo]=useState('EFECTIVO'); const [fechaLimite,setFechaLimite]=useState(''); const [nota,setNota]=useState(''); const [proveedor,setProveedor]=useState(''); const [foto,setFoto]=useState(''); const [ruta,setRuta]=useState<number|undefined>();
