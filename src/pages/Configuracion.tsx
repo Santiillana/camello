@@ -159,7 +159,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
               placeholder="Usa {nombre} y {dias} para personalizar."
             />
           </label>
-          <p className="texto-vacio">Puedes usar {nombre} y {dias} como variables.</p>
+          <p className="texto-vacio">Puedes usar las variables {'{nombre}'} y {'{dias}'}.</p>
           <p className="texto-vacio">Moneda: COP (peso colombiano).</p>
           <button className="boton-primario" type="submit" disabled={guardandoDatos}>{guardandoDatos ? 'Guardando…' : 'Guardar cambios'}</button>
         </form>
