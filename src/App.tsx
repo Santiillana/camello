@@ -144,7 +144,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
       </header>
       {rutaActiva && (
         <Link to={`/rutas/${rutaActiva.id}`} className="banner-ruta-activa banner-ruta-global">
-          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · {duracionRuta(rutaActiva.fecha, rutaActiva.hora_inicio, ahoraMs)} · paquetes {rutaActiva.paquetes_llevados}
+          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · {rutaActiva.hora_inicio ? duracionRuta(rutaActiva.fecha, rutaActiva.hora_inicio, ahoraMs) : '00:00'} · paquetes {rutaActiva.paquetes_llevados}
         </Link>
       )}
       <main className="app-contenido">
