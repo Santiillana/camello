@@ -4,6 +4,7 @@ import {
   SQLiteConnection,
   SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
+import { WebSqliteConnection } from './webSqlite';
 import { DB_NAME, DB_VERSION, SCHEMA_STATEMENTS } from './schema';
 import type {
   CarteraItem,
@@ -30,17 +31,33 @@ import type {
   Pago,
 } from '../types';
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
-import { initWebSqlite } from './initWebSqlite';
 import { calcularChecksum } from '../utils/respaldo';
 import { crearContexto } from '../modulos/runtime';
-import { guardarEspejoSqlite, leerEspejoSqlite } from './webMirror';
 
 type SqliteExportData = Record<string, unknown> & {
   database: string;
   mode: string;
   encrypted?: boolean;
-  tables: unknown[];
+  tables?: unknown[];
+  format?: 'json' | 'sqlite-binary';
+  bytes_base64?: string;
 };
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(texto: string): Uint8Array {
+  const binary = atob(texto);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 const DEFAULT_CONFIG: ConfiguracionApp = {
   negocio_nombre: '',
@@ -158,7 +175,8 @@ function marcarEtapaSqlite(etapa: string): void {
 
 class Database {
   private sqlite: SQLiteConnection | null = null;
-  private db: SQLiteDBConnection | null = null;
+  private webDb: WebSqliteConnection | null = null;
+  private db: SQLiteDBConnection | WebSqliteConnection | null = null;
   private activeDbName = DB_NAME;
   private ready: Promise<void> | null = null;
 
@@ -169,19 +187,19 @@ class Database {
 
   private async _init(): Promise<void> {
     marcarEtapaSqlite('connection');
-    this.sqlite = new SQLiteConnection(CapacitorSQLite);
-
     if (Capacitor.getPlatform() === 'web') {
-      await initWebSqlite();
-      marcarEtapaSqlite('webstore');
-      await this.sqlite.initWebStore();
+      this.webDb = new WebSqliteConnection(DB_NAME, import.meta.env.BASE_URL + 'assets');
+      await this.webDb.open();
+      this.db = this.webDb;
+    } else {
+      this.sqlite = new SQLiteConnection(CapacitorSQLite);
+      await this.abrirConexion();
     }
 
     marcarEtapaSqlite('open');
-    await this.abrirConexion();
+    if (Capacitor.getPlatform() === 'web') marcarEtapaSqlite('webstore');
     marcarEtapaSqlite('schema');
     await this.prepararEsquema();
-    await this.restaurarEspejoSiLaBaseApareceVacia();
     marcarEtapaSqlite('health');
     await this.verificarSalud();
     marcarEtapaSqlite('seed');
@@ -220,8 +238,16 @@ class Database {
   }
 
   private async abrirConexion(): Promise<void> {
-    if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
+    if (Capacitor.getPlatform() === 'web') {
+      if (!this.webDb) this.webDb = new WebSqliteConnection(DB_NAME, import.meta.env.BASE_URL + 'assets');
+      await this.webDb.open();
+      this.db = this.webDb;
+      this.activeDbName = DB_NAME;
+      await this.db.execute('PRAGMA foreign_keys = ON;');
+      return;
+    }
 
+    if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
     this.activeDbName = await this.nombreBaseExistente();
     marcarEtapaSqlite('consistency');
     const consistency = await this.sqlite.checkConnectionsConsistency();
@@ -233,7 +259,6 @@ class Database {
       ? await this.sqlite.retrieveConnection(this.activeDbName, false)
       : await this.sqlite.createConnection(this.activeDbName, false, 'no-encryption', DB_VERSION, false);
     marcarEtapaSqlite('connection-object-ok');
-
     marcarEtapaSqlite('db-open');
     await this.db.open();
     marcarEtapaSqlite('db-open-ok');
@@ -1240,8 +1265,6 @@ class Database {
   }
 
   private async cerrarConexion(): Promise<void> {
-    if (!this.sqlite) return;
-
     if (this.db) {
       try {
         await this.db.close();
@@ -1250,72 +1273,29 @@ class Database {
       }
     }
 
-    try {
-      await this.sqlite.closeConnection(this.activeDbName, false);
-    } catch {
-      // La conexión puede no existir después de una restauración fallida.
+    if (Capacitor.getPlatform() !== 'web' && this.sqlite) {
+      try {
+        await this.sqlite.closeConnection(this.activeDbName, false);
+      } catch {
+        // La conexión puede no existir después de una restauración fallida.
+      }
     }
 
     this.db = null;
+    this.webDb = null;
     this.activeDbName = DB_NAME;
   }
 
-  private conn(): SQLiteDBConnection {
+  private conn(): SQLiteDBConnection | WebSqliteConnection {
     if (!this.db) throw new Error('Base de datos no inicializada. Llama a database.init() primero.');
     return this.db;
   }
 
   private async persist(): Promise<void> {
-    if (Capacitor.getPlatform() === 'web' && this.sqlite) {
-      await this.sqlite.saveToStore(this.activeDbName);
-      const exportado = await this.conn().exportToJson('full');
-      if (exportado.export) await guardarEspejoSqlite(JSON.stringify(exportado.export));
-    }
-  }
-
-  private async restaurarEspejoSiLaBaseApareceVacia(): Promise<void> {
-    if (Capacitor.getPlatform() !== 'web' || !this.sqlite) return;
-
-    const estadoActual = await this.conn().query(
-      "SELECT " +
-      "(SELECT COUNT(*) FROM clientes) AS clientes, " +
-      "(SELECT COUNT(*) FROM ventas) AS ventas, " +
-      "(SELECT COUNT(*) FROM configuracion_app) AS configuracion, " +
-      "(SELECT COUNT(*) FROM rutas) AS rutas, " +
-      "(SELECT COUNT(*) FROM gastos) AS gastos;"
-    );
-    const row = estadoActual.values?.[0] ?? {};
-    const requiereRecuperacion =
-      Number(row.clientes ?? 0) === 0 &&
-      Number(row.ventas ?? 0) === 0 &&
-      Number(row.rutas ?? 0) === 0 &&
-      Number(row.gastos ?? 0) === 0;
-
-    const espejo = await leerEspejoSqlite();
-    if (!requiereRecuperacion || !espejo) return;
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(espejo) as Record<string, unknown>;
-    } catch {
+    if (Capacitor.getPlatform() === 'web') {
+      if (this.webDb) await this.webDb.persist();
       return;
     }
-
-    const tablas = Array.isArray(parsed.tables) ? parsed.tables as Array<Record<string, unknown>> : [];
-    const tieneDatosDeNegocio = tablas.some((tabla) =>
-      ['clientes', 'ventas', 'rutas', 'gastos'].includes(String(tabla.name)) &&
-      Array.isArray(tabla.values) &&
-      tabla.values.length > 0
-    );
-    if (!tieneDatosDeNegocio) return;
-
-    await this.cerrarConexion();
-    await this.sqlite.importFromJson(JSON.stringify({
-      ...parsed,
-      database: this.activeDbName,
-      overwrite: true,
-    }));
-    await this.abrirConexion();
   }
 
   private async seedProductosSiVacio(): Promise<void> {
