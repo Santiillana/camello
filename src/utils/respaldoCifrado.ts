@@ -6,8 +6,7 @@ function b64(bytes: Uint8Array): string { let s=''; for (const b of bytes) s += 
 function bytes(s: string): Uint8Array { const b=atob(s); const out=new Uint8Array(b.length); for(let i=0;i<b.length;i+=1) out[i]=b.charCodeAt(i); return out; }
 async function keyFromPassword(password:string,salt:Uint8Array){
   const base=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt:saltBuffer,iterations:ITERACIONES,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:ITERACIONES,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 export async function cifrarRespaldo(texto:string,password:string):Promise<string>{
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
@@ -19,15 +18,15 @@ export async function cifrarRespaldo(texto:string,password:string):Promise<strin
 }
 export async function descifrarRespaldo(texto:string,password:string):Promise<string>{
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
-  const data=JSON.parse(texto) as Record<string,unknown>;
+  const parsed: unknown = JSON.parse(texto);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Formato de respaldo cifrado no reconocido.');
+  const data = parsed as { camello_encrypted_backup_version?: unknown; iv?: unknown; salt?: unknown; ciphertext?: unknown };
   if(Number(data.camello_encrypted_backup_version)!==1) throw new Error('Formato de respaldo cifrado no reconocido.');
   try {
     const iv = bytes(String(data.iv));
     const salt = bytes(String(data.salt));
     const ciphertext = bytes(String(data.ciphertext));
-    const ivBuffer = iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer;
-    const cipherBuffer = ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer;
-    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:ivBuffer},await keyFromPassword(password,salt),cipherBuffer);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},await keyFromPassword(password,salt),ciphertext);
     return dec.decode(plain);
   } catch { throw new Error('Contraseña incorrecta o respaldo cifrado alterado.'); }
 }
