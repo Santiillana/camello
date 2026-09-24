@@ -2423,10 +2423,9 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
-      if (Object.keys(valido.modulos).length > 0) {
-        const { crearContexto } = await import('../modulos/runtime');
-        await crearContexto(this).importarTodo(valido.modulos);
-      }
+      // Los datos propios del módulo ya forman parte del export SQLite completo.
+      // La sección modulos del sobre se conserva para versionado/auditoría; no se reinyecta
+      // para evitar duplicar filas. Las migraciones del módulo se ejecutan al arrancar. 
       await this.persist();
     }
   }
