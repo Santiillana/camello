@@ -134,8 +134,33 @@ async function crearCliente(page) {
         return { element: true, error: String(error) };
       }
     }).catch((error) => ({ pageError: String(error) }));
+    const espejoDiag = await page.evaluate(async () => {
+      try {
+        const req = indexedDB.open('camelloPersistenceMirror');
+        return await new Promise((resolve, reject) => {
+          req.onerror = () => reject(req.error ?? new Error('No se pudo abrir espejo.'));
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('snapshots', 'readonly');
+            const get = tx.objectStore('snapshots').get('sqlite-full');
+            get.onerror = () => reject(get.error ?? new Error('No se pudo leer espejo.'));
+            get.onsuccess = () => {
+              const valor = typeof get.result === 'string' ? JSON.parse(get.result) : null;
+              const clientes = valor?.tables?.find((tabla) => tabla.name === 'clientes')?.values?.length ?? 0;
+              const ventas = valor?.tables?.find((tabla) => tabla.name === 'ventas')?.values?.length ?? 0;
+              resolve({ existe: Boolean(get.result), clientes, ventas });
+              db.close();
+            };
+          };
+        });
+      } catch (error) {
+        return { error: String(error) };
+      }
+    }).catch((error) => ({ pageError: String(error) }));
     throw new Error(
-      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga),
+      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga)
+      + ' espejo=' + JSON.stringify(espejoDiag)
+      + ' etapa=' + await page.evaluate(() => document.documentElement.dataset.camelloSqliteStage || 'sin-etapa').catch(() => 'sin-etapa'),
     );
   }
 }
