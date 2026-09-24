@@ -25,6 +25,14 @@ type Props = {
   borradorClave?: string;
 };
 
+function esSexoMascota(valor: string): MascotaBorrador['sexo'] {
+  return valor === 'M' || valor === 'H' || valor === 'Desconocido' ? valor : 'Desconocido';
+}
+
+function esTamanoMascota(valor: string): MascotaBorrador['tamano'] {
+  return valor === 'Pequeño' || valor === 'Mediano' || valor === 'Grande' ? valor : 'Mediano';
+}
+
 const mascotaVacia = (): MascotaBorrador => ({
   nombre: '',
   cumple_dia: '',
@@ -178,7 +186,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
               <div className="grid-dos-columnas">
                 <label>
                   Sexo
-                  <select value={mascota.sexo} onChange={(e) => actualizarMascota(index, { sexo: e.target.value as MascotaBorrador['sexo'] })}>
+                  <select value={mascota.sexo} onChange={(e) => actualizarMascota(index, { sexo: esSexoMascota(e.target.value) })}>
                     <option value="Desconocido">No especificado</option>
                     <option value="M">Macho</option>
                     <option value="H">Hembra</option>
@@ -186,7 +194,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
                 </label>
                 <label>
                   Tamaño
-                  <select value={mascota.tamano} onChange={(e) => actualizarMascota(index, { tamano: e.target.value as MascotaBorrador['tamano'] })}>
+                  <select value={mascota.tamano} onChange={(e) => actualizarMascota(index, { tamano: esTamanoMascota(e.target.value) })}>
                     <option>Pequeño</option>
                     <option>Mediano</option>
                     <option>Grande</option>
