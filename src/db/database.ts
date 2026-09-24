@@ -1569,7 +1569,7 @@ class Database {
     if (!clientes.length) return [];
     const ids = clientes.map((cliente) => cliente.id);
     const placeholders = ids.map(() => '?').join(',');
-    const [mascotasResult, ventasResult, seguimientoResult] = await Promise.all([
+    const [mascotasResult, ventasResult, seguimientoResult, ritmoResult] = await Promise.all([
       this.conn().query('SELECT * FROM mascotas WHERE estado=\'activo\' AND cliente_id IN (' + placeholders + ') ORDER BY nombre_normalizado;', ids),
       this.conn().query(
         `SELECT cliente_id, MIN(fecha) primera, MAX(fecha) ultima, COALESCE(SUM(total),0) total,
@@ -1583,6 +1583,19 @@ class Database {
         ids,
       ),
       this.conn().query('SELECT cliente_id,modo,dias,contactado_fecha,recordar_hasta FROM seguimiento_clientes WHERE cliente_id IN (' + placeholders + ');', ids),
+      this.conn().query(
+        `WITH orden AS (
+           SELECT cliente_id, fecha,
+                  LAG(fecha) OVER (PARTITION BY cliente_id ORDER BY fecha) AS anterior
+           FROM ventas
+           WHERE cliente_id IN (${placeholders}) AND COALESCE(estado_registro,'activa')='activa'
+         )
+         SELECT cliente_id, ROUND(AVG(julianday(fecha)-julianday(anterior))) AS ritmo
+         FROM orden
+         WHERE anterior IS NOT NULL
+         GROUP BY cliente_id;`,
+        ids,
+      ),
     ]);
     const mascotasMap = new Map<number,Mascota[]>();
     for (const row of mascotasResult.values ?? []) {
@@ -1595,6 +1608,8 @@ class Database {
     for(const row of ventasResult.values??[]) ventasMap.set(Number(row.cliente_id),row as Record<string,unknown>);
     const seguimientoMap=new Map<number,Record<string,unknown>>();
     for(const row of seguimientoResult.values??[]) seguimientoMap.set(Number(row.cliente_id),row as Record<string,unknown>);
+    const ritmoMap=new Map<number,number>();
+    for(const row of ritmoResult.values??[]) ritmoMap.set(Number(row.cliente_id),Math.max(1,Number(row.ritmo??20)));
     return clientes.map((c)=>{
       const row=ventasMap.get(c.id)??{};
       const seguimiento=seguimientoMap.get(c.id);
@@ -1603,7 +1618,7 @@ class Database {
       const numero_compras=Number(row.compras??0);
       const total_comprado=Number(row.total??0);
       const ritmo_modo:ModoRitmo=seguimiento?.modo==='manual'?'manual':'automatico';
-      const ritmo_dias=ritmo_modo==='manual'?Math.max(1,Number(seguimiento?.dias??20)):20;
+      const ritmo_dias=ritmo_modo==='manual'?Math.max(1,Number(seguimiento?.dias??20)):(ritmoMap.get(c.id)??20);
       return {
         ...c,
         mascotas:mascotasMap.get(c.id)??[],
