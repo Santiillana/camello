@@ -144,7 +144,7 @@ async function webStoreSnapshot(page) {
         request.onsuccess = () => resolve(request.result);
       });
       const stores = Array.from(db.objectStoreNames);
-      const dbResult = { name: base.name, stores, keys: {} };
+      const dbResult = { name: base.name, stores, keys: {}, sizes: {} };
       for (const storeName of stores) {
         const keys = await new Promise((resolve, reject) => {
           const tx = db.transaction(storeName, 'readonly');
@@ -153,6 +153,15 @@ async function webStoreSnapshot(page) {
           req.onsuccess = () => resolve(req.result.map((value) => String(value)));
         });
         dbResult.keys[storeName] = keys;
+        if (storeName === 'databases') {
+          const value = await new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).get('camelloSQLite.db');
+            req.onerror = () => reject(req.error ?? new Error('No se pudo leer camelloSQLite.db.'));
+            req.onsuccess = () => resolve(req.result);
+          });
+          dbResult.sizes[storeName] = value instanceof Uint8Array ? value.byteLength : value && typeof value === 'object' && 'byteLength' in value ? Number(value.byteLength) : value == null ? null : -1;
+        }
       }
       db.close();
       result.push(dbResult);
