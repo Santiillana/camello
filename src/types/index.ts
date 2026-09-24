@@ -29,6 +29,7 @@ export interface ConfiguracionApp {
   usuario_nombre: string;
   color_acento: string;
   moneda: 'COP';
+  mensaje_recordatorio?: string;
 }
 
 export interface CarteraItem {
