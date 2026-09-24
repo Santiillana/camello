@@ -14,7 +14,7 @@ type Props = {
   onOmitir?: () => void;
 };
 
-async function comprimirArchivo(file: File): Promise<string> {
+export async function comprimirArchivo(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const max = 1600;
   const escala = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
