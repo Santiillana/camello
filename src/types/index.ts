@@ -5,7 +5,7 @@ export type EstadoCliente = 'activo' | 'archivado';
 export type EstadoMascota = 'activo' | 'archivado';
 export type EstadoPago = 'PAGADA' | 'PENDIENTE';
 export type MetodoPago = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
-export type EstadoRuta = 'PROGRAMADA' | 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
+export type EstadoRuta = 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
 export type TipoRuta = 'Puerta a puerta' | 'Venta local móvil';
 export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
@@ -89,8 +89,6 @@ export interface Ruta {
   tipo: TipoRuta;
   estado: EstadoRuta;
   fecha: string;
-  fecha_planificada?: string;
-  hora_planificada?: string;
   hora_inicio?: string;
   hora_fin?: string;
   lat_inicio?: number;
