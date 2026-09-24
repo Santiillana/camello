@@ -186,6 +186,7 @@ class Database {
       { version: 6, ejecutar: () => this.migrarVersion6() },
       { version: 7, ejecutar: () => this.migrarVersion7() },
       { version: 8, ejecutar: () => this.migrarVersion8() },
+      { version: 10, ejecutar: () => this.migrarVersion10() },
     ];
     for (const migracion of migraciones) {
       if (version < migracion.version) await migracion.ejecutar();
@@ -558,8 +559,69 @@ class Database {
     if (resultadoIntegrity.toLowerCase() !== 'ok') throw new Error('v9: integrity_check = ' + resultadoIntegrity);
   }
 
+  private async migrarVersion10(): Promise<void> {
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS borradores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo TEXT NOT NULL,
+      clave TEXT NOT NULL,
+      json TEXT NOT NULL,
+      paso INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      UNIQUE(tipo, clave)
+    );`, false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_borradores_updated ON borradores(updated_at);', false);
+    await this.conn().execute(
+      "DELETE FROM borradores WHERE updated_at < datetime('now', '-7 days');",
+      false,
+    );
+  }
+
+  async guardarBorrador(tipo: string, clave: string, datos: unknown, paso: number): Promise<void> {
+    const json = JSON.stringify(datos);
+    if (!Number.isInteger(paso) || paso < 0) throw new Error('El paso del borrador no es válido.');
+    await this.conn().run(
+      `INSERT INTO borradores (tipo, clave, json, paso, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(tipo, clave) DO UPDATE SET
+         json = excluded.json,
+         paso = excluded.paso,
+         updated_at = excluded.updated_at;`,
+      [tipo, clave, json, paso, new Date().toISOString()],
+      false,
+    );
+    await this.persist();
+  }
+
+  async obtenerBorrador<T>(tipo: string, clave: string): Promise<{ datos: T; paso: number; updated_at: string } | null> {
+    const result = await this.conn().query(
+      'SELECT json, paso, updated_at FROM borradores WHERE tipo = ? AND clave = ? LIMIT 1;',
+      [tipo, clave],
+    );
+    const row = result.values?.[0];
+    if (!row) return null;
+    try {
+      return {
+        datos: JSON.parse(String(row.json)) as T,
+        paso: Number(row.paso ?? 0),
+        updated_at: String(row.updated_at ?? ''),
+      };
+    } catch {
+      await this.eliminarBorrador(tipo, clave);
+      return null;
+    }
+  }
+
+  async eliminarBorrador(tipo: string, clave: string): Promise<void> {
+    await this.conn().run(
+      'DELETE FROM borradores WHERE tipo = ? AND clave = ?;',
+      [tipo, clave],
+      false,
+    );
+    await this.persist();
+  }
+
   private async verificarEsquemaCompleto(): Promise<void> {
-    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes'];
+    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes', 'borradores'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
     const r = await this.conn().query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');');
     const existentes = new Set((r.values ?? []).map((row) => String(row.name)));
