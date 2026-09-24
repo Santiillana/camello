@@ -21,7 +21,7 @@ function health(db, label) {
   if (fk.length) throw new Error(label + ': foreign_key_check no vacío: ' + JSON.stringify(fk));
   const integrity = String(db.exec('PRAGMA integrity_check;')[0]?.values?.[0]?.[0] ?? '');
   if (integrity.toLowerCase() !== 'ok') throw new Error(label + ': integrity_check=' + integrity);
-  const temp = db.exec("SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';")[0]?.values ?? [];
+  const temp = db.exec("SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';")[0]?.values ?? [];
   if (temp.length) throw new Error(label + ': DDL temporal restante: ' + JSON.stringify(temp));
 }
 
@@ -85,7 +85,7 @@ function migrate8(db) {
   } finally { db.run('PRAGMA foreign_keys=ON;'); }
 }
 function migrate9(db) {
-  const refs = db.exec("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';")[0]?.values ?? [];
+  const refs = db.exec("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';")[0]?.values ?? [];
   if (!refs.length) return;
   const refsMap = new Map();
   const rx=/\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\b/g;
@@ -190,7 +190,7 @@ const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same
 const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
 const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
 const dañada=fixture(SQL,'schema-v8-damaged.sql');
-const brokenDDL=dañada.exec("SELECT name,sql FROM sqlite_master WHERE sql LIKE '%_migracion_%'")[0]?.values??[];
+const brokenDDL=dañada.exec("SELECT name,sql FROM sqlite_master WHERE sql LIKE '%\\_migracion\\_%' ESCAPE '\\'")[0]?.values??[];
 if(!brokenDDL.some(r=>String(r[0])==='ventas'&&String(r[1]).includes('rutas_migracion_v8')))throw new Error('La fixture dañada no reproduce rutas_migracion_v8.');
 const beforeD=resumen(dañada); initialize(dañada); same(beforeD,resumen(dañada),'damaged'); flujo(dañada,'damaged');
 for(const db of [fresh,v1,v2,v7,dañada]){health(db,'final');db.close();}
