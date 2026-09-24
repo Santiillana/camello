@@ -856,7 +856,7 @@ class Database {
       await this.conn().commitTransaction();
       await this.persist();
     } catch (error) {
-      try { await this.conn().rollbackTransaction(); } catch {}
+      try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
       throw error;
     }
   }
@@ -1081,7 +1081,7 @@ class Database {
       await this.conn().commitTransaction();
       await this.persist();
     } catch (error) {
-      try { await this.conn().rollbackTransaction(); } catch {}
+      try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
       throw error;
     }
   }
@@ -1130,7 +1130,7 @@ class Database {
           await this.conn().commitTransaction();
           await this.persist();
         } catch (error) {
-          try { await this.conn().rollbackTransaction(); } catch {}
+          try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
           await this.conn().execute('PRAGMA foreign_keys = ON;', false);
           throw error;
         }
@@ -1178,7 +1178,7 @@ class Database {
       await this.conn().commitTransaction();
       await this.persist();
     } catch (error) {
-      try { await this.conn().rollbackTransaction(); } catch {}
+      try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
       throw error;
     }
   }
@@ -1206,7 +1206,7 @@ class Database {
       await this.conn().commitTransaction();
       await this.persist();
     } catch (error) {
-      try { await this.conn().rollbackTransaction(); } catch {}
+      try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
       throw error;
     }
   }
@@ -1421,7 +1421,7 @@ class Database {
       await this.conn().commitTransaction();
       await this.persist();
     } catch (error) {
-      try { await this.conn().rollbackTransaction(); } catch {}
+      try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
       throw error;
     }
   }
