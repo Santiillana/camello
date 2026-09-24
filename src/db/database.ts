@@ -180,6 +180,7 @@ class Database {
       { version: 3, ejecutar: () => this.migrarVersion3() },
       { version: 4, ejecutar: () => this.migrarVersion4() },
       { version: 5, ejecutar: () => this.migrarVersion5() },
+      { version: 6, ejecutar: () => this.migrarVersion6() },
     ];
     for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
@@ -289,8 +290,20 @@ class Database {
     }
   }
 
+  private async migrarVersion6(): Promise<void> {
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS seguimiento_clientes (
+      cliente_id INTEGER PRIMARY KEY,
+      modo TEXT NOT NULL DEFAULT 'automatico',
+      dias INTEGER,
+      contactado_fecha TEXT,
+      recordar_hasta TEXT,
+      FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+    );`);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_seguimiento_recordar ON seguimiento_clientes(recordar_hasta);');
+  }
+
   private async verificarEsquemaCompleto(): Promise<void> {
-    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos'];
+    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
     const r = await this.conn().query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');');
     const existentes = new Set((r.values ?? []).map((row) => String(row.name)));
