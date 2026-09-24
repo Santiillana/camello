@@ -1,7 +1,23 @@
 import type { ContextoModulo, ModuloContrato } from './contrato';
 
-const entradas = import.meta.glob('./*/index.ts', { eager: true, import: 'default' }) as Record<string, ModuloContrato>;
-const modulos = Object.values(entradas);
+function esModuloContrato(valor: unknown): valor is ModuloContrato {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
+  const registro = Object.fromEntries(Object.entries(valor));
+  return typeof registro.id === 'string'
+    && typeof registro.nombre === 'string'
+    && typeof registro.version === 'number'
+    && Array.isArray(registro.migraciones)
+    && typeof registro.limpiar === 'function'
+    && typeof registro.exportar === 'function'
+    && typeof registro.importar === 'function';
+}
+
+function esRegistro(valor: unknown): valor is Record<string, unknown> {
+  return Boolean(valor) && typeof valor === 'object' && !Array.isArray(valor);
+}
+
+const entradas = import.meta.glob('./*/index.ts', { eager: true, import: 'default' });
+const modulos = Object.values(entradas).filter(esModuloContrato);
 
 export function listarModulos(): ModuloContrato[] {
   return modulos.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre));
@@ -69,13 +85,15 @@ export function crearContexto(runtimeApi: {
     },
     async importarTodo(data: unknown) {
       if (!data || typeof data !== 'object') return;
-      const record = data as Record<string, unknown>;
+      if (!esRegistro(data)) return;
+      const record = data;
       for (const modulo of modulos) {
         const entry = record[modulo.id];
         if (!entry || typeof entry !== 'object') continue;
         try {
           const contexto = await runtimeApi.crearContextoModulo(modulo.id);
-          await modulo.importar(contexto, (entry as Record<string, unknown>).datos);
+          if (!esRegistro(entry)) continue;
+          await modulo.importar(contexto, entry.datos);
         } catch {
           await runtimeApi.guardarModuloHabilitado(modulo.id, false);
         }
