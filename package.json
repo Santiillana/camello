@@ -12,7 +12,8 @@
     "lint": "oxlint src vite.config.ts capacitor.config.ts scripts",
     "verify": "npm ls sql.js && npm audit --audit-level=high && npm run lint && npm run verify:db && npm run build",
     "preview": "vite preview",
-    "verify:db": "node scripts/verify-db.mjs"
+    "verify:db": "node scripts/verify-db.mjs",
+    "benchmark:db": "node scripts/benchmark-db.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
