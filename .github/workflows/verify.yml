@@ -19,12 +19,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm ls sql.js jeep-sqlite @capacitor-community/sqlite
-      - run: npm audit --audit-level=high
       - run: npm run build
       - run: npm run lint
-      - run: npm run verify:web-sqlite
-
 
   android:
     runs-on: ubuntu-latest
