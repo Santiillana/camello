@@ -1280,17 +1280,19 @@ class Database {
       "SELECT " +
       "(SELECT COUNT(*) FROM clientes) AS clientes, " +
       "(SELECT COUNT(*) FROM ventas) AS ventas, " +
-      "(SELECT COUNT(*) FROM configuracion_app) AS configuracion;"
+      "(SELECT COUNT(*) FROM configuracion_app) AS configuracion, " +
+      "(SELECT COUNT(*) FROM rutas) AS rutas, " +
+      "(SELECT COUNT(*) FROM gastos) AS gastos;"
     );
     const row = estadoActual.values?.[0] ?? {};
-    const estaVacia =
+    const requiereRecuperacion =
       Number(row.clientes ?? 0) === 0 &&
       Number(row.ventas ?? 0) === 0 &&
-      Number(row.configuracion ?? 0) === 0;
-    if (!estaVacia) return;
+      Number(row.rutas ?? 0) === 0 &&
+      Number(row.gastos ?? 0) === 0;
 
     const espejo = await leerEspejoSqlite();
-    if (!espejo) return;
+    if (!requiereRecuperacion || !espejo) return;
 
     let parsed: Record<string, unknown>;
     try {
@@ -1300,8 +1302,12 @@ class Database {
     }
 
     const tablas = Array.isArray(parsed.tables) ? parsed.tables as Array<Record<string, unknown>> : [];
-    const tieneDatos = tablas.some((tabla) => Array.isArray(tabla.values) && tabla.values.length > 0);
-    if (!tieneDatos) return;
+    const tieneDatosDeNegocio = tablas.some((tabla) =>
+      ['clientes', 'ventas', 'rutas', 'gastos'].includes(String(tabla.name)) &&
+      Array.isArray(tabla.values) &&
+      tabla.values.length > 0
+    );
+    if (!tieneDatosDeNegocio) return;
 
     await this.cerrarConexion();
     await this.sqlite.importFromJson(JSON.stringify({
