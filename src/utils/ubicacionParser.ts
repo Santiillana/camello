@@ -49,7 +49,7 @@ export function parsearUbicacionPura(texto: string): CoordenadasParseadas | null
         const lat = Number(at[1]); const lng = Number(at[2]);
         if (coordenadasValidas(lat, lng)) return { lat, lng };
       }
-    } catch {}
+    } catch { /* Un intento de decodificación fallido se trata como formato no reconocido. */ }
   }
 
   const inline = valor.match(/!3d([+-]?\d+(?:\.\d+)?)!4d([+-]?\d+(?:\.\d+)?)/);
