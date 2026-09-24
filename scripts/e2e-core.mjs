@@ -348,10 +348,10 @@ try {
     }
 
     await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    const download = page.waitForEvent('download');
+    const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Descargar sin cifrar' }).click();
-    await download;
-    await page.getByText(/Respaldo generado|Respaldo/).first().waitFor();
+    const download = await downloadPromise;
+    if (!download.suggestedFilename().endsWith('.json')) throw new Error('E2E: el respaldo descargado no terminó en .json.');
     const backupBase = await sql(page, "SELECT COUNT(*) AS n FROM clientes;");
     if (Number(backupBase[0]?.n) < 1) throw new Error('E2E: la base no conserva clientes antes del respaldo.');
 
