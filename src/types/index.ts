@@ -33,6 +33,9 @@ export interface ConfiguracionApp {
   mensaje_recordatorio?: string;
   pin_habilitado?: boolean;
   pin_lock_minutos?: number;
+  privacidad_habilitada?: boolean;
+  privacidad_texto?: string;
+  responsable_datos?: string;
   privacy_accepted_at?: string | null;
   privacy_responsable?: string;
 }
