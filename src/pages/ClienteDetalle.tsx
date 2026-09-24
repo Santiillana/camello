@@ -8,8 +8,12 @@ import type {
   SexoMascota,
   TamanoMascota,
   Venta,
+  Foto,
 } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
+import UbicacionMiniMapa from '../components/UbicacionMiniMapa';
+import UbicacionSelector from '../components/UbicacionSelector';
+import { comprimirArchivo } from '../components/FotosSelector';
 
 export default function ClienteDetalle() {
   const { id } = useParams();
@@ -17,6 +21,7 @@ export default function ClienteDetalle() {
   const navigate = useNavigate();
   const [cliente, setCliente] = useState<ClienteConResumen | null>(null);
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const [fotos, setFotos] = useState<Foto[]>([]);
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [mostrarMascota, setMostrarMascota] = useState(false);
@@ -27,12 +32,14 @@ export default function ClienteDetalle() {
 
   async function cargar() {
     try {
-      const [c, v] = await Promise.all([
+      const [c, v, fs] = await Promise.all([
         database.obtenerCliente(clienteId),
         database.listarVentasPorCliente(clienteId),
+        database.listarFotosCliente(clienteId),
       ]);
       setCliente(c);
       setVentas(v);
+      setFotos(fs);
       setError(c ? null : 'No se encontró el cliente.');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -133,9 +140,13 @@ export default function ClienteDetalle() {
           </div>
 
           {cliente.lat != null && cliente.lng != null ? (
-            <p className="detalle-cliente">📍 Ubicación guardada ({cliente.lat.toFixed(5)}, {cliente.lng.toFixed(5)})</p>
+            <>
+              <p className="detalle-cliente">📍 Ubicación guardada {cliente.ubicacion_precision_m != null ? '(±' + Math.round(cliente.ubicacion_precision_m) + ' m)' : ''}</p>
+              <UbicacionMiniMapa lat={cliente.lat} lng={cliente.lng} />
+              <button className="boton-texto" onClick={() => setMostrarUbicacion(true)}>Editar ubicación</button>
+            </>
           ) : (
-            <button className="boton-texto" onClick={() => setMostrarUbicacion(true)}>📍 Guardar ubicación</button>
+            <button className="boton-texto" onClick={() => setMostrarUbicacion(true)}>📍 Agregar ubicación</button>
           )}
         </section>
       )}
@@ -252,6 +263,79 @@ export default function ClienteDetalle() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="tarjeta">
+        <div className="fila-titulo-boton">
+          <div>
+            <p className="texto-kicker">Memoria visual</p>
+            <h2>Fotos</h2>
+          </div>
+          <label className="boton-secundario boton-archivo">
+            + Foto
+            <input
+              type="file"
+              accept="image/*"
+              className="input-oculto"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const data = await comprimirArchivo(file);
+                  await database.guardarFotosCliente(clienteId, [{ categoria: 'cliente', data_url: data }]);
+                  await cargar();
+                } catch (err: unknown) {
+                  setError(err instanceof Error ? err.message : String(err));
+                } finally {
+                  e.currentTarget.value = '';
+                }
+              }}
+            />
+          </label>
+        </div>
+        {fotos.length === 0 ? (
+          <p className="texto-vacio">No hay fotos guardadas.</p>
+        ) : (
+          <div className="fotos-grid">
+            {fotos.map((foto) => (
+              <figure className="foto-preview" key={foto.id}>
+                <img src={foto.data_url} alt={foto.referencia || foto.categoria} />
+                <figcaption>{foto.categoria}{foto.referencia ? ' · ' + foto.referencia : ''}</figcaption>
+                <div className="fila-botones">
+                  <label className="boton-texto">
+                    Reemplazar
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="input-oculto"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const data = await comprimirArchivo(file);
+                          await database.actualizarFotoCliente(foto.id, data);
+                          await cargar();
+                        } catch (err: unknown) {
+                          setError(err instanceof Error ? err.message : String(err));
+                        } finally {
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                    />
+                  </label>
+                  <button className="boton-texto peligro-texto" onClick={async () => {
+                    try {
+                      await database.eliminarFotoCliente(foto.id);
+                      await cargar();
+                    } catch (err: unknown) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    }
+                  }}>Eliminar</button>
+                </div>
+              </figure>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="tarjeta">
