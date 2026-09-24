@@ -37,6 +37,29 @@ export default function UbicacionSelector({ lat, lng, precision_m, fuente, onCha
     : coordenadasIniciales();
 
   useEffect(() => {
+    try {
+      const compartido = localStorage.getItem('camello.sharedText');
+      if (compartido && !pegado) {
+        setPegado(compartido);
+        setMensaje('Ubicación compartida desde Android lista para pegar.');
+      }
+    } catch {}
+
+    const recibirCompartido = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: string }>).detail;
+      const texto = detail?.text?.trim();
+      if (!texto) return;
+      try { localStorage.setItem('camello.sharedText', texto); } catch {}
+      setPegado(texto);
+      setMensaje('Ubicación compartida desde Android lista para pegar.');
+      setError(null);
+    };
+
+    window.addEventListener('camelloShare', recibirCompartido);
+    return () => window.removeEventListener('camelloShare', recibirCompartido);
+  }, []);
+
+  useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
     const mapa = L.map(contenedorRef.current).setView([actual.lat, actual.lng], lat != null ? 16 : 13);
     mapaRef.current = mapa;
@@ -96,6 +119,7 @@ export default function UbicacionSelector({ lat, lng, precision_m, fuente, onCha
     onChange(resultado);
     setMensaje('Ubicación pegada de Google Maps.');
     setPegado('');
+    try { localStorage.removeItem('camello.sharedText'); } catch {}
   }
 
   const precisionTexto = precision_m != null ? `±${Math.round(precision_m)} m` : 'Precisión no disponible';
