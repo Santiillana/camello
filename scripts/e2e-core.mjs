@@ -107,12 +107,43 @@ async function crearCliente(page) {
   await page.waitForFunction(() => document.documentElement.dataset.camelloSqliteStage === 'persist', undefined, { timeout: 15000 });
   const trasRecarga = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
   if (trasRecarga.length !== 1 || trasRecarga[0]?.estado !== 'activo') {
-    throw new Error('E2E: el cliente no sobrevivió a una recarga completa: ' + JSON.stringify(trasRecarga));
+    throw new Error(
+      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga)
+      + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
+    );
   }
-}
 
 async function expectOption(select, label) {
   await select.locator('option').filter({ hasText: label }).waitFor({ state: 'attached', timeout: 20000 });
+}
+
+async function webStoreSnapshot(page) {
+  return page.evaluate(async () => {
+    const bases = await indexedDB.databases();
+    const result = [];
+    for (const base of bases) {
+      if (!base.name) continue;
+      const request = indexedDB.open(base.name);
+      const db = await new Promise((resolve, reject) => {
+        request.onerror = () => reject(request.error ?? new Error('No se pudo abrir IndexedDB.'));
+        request.onsuccess = () => resolve(request.result);
+      });
+      const stores = Array.from(db.objectStoreNames);
+      const dbResult = { name: base.name, stores, keys: {} };
+      for (const storeName of stores) {
+        const keys = await new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, 'readonly');
+          const req = tx.objectStore(storeName).getAllKeys();
+          req.onerror = () => reject(req.error ?? new Error('No se pudieron leer claves IndexedDB.'));
+          req.onsuccess = () => resolve(req.result.map((value) => String(value)));
+        });
+        dbResult.keys[storeName] = keys;
+      }
+      db.close();
+      result.push(dbResult);
+    }
+    return result;
+  });
 }
 
 async function sql(page, query, params = []) {
