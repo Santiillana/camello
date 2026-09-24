@@ -236,7 +236,8 @@ const SQL=await initSqlJs({locateFile:file=>fileURLToPath(new URL('../node_modul
 function carteraScenario(SQL) {
   const db = new SQL.Database();
   initialize(db);
-  const cid = Number(db.exec("SELECT id FROM clientes LIMIT 1")[0]?.values?.[0]?.[0] ?? 0);
+  db.run("INSERT INTO clientes(nombre,fecha_registro) VALUES ('Cliente cartera','2026-09-24');");
+  const cid = Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
   db.run("INSERT INTO ventas(cliente_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,metodo_pago,monto_pagado,operacion_id) VALUES (?, 'Cartera',1,10000,4000,10000,6000,'2026-09-24','13:00','PENDIENTE','FIADO',0,'cartera-vitest');",[cid]);
   const before = Number(db.exec("SELECT total-monto_pagado FROM ventas WHERE operacion_id='cartera-vitest'")[0].values[0][0]);
   assertEq(before,10000,'cartera inicial');
@@ -344,3 +345,4 @@ async function runScenario(scenario) {
 
 const scenario = process.env.CAMELLO_DB_SCENARIO;
 await runScenario(scenario);
+if (scenario && scenario !== 'all') console.log(scenario + ': PASÓ');
