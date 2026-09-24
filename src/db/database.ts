@@ -1225,6 +1225,12 @@ class Database {
     await this.persist();
   }
 
+  async connForTesting(sql: string, params: unknown[] = []): Promise<unknown[]> {
+    if (!import.meta.env.VITE_E2E) throw new Error('API de pruebas disponible solo en E2E.');
+    const r = await this.conn().query(sql, params);
+    return r.values ?? [];
+  }
+
   async verificarSalud(): Promise<void> {
     const fk = await this.conn().query('PRAGMA foreign_key_check;');
     if ((fk.values ?? []).length) throw new Error('foreign_key_check encontró registros inválidos.');
