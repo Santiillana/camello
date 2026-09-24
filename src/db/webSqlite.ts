@@ -20,6 +20,22 @@ function isSqlValueArray(value: unknown): value is SqlValue[] {
   );
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(texto: string): Uint8Array {
+  const binary = atob(texto);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 function toSqlParams(params: unknown[]): SqlValue[] {
   return params.map((value) => {
     if (value == null) return null;
