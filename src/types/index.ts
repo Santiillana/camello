@@ -247,6 +247,8 @@ export interface Gasto {
 }
 
 export interface ResultadoMes {
+  desde?: string;
+  hasta?: string;
   periodo: string;
   ventas: number;
   costo_materia_prima: number;
