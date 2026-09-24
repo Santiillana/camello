@@ -9,7 +9,6 @@ const ETIQUETA_ESTADO: Record<string, string> = {
   EN_CURSO: 'En curso',
   FINALIZADA: 'Finalizada',
   CANCELADA: 'Cancelada',
-  PROGRAMADA: 'Pendiente',
 };
 
 export default function Rutas() {
