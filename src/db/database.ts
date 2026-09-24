@@ -793,6 +793,29 @@ class Database {
     await this.persist();
   }
 
+  async reordenarCategoriaGasto(id: number, direccion: 'arriba' | 'abajo'): Promise<void> {
+    const actual = await this.conn().query('SELECT id, orden FROM categorias_gasto WHERE id=?;', [id]);
+    const row = actual.values?.[0];
+    if (!row) throw new Error('Categoría inválida.');
+    const delta = direccion === 'arriba' ? -1 : 1;
+    const objetivo = await this.conn().query(
+      'SELECT id, orden FROM categorias_gasto WHERE orden = ? LIMIT 1;',
+      [Number(row.orden) + delta],
+    );
+    const otro = objetivo.values?.[0];
+    if (!otro) return;
+    await this.conn().beginTransaction();
+    try {
+      await this.conn().run('UPDATE categorias_gasto SET orden=? WHERE id=?;', [Number(otro.orden), id], false);
+      await this.conn().run('UPDATE categorias_gasto SET orden=? WHERE id=?;', [Number(row.orden), Number(otro.id)], false);
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch {}
+      throw error;
+    }
+  }
+
   async listarGastos(opts?: { desde?: string; hasta?: string; categoriaId?: number; estado?: EstadoGasto }): Promise<Gasto[]> {
     const where = ['g.archivado = 0'];
     const params: unknown[] = [];
