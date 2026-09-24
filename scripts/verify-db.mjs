@@ -117,6 +117,13 @@ function migrate10(db){ db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE I
 function migrate11(db){ for(const s of CURRENT_SCHEMA.filter(s=>/^(CREATE TABLE IF NOT EXISTS (categorias_gasto|gastos|gastos_recurrentes)|CREATE INDEX IF NOT EXISTS idx_(gastos|recurrentes))/.test(s.trim())))db.run(s); for(const [n,t,na,o] of [['Arriendo','fijo','operativo',1],['Servicios','fijo','operativo',2],['Gas','variable','operativo',3],['Transporte/Gasolina','variable','operativo',4],['Empaques','variable','operativo',5],['Publicidad','variable','operativo',6],['Mantenimiento','variable','operativo',7],['Otros','variable','operativo',8],['Compra de materia prima','variable','compra_insumos',9],['Retiro del dueño','variable','retiro_dueno',10]])db.run('INSERT INTO categorias_gasto(nombre,tipo,naturaleza,orden) VALUES (?,?,?,?) ON CONFLICT(nombre) DO NOTHING',[n,t,na,o]); }
 function migrate12(db){ for(const [t,c,ddl] of [['ventas','estado_registro',"estado_registro TEXT NOT NULL DEFAULT 'activa'"],['ventas','motivo_anulacion','motivo_anulacion TEXT'],['ventas','anulada_at','anulada_at TEXT'],['pagos','estado_registro',"estado_registro TEXT NOT NULL DEFAULT 'activa'"],['pagos','motivo_anulacion','motivo_anulacion TEXT'],['pagos','anulada_at','anulada_at TEXT'],['gastos','motivo_anulacion','motivo_anulacion TEXT'],['gastos','anulado_at','anulado_at TEXT']])addColumn(db,t,c,ddl); }
 function migrate13(db){ db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS modulos_migraciones')) ?? ''); }
+function migrate14(db){
+  addColumn(db,'clientes','nombre_normalizado','nombre_normalizado TEXT NOT NULL DEFAULT ""');
+  addColumn(db,'mascotas','nombre_normalizado','nombre_normalizado TEXT NOT NULL DEFAULT ""');
+  db.run('CREATE INDEX IF NOT EXISTS idx_clientes_nombre_norm ON clientes(nombre_normalizado);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_mascotas_nombre_norm ON mascotas(nombre_normalizado);');
+}
+
 
 function initialize(db){
   applySchema(db);
@@ -184,4 +191,4 @@ if(!brokenDDL.some(r=>String(r[0])==='ventas'&&String(r[1]).includes('rutas_migr
 const beforeD=resumen(dañada); initialize(dañada); same(beforeD,resumen(dañada),'damaged'); flujo(dañada,'damaged');
 for(const db of [fresh,v1,v2,v7,dañada]){health(db,'final');db.close();}
 console.log('verify-db: OK');
-console.log(JSON.stringify({version:DB_VERSION,base_nueva:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
+console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
