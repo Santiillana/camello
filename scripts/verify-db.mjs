@@ -2,7 +2,7 @@ import initSqlJs from 'sql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 const REQUIRED_TABLES = [
   'clientes',
   'mascotas',
@@ -259,218 +259,145 @@ function migrateVersion8(db) {
   const rows = db.exec('PRAGMA table_info(rutas);')[0]?.values ?? [];
   const columns = new Set(rows.map((row) => String(row[1])));
   if (!columns.has('fecha_planificada') && !columns.has('hora_planificada')) return;
+
+  const snapshot = db.exec(
+    'SELECT id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, COALESCE(paquetes_sobrantes, 0), notas FROM rutas ORDER BY id;'
+  )[0]?.values ?? [];
+
   db.run('PRAGMA foreign_keys = OFF;');
-  db.run('BEGIN TRANSACTION;');
   try {
-    db.run('ALTER TABLE rutas RENAME TO rutas_migracion_v8;');
-    db.run(`CREATE TABLE rutas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre TEXT NOT NULL DEFAULT '',
-      tipo TEXT NOT NULL,
-      estado TEXT NOT NULL DEFAULT 'EN_CURSO',
-      fecha TEXT NOT NULL,
-      hora_inicio TEXT,
-      hora_fin TEXT,
-      lat_inicio REAL,
-      lng_inicio REAL,
-      lat_fin REAL,
-      lng_fin REAL,
-      paquetes_llevados INTEGER NOT NULL DEFAULT 0,
-      paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
-      notas TEXT
-    );`);
-    db.run(`INSERT INTO rutas (
-      id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio,
-      lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas
-    )
-    SELECT id, nombre, tipo,
-      CASE WHEN estado = 'PROGRAMADA' THEN 'CANCELADA' ELSE estado END,
-      fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin,
-      paquetes_llevados, COALESCE(paquetes_sobrantes,0), notas
-    FROM rutas_migracion_v8;`);
-    db.run('DROP TABLE rutas_migracion_v8;');
-    const fk = db.exec('PRAGMA foreign_key_check;')[0]?.values ?? [];
-    if (fk.length) throw new Error('migración v8: foreign keys rotas');
-    db.run('COMMIT;');
-  } catch (error) {
-    try { db.run('ROLLBACK;'); } catch {}
-    throw error;
+    db.run('DROP TABLE IF EXISTS rutas_reconstruccion_v8;');
+    db.run('CREATE TABLE rutas_reconstruccion_v8 (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL DEFAULT '''', tipo TEXT NOT NULL, estado TEXT NOT NULL DEFAULT ''EN_CURSO'', fecha TEXT NOT NULL, hora_inicio TEXT, hora_fin TEXT, lat_inicio REAL, lng_inicio REAL, lat_fin REAL, lng_fin REAL, paquetes_llevados INTEGER NOT NULL DEFAULT 0, paquetes_sobrantes INTEGER NOT NULL DEFAULT 0, notas TEXT);'.replace(/''/g, "'"));
+    db.run('INSERT INTO rutas_reconstruccion_v8 (id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas) SELECT id, nombre, tipo, CASE WHEN estado = ''PROGRAMADA'' THEN ''CANCELADA'' ELSE estado END, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, COALESCE(paquetes_sobrantes, 0), notas FROM rutas;'.replace(/''/g, "'"));
+    db.run('DROP TABLE rutas;');
+    db.run('CREATE TABLE rutas (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL DEFAULT '''', tipo TEXT NOT NULL, estado TEXT NOT NULL DEFAULT ''EN_CURSO'', fecha TEXT NOT NULL, hora_inicio TEXT, hora_fin TEXT, lat_inicio REAL, lng_inicio REAL, lat_fin REAL, lng_fin REAL, paquetes_llevados INTEGER NOT NULL DEFAULT 0, paquetes_sobrantes INTEGER NOT NULL DEFAULT 0, notas TEXT);'.replace(/''/g, "'"));
+    db.run('INSERT INTO rutas (id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas) SELECT id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas FROM rutas_reconstruccion_v8;');
+    db.run('DROP TABLE rutas_reconstruccion_v8;');
+
+    const despues = Number(db.exec('SELECT COUNT(*) FROM rutas;')[0]?.values?.[0]?.[0] ?? 0);
+    if (despues !== snapshot.length) throw new Error('v8: cambió el conteo de rutas.');
+    const sobrantes = Number(db.exec('SELECT COALESCE(SUM(paquetes_sobrantes),0) FROM rutas;')[0]?.values?.[0]?.[0] ?? 0);
+    const esperados = snapshot.reduce((sum, row) => sum + Number(row[12] ?? 0), 0);
+    if (sobrantes !== esperados) throw new Error('v8: cambió el total de sobrantes.');
   } finally {
     db.run('PRAGMA foreign_keys = ON;');
   }
+
+  const fk = db.exec('PRAGMA foreign_key_check;')[0]?.values ?? [];
+  if (fk.length) throw new Error('v8: foreign_key_check no está vacío.');
+}
+
+function migrateVersion9(db) {
+  const referencias = db.exec("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';")[0]?.values ?? [];
+  if (!referencias.length) return;
+
+  const objetos = referencias.map((row) => ({
+    type: String(row[0] ?? ''),
+    name: String(row[1] ?? ''),
+    tbl_name: String(row[2] ?? ''),
+    sql: String(row[3] ?? ''),
+  }));
+  const temporales = new Set();
+  const extraer = /\b[A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*\b/g;
+  for (const objeto of objetos) {
+    for (const match of objeto.sql.match(extraer) ?? []) temporales.add(match);
+    if (objeto.name.includes('_migracion_')) temporales.add(objeto.name);
+  }
+  const reemplazos = new Map([...temporales].map((temporal) => [temporal, temporal.split('_migracion_')[0]]));
+
+  const objetosNoTabla = objetos.filter((objeto) => objeto.type !== 'table');
+  for (const objeto of objetosNoTabla) {
+    const nombre = '"' + objeto.name.replace(/"/g, '""') + '"';
+    if (objeto.type === 'index') db.run('DROP INDEX IF EXISTS ' + nombre + ';');
+    if (objeto.type === 'trigger') db.run('DROP TRIGGER IF EXISTS ' + nombre + ';');
+    if (objeto.type === 'view') db.run('DROP VIEW IF EXISTS ' + nombre + ';');
+  }
+
+  const canonica = (nombre) => {
+    const statement = SCHEMA_STATEMENTS.find((stmt) => stmt.trimStart().startsWith('CREATE TABLE IF NOT EXISTS ' + nombre + ' '));
+    if (!statement) throw new Error('v9: no existe esquema canónico para ' + nombre);
+    return statement;
+  };
+
+  const afectadas = objetos.filter((objeto) =>
+    objeto.type === 'table' &&
+    !objeto.name.includes('_migracion_') &&
+    [...reemplazos.keys()].some((temporal) => objeto.sql.includes(temporal))
+  );
+
+  db.run('PRAGMA foreign_keys = OFF;');
+  try {
+    for (const objeto of afectadas) {
+      const nombre = objeto.name;
+      const oldCols = [...columnMap(db, nombre).keys()];
+      const reparacion = nombre + '_reparacion_v9';
+      const create = canonica(nombre);
+      db.run('DROP TABLE IF EXISTS ' + reparacion + ';');
+      db.run(create.replace('CREATE TABLE IF NOT EXISTS ' + nombre, 'CREATE TABLE ' + reparacion));
+      const newCols = new Set([...columnMap(db, reparacion).keys()]);
+      const comunes = oldCols.filter((col) => newCols.has(col));
+      if (!comunes.length) throw new Error('v9: sin columnas comunes para ' + nombre);
+      const lista = comunes.map((col) => '"' + col.replace(/"/g, '""') + '"').join(', ');
+      db.run('INSERT INTO ' + reparacion + ' (' + lista + ') SELECT ' + lista + ' FROM ' + nombre + ';');
+      db.run('DROP TABLE ' + nombre + ';');
+      db.run(create);
+      db.run('INSERT INTO ' + nombre + ' (' + lista + ') SELECT ' + lista + ' FROM ' + reparacion + ';');
+      db.run('DROP TABLE ' + reparacion + ';');
+    }
+
+    for (const objeto of objetos.filter((item) => item.type === 'table' && item.name.includes('_migracion_'))) {
+      const canonical = reemplazos.get(objeto.name);
+      if (!canonical) continue;
+      const existe = Number(db.exec("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='" + canonical.replace(/'/g, "''") + "';")[0]?.values?.[0]?.[0] ?? 0);
+      if (!existe) continue;
+      const filas = Number(db.exec('SELECT COUNT(*) FROM ' + objeto.name + ';')[0]?.values?.[0]?.[0] ?? 0);
+      if (filas === 0) db.run('DROP TABLE ' + objeto.name + ';');
+      else throw new Error('v9: quedó una tabla temporal con datos: ' + objeto.name);
+    }
+  } finally {
+    db.run('PRAGMA foreign_keys = ON;');
+  }
+
+  for (const statement of SCHEMA_STATEMENTS.filter((stmt) => /^CREATE INDEX IF NOT EXISTS/i.test(stmt.trim()))) db.run(statement);
+  const normalizarSql = (sql) => {
+    let resultado = sql;
+    for (const [temporal, canonical] of reemplazos) resultado = resultado.split(temporal).join(canonical);
+    return resultado;
+  };
+  for (const objeto of objetosNoTabla) {
+    const sql = normalizarSql(objeto.sql);
+    if (sql) db.run(sql);
+  }
+
+  const restantes = db.exec("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';")[0]?.values ?? [];
+  if (restantes.length) throw new Error('v9: quedaron referencias _migracion_: ' + JSON.stringify(restantes));
+  const fk = db.exec('PRAGMA foreign_key_check;')[0]?.values ?? [];
+  if (fk.length) throw new Error('v9: foreign_key_check no está vacío.');
+  const integrity = String(db.exec('PRAGMA integrity_check;')[0]?.values?.[0]?.[0] ?? '');
+  if (integrity.toLowerCase() !== 'ok') throw new Error('v9: integrity_check = ' + integrity);
 }
 
 function initialize(db) {
   applySchema(db);
   const currentVersion = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
+  if (currentVersion > DB_VERSION) throw new Error('Esquema ' + currentVersion + ' incompatible con ' + DB_VERSION);
 
-  if (currentVersion > DB_VERSION) {
-    throw new Error(`Esquema ${currentVersion} incompatible con ${DB_VERSION}`);
+  const migraciones = [
+    [2, migrateVersion2],
+    [3, migrateVersion3],
+    [4, migrateVersion4],
+    [5, migrateVersion5],
+    [6, migrateVersion6],
+    [7, migrateVersion7],
+    [8, migrateVersion8],
+  ];
+  for (const [version, migracion] of migraciones) {
+    if (currentVersion < version) migracion(db);
   }
-
-  // Se ejecuta también cuando ya figura como aplicada para reparar columnas
-  // que falten por una actualización anterior incompleta.
-  migrateVersion2(db);
-  migrateVersion3(db);
-  migrateVersion4(db);
-  migrateVersion5(db);
-  migrateVersion6(db);
-  migrateVersion7(db);
-  migrateVersion8(db);
-  db.run(`PRAGMA user_version = ${DB_VERSION};`);
+  migrateVersion9(db);
+  db.run('PRAGMA user_version = ' + DB_VERSION + ';');
   assertRequiredTables(db, 'inicialización');
+  assertDbSaludable(db, 'inicialización');
 }
 
-function assertRequiredTables(db, label) {
-  const rows = db.exec(
-    "SELECT name FROM sqlite_master WHERE type = 'table';",
-  )[0]?.values ?? [];
-  const names = new Set(rows.map((row) => String(row[0])));
-  const missing = REQUIRED_TABLES.filter((name) => !names.has(name));
-  if (missing.length) {
-    throw new Error(`${label}: faltan tablas ${missing.join(', ')}`);
-  }
-}
 
-function loadFixture(SQL, fileName) {
-  const db = new SQL.Database();
-  const sql = readFileSync(new URL('./fixtures/' + fileName, import.meta.url), 'utf8');
-  db.run(sql);
-  return db;
-}
-
-function resumenDatos(db) {
-  const tablas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas'];
-  const resumen = Object.fromEntries(
-    tablas.map((tabla) => [
-      tabla,
-      Number(db.exec('SELECT COUNT(*) FROM ' + tabla + ';')[0]?.values?.[0]?.[0] ?? 0),
-    ]),
-  );
-  const venta = db.exec('SELECT COALESCE(SUM(total), 0), COALESCE(SUM(utilidad), 0) FROM ventas;')[0]?.values?.[0] ?? [0, 0];
-  resumen.total_ventas = Number(venta[0] ?? 0);
-  resumen.total_utilidad = Number(venta[1] ?? 0);
-  return resumen;
-}
-
-function assertMismaCargaAntesDespues(antes, despues, label) {
-  for (const clave of Object.keys(antes)) {
-    if (antes[clave] !== despues[clave]) {
-      throw new Error(
-        label + ': cambió ' + clave + ' de ' + antes[clave] + ' a ' + despues[clave],
-      );
-    }
-  }
-}
-
-function assertUserVersion(db, expected, label) {
-  const version = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
-  if (version !== expected) throw new Error(label + ': user_version = ' + version);
-}
-
-const SQL = await initSqlJs({
-  locateFile: (file) => fileURLToPath(new URL('../node_modules/sql.js/dist/' + file, import.meta.url)),
-});
-
-// a) Base completamente nueva.
-const fresh = new SQL.Database();
-initialize(fresh);
-fresh.run('PRAGMA foreign_keys = ON;');
-fresh.run("INSERT INTO clientes (id, nombre, fecha_registro) VALUES (1, 'Cliente de prueba', '2026-09-24');");
-const freshConfig = fresh.exec(
-  "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'configuracion_app';",
-)[0]?.values?.length ?? 0;
-if (freshConfig !== 1) throw new Error('base nueva: configuracion_app no existe');
-assertRequiredTables(fresh, 'base nueva');
-assertUserVersion(fresh, DB_VERSION, 'base nueva');
-
-const productTypes = new Map(
-  (fresh.exec('PRAGMA table_info(productos);')[0]?.values ?? [])
-    .map((row) => [String(row[1]), String(row[2]).toUpperCase()]),
-);
-for (const field of ['precio', 'costo']) {
-  if (productTypes.get(field) !== 'INTEGER') {
-    throw new Error('base nueva: productos.' + field + ' no usa INTEGER');
-  }
-}
-const saleTypes = new Map(
-  (fresh.exec('PRAGMA table_info(ventas);')[0]?.values ?? [])
-    .map((row) => [String(row[1]), String(row[2]).toUpperCase()]),
-);
-for (const field of ['precio_aplicado', 'costo_aplicado', 'total', 'utilidad', 'monto_pagado']) {
-  if (saleTypes.get(field) !== 'INTEGER') {
-    throw new Error('base nueva: ventas.' + field + ' no usa INTEGER');
-  }
-}
-
-fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Prueba', 2, 13000, 7000, 26000, 12000, '2026-09-24', '10:00', 'PAGADA', 'EFECTIVO', 26000, 'op-1');");
-let duplicadoRechazado = false;
-try {
-  fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Prueba', 2, 13000, 7000, 26000, 12000, '2026-09-24', '10:00', 'PAGADA', 'EFECTIVO', 26000, 'op-1');");
-} catch {
-  duplicadoRechazado = true;
-}
-if (!duplicadoRechazado) throw new Error('base nueva: operacion_id permite duplicados');
-
-fresh.run('BEGIN TRANSACTION;');
-fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Rollback', 1, 1000, 600, 1000, 400, '2026-09-24', '10:01', 'PENDIENTE', 'FIADO', 0, 'op-rollback');");
-fresh.run('ROLLBACK;');
-const rollbackCount = Number(fresh.exec("SELECT COUNT(*) FROM ventas WHERE operacion_id = 'op-rollback';")[0].values[0][0]);
-if (rollbackCount !== 0) throw new Error('base nueva: la transacción no hizo rollback');
-
-const fixtureV1 = loadFixture(SQL, 'schema-v1.sql');
-const antesV1 = resumenDatos(fixtureV1);
-initialize(fixtureV1);
-const despuesV1 = resumenDatos(fixtureV1);
-assertMismaCargaAntesDespues(antesV1, despuesV1, 'migración v1→v3');
-assertUserVersion(fixtureV1, DB_VERSION, 'migración v1→v3');
-const clientV1 = fixtureV1.exec('SELECT nombre FROM clientes WHERE id = 1;')[0]?.values?.[0]?.[0];
-if (clientV1 !== 'Cliente antiguo 1') throw new Error('migración v1→v3: se perdió un cliente');
-const routeColumnsV1 = new Set(
-  (fixtureV1.exec('PRAGMA table_info(rutas);')[0]?.values ?? []).map((row) => String(row[1])),
-);
-for (const required of ['nombre', 'fecha_planificada', 'hora_planificada']) {
-  if (!routeColumnsV1.has(required)) throw new Error('migración v1→v3: falta rutas.' + required);
-}
-
-const fixtureV2 = loadFixture(SQL, 'schema-v2.sql');
-const antesV2 = resumenDatos(fixtureV2);
-initialize(fixtureV2);
-const despuesV2 = resumenDatos(fixtureV2);
-assertMismaCargaAntesDespues(antesV2, despuesV2, 'migración v2→v3');
-assertUserVersion(fixtureV2, DB_VERSION, 'migración v2→v3');
-
-// c) Cobro parcial FIFO y saldo restante.
-fresh.run("INSERT INTO clientes (id, nombre, fecha_registro) VALUES (2, 'Cliente cartera', '2026-09-24');");
-fresh.run("INSERT INTO ventas (id, cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, monto_pagado, metodo_pago, operacion_id) VALUES (2, 2, 'Deuda 1', 1, 10000, 5000, 10000, 5000, '2026-09-20', '09:00', 'PENDIENTE', 0, 'FIADO', 'venta-deuda-1');");
-fresh.run("INSERT INTO ventas (id, cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, monto_pagado, metodo_pago, operacion_id) VALUES (3, 2, 'Deuda 2', 1, 8000, 4000, 8000, 4000, '2026-09-21', '10:00', 'PENDIENTE', 0, 'FIADO', 'venta-deuda-2');");
-fresh.run("INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (2, 2, 7000, '2026-09-24', '10:30', 'EFECTIVO', 'cobro-1-2');");
-fresh.run("UPDATE ventas SET monto_pagado = 7000, metodo_pago = 'EFECTIVO' WHERE id = 2;");
-fresh.run("INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (3, 2, 5000, '2026-09-24', '10:30', 'EFECTIVO', 'cobro-1-3');");
-fresh.run("UPDATE ventas SET monto_pagado = 5000, metodo_pago = 'EFECTIVO' WHERE id = 3;");
-const saldoCartera = Number(fresh.exec("SELECT SUM(total - monto_pagado) FROM ventas WHERE cliente_id = 2;")[0].values[0][0]);
-if (saldoCartera !== 6000) throw new Error('cartera: el saldo después de abonos no es 6000');
-const cobradoHoy = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2 AND fecha = '2026-09-24';")[0].values[0][0]);
-if (cobradoHoy !== 12000) throw new Error('cartera: cobrado hoy no es 12000');
-
-const pagosAntesDobleToque = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2;")[0].values[0][0]);
-fresh.run("INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (3, 2, 6000, '2026-09-24', '10:31', 'EFECTIVO', 'cobro-doble-3');");
-const pagosDespuesPrimera = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2;")[0].values[0][0]);
-if (pagosDespuesPrimera !== pagosAntesDobleToque + 6000) throw new Error('cobro: no registró primer toque');
-
-const yaRegistrado = Number(fresh.exec("SELECT COALESCE(SUM(monto),0) FROM pagos WHERE operacion_id LIKE 'cobro-doble-%';")[0].values[0][0]);
-if (yaRegistrado !== 6000) throw new Error('cobro: el segundo toque no debería registrar más dinero');
-
-fixtureV1.close();
-fixtureV2.close();
-
-console.log('verify-db: OK');
-console.log(JSON.stringify({
-  base_nueva: 'PASÓ',
-  migracion_v1_a_v3: { antes: antesV1, despues: despuesV1 },
-  migracion_v2_a_v3: { antes: antesV2, despues: despuesV2 },
-  enteros_cop: 'PASÓ',
-  pago_atómico: 'PASÓ',
-  anti_duplicado: 'PASÓ',
-  rollback_sqljs: 'PASÓ',
-}, null, 2));
