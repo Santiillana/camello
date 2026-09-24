@@ -104,7 +104,7 @@ function migrate9(db) {
       const list=common.map(col=>'"'+col.replace(/"/g,'""')+'"').join(',');
       db.run('INSERT INTO '+temp+'('+list+') SELECT '+list+' FROM '+name); db.run('DROP TABLE '+name); db.run(create); db.run('INSERT INTO '+name+'('+list+') SELECT '+list+' FROM '+temp); db.run('DROP TABLE '+temp);
     }
-    for(const row of refs.filter(r=>String(r[0])==='table'&&String(r[1]).includes('_migracion_')){
+    for(const row of refs.filter(r=>String(r[0])==='table'&&String(r[1]).includes('_migracion_'))){
       const canonical=refsMap.get(String(row[1])); if(!canonical)continue;
       const exists=Number(db.exec("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"+canonical.replace(/'/g,"''")+"'")[0].values[0][0]??0);
       if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)db.run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
