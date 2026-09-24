@@ -14,7 +14,7 @@ const VERSION = 1;
 
 function esBackupItem(valor: unknown): valor is BackupItem {
   if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
-  const registro = valor as Record<string, unknown>;
+  // Este cast queda justificado: valor viene de IndexedDB/JSON externo y las propiedades se validan inmediatamente abajo.\n  const registro = valor as Record<string, unknown>;
   return typeof registro.id === 'string'
     && (registro.kind === 'daily' || registro.kind === 'weekly' || registro.kind === 'monthly')
     && typeof registro.date === 'string'
