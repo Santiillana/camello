@@ -483,7 +483,7 @@ class Database {
     const referencias = await db.query(`
       SELECT type, name, tbl_name, sql
       FROM sqlite_master
-      WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';
+      WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';
     `);
     const objetos = (referencias.values ?? []).map((row) => ({
       type: String(row.type ?? ''),
@@ -581,7 +581,7 @@ class Database {
     const restantes = await db.query(`
       SELECT type, name, sql
       FROM sqlite_master
-      WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';
+      WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';
     `);
     if ((restantes.values ?? []).length) {
       throw new Error('Quedaron referencias a _migracion_ tras v9: ' + JSON.stringify(restantes.values));
@@ -1111,7 +1111,7 @@ class Database {
     if (faltantes.length) throw new Error('La base de datos no quedó lista: faltan tablas (' + faltantes.join(', ') + ').');
     const fk = await this.conn().query('PRAGMA foreign_keys;');
     if (Number(fk.values?.[0]?.foreign_keys ?? 0) !== 1) await this.conn().execute('PRAGMA foreign_keys = ON;');
-    const referenciasTemporales = await this.conn().query("SELECT name FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%_migracion_%';");
+    const referenciasTemporales = await this.conn().query("SELECT name FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';");
     if ((referenciasTemporales.values ?? []).length) throw new Error('La base de datos contiene referencias a tablas temporales de migración.');
     const integridad = await this.conn().query('PRAGMA integrity_check;');
     const resultadoIntegridad = String(integridad.values?.[0]?.integrity_check ?? integridad.values?.[0]?.[0] ?? '');
