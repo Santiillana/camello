@@ -11,3 +11,11 @@
 - Keystore de release solo en secretos de GitHub.
 - GPS/cámara/Compartir/actualización encima/apagado físico permanecen en guía manual.
 - No se ocultan errores de CI: una corrida en cola no se interpreta como PASÓ.
+
+- B0: v8 no debe usar ALTER TABLE RENAME sobre rutas porque puede reescribir FKs; la reparación v9 es idempotente y reconstruye tablas canónicamente.
+- B0: se acepta la excepción documentada de que v8 solo estuvo en datos de prueba; v9 protege bases dañadas antes de la primera venta.
+- B1: borradores se guardan en SQLite local como JSON para que el estado sobreviva recarga/cambio de app sin introducir otro backend.
+- B2: el asistente usa overlay fijo + visualViewport para no quedar debajo del teclado.
+- B3: GPS y resolución de enlaces cortos dependen de APIs nativas en APK; en navegador se explicita la limitación en lugar de simular disponibilidad.
+- B4: el riel móvil permanece visible para que el contenido no quede tapado; la expansión se persiste localmente.
+- B5: un workflow QUEUED no se interpreta como PASÓ; el bloqueo de runner queda visible y se conserva el E2E para ejecutarse cuando exista runner.
