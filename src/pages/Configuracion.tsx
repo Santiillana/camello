@@ -25,6 +25,9 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [privacidadHabilitada,setPrivacidadHabilitada]=useState(true);
+  const [privacidadTexto,setPrivacidadTexto]=useState('');
+  const [responsableDatos,setResponsableDatos]=useState('');
   const [pinActual,setPinActual]=useState(''); const [pinConfirmacion,setPinConfirmacion]=useState(''); const [pinMinutos,setPinMinutos]=useState(5);
   const [privacyAceptada,setPrivacyAceptada]=useState(false);
   const [categoriasGasto, setCategoriasGasto] = useState<Awaited<ReturnType<typeof database.listarCategoriasGasto>>>([]);
@@ -46,6 +49,9 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setColor(cfg.color_acento);
       setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
       const seg=await database.obtenerSeguridadPin(); setPinMinutos(seg.lock_minutos);
+      setPrivacidadHabilitada(cfg.privacidad_habilitada !== false);
+      setPrivacidadTexto(cfg.privacidad_texto ?? '');
+      setResponsableDatos(cfg.responsable_datos ?? '');
       setPrivacyAceptada(Boolean(cfg.privacy_accepted_at));
       setProductos(ps);
       setCategoriasGasto(cats);
@@ -295,6 +301,14 @@ export default function Configuracion({ onConfigChanged }: Props) {
         </label>
       </section>
 
+            <section className="tarjeta">
+        <h2>Aviso de privacidad y datos</h2>
+        <p className="texto-vacio">CAMELLO ofrece herramientas para documentar y gestionar datos personales. Este aviso no constituye certificación de cumplimiento legal; el responsable del negocio debe revisarlo con asesoría jurídica.</p>
+        <label className="fila-checkbox"><input type="checkbox" checked={privacidadHabilitada} onChange={e=>{setPrivacidadHabilitada(e.target.checked);void database.guardarConfiguracion({privacidad_habilitada:e.target.checked});}}/> Mostrar aviso al abrir CAMELLO</label>
+        <label>Responsable del tratamiento<input maxLength={160} value={responsableDatos} onChange={e=>setResponsableDatos(e.target.value)} onBlur={()=>void database.guardarConfiguracion({responsable_datos:responsableDatos})} placeholder="Nombre del negocio o responsable"/></label>
+        <label>Texto del aviso<textarea maxLength={1000} rows={5} value={privacidadTexto} onChange={e=>setPrivacidadTexto(e.target.value)} onBlur={()=>void database.guardarConfiguracion({privacidad_texto:privacidadTexto})}/></label>
+        <p className="detalle-cliente">Protección prevista: Ley 1581 de 2012. Revisa y adapta el texto con un profesional antes de usarlo como aviso jurídico.</p>
+      </section>
       <section className="tarjeta">
         <h2>Privacidad y datos</h2>
         <p className="texto-vacio">PIN local PBKDF2; olvidar el PIN requiere restaurar un respaldo.</p>
