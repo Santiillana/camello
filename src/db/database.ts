@@ -40,6 +40,10 @@ const DEFAULT_CONFIG: ConfiguracionApp = {
   mensaje_recordatorio: 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.',
 };
 
+function normalizarTextoBusqueda(valor: string): string {
+  return valor.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 function normalizarTelefono(valor?: string): string {
   return (valor ?? '').replace(/\D/g, '');
 }
@@ -199,6 +203,7 @@ class Database {
       { version: 11, ejecutar: () => this.migrarVersion11() },
       { version: 12, ejecutar: () => this.migrarVersion12() },
       { version: 13, ejecutar: () => this.migrarVersion13() },
+      { version: 14, ejecutar: () => this.migrarVersion14() },
     ];
     for (const migracion of migraciones) {
       if (version < migracion.version) await migracion.ejecutar();
@@ -879,6 +884,21 @@ class Database {
     };
   }
 
+  private async migrarVersion14(): Promise<void> {
+    const add = async (table: string, column: string) => {
+      const cols = await this.columnasDeTabla(table);
+      if (!cols.has(column)) await this.conn().execute('ALTER TABLE ' + table + ' ADD COLUMN nombre_normalizado TEXT NOT NULL DEFAULT "";', false);
+    };
+    await add('clientes','nombre_normalizado');
+    await add('mascotas','nombre_normalizado');
+    const clientes = await this.conn().query('SELECT id,nombre FROM clientes;');
+    for (const row of clientes.values ?? []) await this.conn().run('UPDATE clientes SET nombre_normalizado=? WHERE id=?;', [normalizarTextoBusqueda(String(row.nombre ?? '')), Number(row.id)], false);
+    const mascotas = await this.conn().query('SELECT id,nombre FROM mascotas;');
+    for (const row of mascotas.values ?? []) await this.conn().run('UPDATE mascotas SET nombre_normalizado=? WHERE id=?;', [normalizarTextoBusqueda(String(row.nombre ?? '')), Number(row.id)], false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_clientes_nombre_norm ON clientes(nombre_normalizado);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_mascotas_nombre_norm ON mascotas(nombre_normalizado);', false);
+  }
+
   private async migrarVersion13(): Promise<void> {
     await this.conn().execute(`CREATE TABLE IF NOT EXISTS modulos_migraciones (
       modulo_id TEXT NOT NULL,
@@ -1137,8 +1157,8 @@ class Database {
     await this.comprobarTelefonoDuplicado(c.telefono1);
     const fecha = c.fecha_registro ?? fechaLocalISO();
     const res = await this.conn().run(
-      `INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
+      `INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, nombre_normalizado, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
       [
         nombre,
         c.telefono1?.trim() || null,
@@ -1149,6 +1169,7 @@ class Database {
         c.lat ?? null,
         c.lng ?? null,
         c.observaciones?.trim() || null,
+        normalizarTextoBusqueda(nombre),
       ]
     );
     await this.persist();
@@ -1188,15 +1209,15 @@ class Database {
     await this.conn().beginTransaction();
     try {
         const res = await this.conn().run(
-        "INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, ubicacion_precision_m, ubicacion_fuente, ubicacion_fecha, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
-        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.ubicacion_precision_m ?? null, c.ubicacion_fuente ?? null, c.ubicacion_fecha ?? null, c.observaciones?.trim() || null],
+        "INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, ubicacion_precision_m, ubicacion_fuente, ubicacion_fecha, observaciones, nombre_normalizado, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
+        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.ubicacion_precision_m ?? null, c.ubicacion_fuente ?? null, c.ubicacion_fecha ?? null, c.observaciones?.trim() || null, normalizarTextoBusqueda(nombre)],
         false
       );
       const clienteId = Number(res.changes?.lastId ?? 0);
       for (const mascota of mascotas) {
         await this.conn().run(
-          "INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
-          [clienteId, mascota.nombre.trim(), mascota.cumple_dia ?? null, mascota.cumple_mes ?? null, mascota.sexo ?? null, mascota.raza?.trim() || null, mascota.tamano ?? null, mascota.preferencias?.trim() || null, mascota.observaciones?.trim() || null],
+          "INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, nombre_normalizado, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
+          [clienteId, mascota.nombre.trim(), mascota.cumple_dia ?? null, mascota.cumple_mes ?? null, mascota.sexo ?? null, mascota.raza?.trim() || null, mascota.tamano ?? null, mascota.preferencias?.trim() || null, mascota.observaciones?.trim() || null, normalizarTextoBusqueda(mascota.nombre)],
           false
         );
       }
@@ -1268,11 +1289,13 @@ class Database {
     validarMesDia(c.cumple_mes, c.cumple_dia, 'Cumpleaños');
     if (c.telefono1 !== undefined) await this.comprobarTelefonoDuplicado(c.telefono1, id);
 
-    const campos = Object.keys(c).filter((k) => k !== 'id' && CAMPOS_CLIENTE_EDITABLES.has(k));
+    const cambios = { ...c } as Record<string, unknown>;
+    if (typeof cambios.nombre === 'string') cambios.nombre_normalizado = normalizarTextoBusqueda(cambios.nombre);
+    const campos = Object.keys(cambios).filter((k) => k !== 'id' && (CAMPOS_CLIENTE_EDITABLES.has(k) || k === 'nombre_normalizado'));
     if (campos.length === 0) return;
 
     const sets = campos.map((k) => `${k} = ?`).join(', ');
-    const valores = campos.map((k) => (c as Record<string, unknown>)[k] ?? null);
+    const valores = campos.map((k) => cambios[k] ?? null);
     const res = await this.conn().run(`UPDATE clientes SET ${sets} WHERE id = ?;`, [...valores, id]);
 
     if (!res.changes?.changes) throw new Error('El cliente no existe.');
@@ -1284,20 +1307,22 @@ class Database {
     await this.persist();
   }
 
-  async listarClientes(opts?: { soloActivos?: boolean; texto?: string }): Promise<ClienteConResumen[]> {
+  async listarClientes(opts?: { soloActivos?: boolean; texto?: string; limite?: number; offset?: number }): Promise<ClienteConResumen[]> {
     let sql = 'SELECT * FROM clientes';
     const cond: string[] = [];
     const params: unknown[] = [];
+    const limite = Math.min(250, Math.max(1, Math.floor(opts?.limite ?? 250)));
+    const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
 
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
     if (opts?.texto?.trim()) {
-      const texto = opts.texto.trim();
-      cond.push(`(nombre LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ? OR id IN (SELECT cliente_id FROM mascotas WHERE estado = 'activo' AND nombre LIKE ?))`);
-      params.push(`%${texto}%`, `%${texto}%`, `%${texto}%`, `%${texto}%`);
+      const texto = normalizarTextoBusqueda(opts.texto);
+      cond.push(`(nombre_normalizado LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ? OR id IN (SELECT cliente_id FROM mascotas WHERE estado = 'activo' AND nombre_normalizado LIKE ?))`);
+      params.push('%' + texto + '%', '%' + opts.texto.trim() + '%', '%' + opts.texto.trim() + '%', '%' + texto + '%');
     }
-
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
-    sql += ' ORDER BY nombre ASC;';
+    sql += ' ORDER BY nombre_normalizado ASC, id ASC LIMIT ? OFFSET ?;';
+    params.push(limite, offset);
 
     const r = await this.conn().query(sql, params);
     const clientes = (r.values ?? []) as Cliente[];
