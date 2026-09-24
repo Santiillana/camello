@@ -394,6 +394,10 @@ class Database {
       reemplazoCreado = true;
       const rutaIndex = `CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);`;
       await db.execute(rutaIndex, false);
+      const despues = await db.query('SELECT COUNT(*) AS n, COALESCE(SUM(paquetes_llevados), 0) AS llevados, COALESCE(SUM(paquetes_sobrantes), 0) AS sobrantes FROM rutas;');
+      const filasAntes = Number((snapshot.values ?? []).length);
+      const filasDespues = Number(despues.values?.[0]?.n ?? 0);
+      if (filasAntes !== filasDespues) throw new Error('La migración v8 cambió el conteo de rutas.');
     } catch (error) {
       // Sin transacción explícita: si el proceso quedó a mitad, restauramos
       // rutas desde el snapshot para no dejar una tabla incompleta.
@@ -455,7 +459,7 @@ class Database {
     if (!objetos.length) return;
 
     const temporales = new Set<string>();
-    const extraer = /\\b[A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*\\b/g;
+    const extraer = /\b[A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*\b/g;
     for (const objeto of objetos) {
       for (const match of objeto.sql.match(extraer) ?? []) temporales.add(match);
       if (objeto.name.includes('_migracion_')) temporales.add(objeto.name);
@@ -490,7 +494,7 @@ class Database {
 
     const sentenciaTabla = (nombre: string): string => {
       const sentencia = SCHEMA_STATEMENTS.find((statement) =>
-        new RegExp('CREATE TABLE IF NOT EXISTS\\\\s+' + nombre + '\\\\s*\\\\(', 'i').test(statement),
+        statement.trimStart().startsWith('CREATE TABLE IF NOT EXISTS ' + nombre + ' '),
       );
       if (!sentencia) throw new Error('No existe esquema canónico para reconstruir ' + nombre + '.');
       return sentencia;
