@@ -185,7 +185,8 @@ class Database {
     ];
 
     for (const migracion of migraciones) {
-      if (version < migracion.version || version === migracion.version) {
+      // También repara la versión actual si quedó marcada como aplicada a medias.
+      if (version <= migracion.version) {
         await migracion.ejecutar();
       }
     }
