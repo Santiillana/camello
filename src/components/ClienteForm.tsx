@@ -21,6 +21,7 @@ type Props = {
   onGuardado: (clienteId: number) => void;
   onCancelar?: () => void;
   textoBoton?: string;
+  borradorClave?: string;
 };
 
 const mascotaVacia = (): MascotaBorrador => ({
@@ -34,7 +35,7 @@ const mascotaVacia = (): MascotaBorrador => ({
   observaciones: '',
 });
 
-export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guardar cliente' }: Props) {
+export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guardar cliente', borradorClave = 'nuevo' }: Props) {
   const [nombre, setNombre] = useState('');
   const [telefono1, setTelefono1] = useState('');
   const [telefono2, setTelefono2] = useState('');
@@ -74,7 +75,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
   };
   const borrador = useBorrador<DatosBorradorCliente>({
     tipo: 'cliente-nuevo',
-    clave: 'nuevo',
+    clave: borradorClave,
     datos: datosBorrador,
     paso: pasoInicial,
   });
