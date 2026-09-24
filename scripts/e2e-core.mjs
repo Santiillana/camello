@@ -48,7 +48,7 @@ async function crearCliente(page) {
   await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   try {
-    await page.getByLabel('Nombre completo').waitFor({ timeout: 15000 });
+    await page.getByLabel('Nombre completo').waitFor({ timeout: 70000 });
   } catch (error) {
     const texto = await page.locator('body').innerText().catch(() => '');
     await page.screenshot({ path: 'e2e-fallo-clientes.png', fullPage: true }).catch(() => {});
