@@ -136,8 +136,19 @@ async function crearCliente(page) {
   }
 }
 
-async function expectOption(select, label) {
-  await select.locator('option').filter({ hasText: label }).waitFor({ state: 'attached', timeout: 20000 });
+async function expectOption(select, label, page) {
+  try {
+    await select.locator('option').filter({ hasText: label }).waitFor({ state: 'attached', timeout: 20000 });
+  } catch (error) {
+    const filas = await sql(page, "SELECT id,nombre,estado FROM clientes ORDER BY id DESC LIMIT 5;").catch((e) => [{ error: String(e) }]);
+    const pantalla = await page.locator('body').innerText().catch(() => '');
+    throw new Error(
+      'E2E: selector sin cliente. SQLite=' + JSON.stringify(filas)
+      + ' URL=' + page.url()
+      + ' pantalla=' + pantalla.slice(0, 4000)
+      + ' causa=' + String(error),
+    );
+  }
 }
 
 async function webStoreSnapshot(page) {
@@ -197,7 +208,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ });
   await page.getByLabel('Buscar cliente o mascota').waitFor({ state: 'visible', timeout: 15000 });
-  await expectOption(clienteSelect, 'Cliente E2E');
+  await expectOption(clienteSelect, 'Cliente E2E', page);
   await clienteSelect.selectOption({ label: 'Cliente E2E' });
 
   await siguiente(page);
@@ -277,7 +288,7 @@ try {
     await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
     await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await expectOption(page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ }), 'Cliente E2E');
+    await expectOption(page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ }), 'Cliente E2E', page);
 
     const efectivo = await venta(page, 'EFECTIVO', 1, true);
     if (!efectivo.includes('Efectivo') && !efectivo.includes('Pagado')) throw new Error('No se generó voucher de efectivo.');
