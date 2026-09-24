@@ -53,3 +53,8 @@ docs/            arquitectura, datos, pruebas, release y decisiones
 ## Fuera de alcance
 
 Contabilidad, proveedores, nómina, impuestos, facturación electrónica, inventario avanzado, sincronización entre teléfonos, servidor, IA/chat, GPS permanente y comercio electrónico.
+
+
+## Seguridad y privacidad
+
+CAMELLO funciona sin analítica ni telemetría. Los datos permanecen en el dispositivo salvo acciones explícitas de respaldo, compartir o apertura de servicios externos. El aviso de privacidad es configurable en Configuración y no sustituye revisión jurídica.
