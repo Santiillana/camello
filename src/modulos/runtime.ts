@@ -1,4 +1,3 @@
-import { lazy } from 'react';
 import type { ContextoModulo, ModuloContrato } from './contrato';
 
 const entradas = import.meta.glob('./*/index.ts', { eager: true, import: 'default' }) as Record<string, ModuloContrato>;
@@ -65,4 +64,8 @@ export function crearContexto(runtimeApi: {
       }
     },
   };
+}
+
+export async function inicializarModulos(runtimeApi: Parameters<typeof crearContexto>[0]): Promise<void> {
+  await crearContexto(runtimeApi).migrarTodo();
 }
