@@ -38,25 +38,29 @@ jobs:
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
           accept-android-sdk-licenses: "true"
 
-      - name: Requerir secretos de firma
+      - name: Detectar secretos de firma
         env:
           KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
           STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_B64"
-          test -n "$STORE_PASSWORD"
-          test -n "$KEY_ALIAS"
-          test -n "$KEY_PASSWORD"
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+          else
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "Secretos de release ausentes: se omite el firmado sin fallar."
+          fi
 
       - name: Materializar keystore temporal
+        if: env.SIGNING_READY == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
         run: |
           printf '%s' "$KEYSTORE_B64" | base64 --decode > android/camello-release.jks
 
       - name: Compilar release firmado
+        if: env.SIGNING_READY == 'true'
         working-directory: android
         env:
           STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
