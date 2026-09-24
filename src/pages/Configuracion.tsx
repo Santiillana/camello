@@ -26,6 +26,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [pinActual,setPinActual]=useState(''); const [pinConfirmacion,setPinConfirmacion]=useState(''); const [pinMinutos,setPinMinutos]=useState(5);
+  const [privacyAceptada,setPrivacyAceptada]=useState(false);
   const [categoriasGasto, setCategoriasGasto] = useState<Awaited<ReturnType<typeof database.listarCategoriasGasto>>>([]);
   const [recurrentes, setRecurrentes] = useState<Awaited<ReturnType<typeof database.listarGastosRecurrentes>>>([]);
   const [nuevoGastoCat, setNuevoGastoCat] = useState({nombre:'',tipo:'variable' as 'fijo'|'variable',naturaleza:'operativo' as 'operativo'|'compra_insumos'|'retiro_dueno',presupuesto:''});
@@ -45,6 +46,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setColor(cfg.color_acento);
       setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
       const seg=await database.obtenerSeguridadPin(); setPinMinutos(seg.lock_minutos);
+      setPrivacyAceptada(Boolean(cfg.privacy_accepted_at));
       setProductos(ps);
       setCategoriasGasto(cats);
       setRecurrentes(recs);
@@ -66,7 +68,8 @@ export default function Configuracion({ onConfigChanged }: Props) {
         usuario_nombre: usuario.trim(),
         color_acento: color,
         mensaje_recordatorio: mensajeRecordatorio.trim(),
-      });
+        privacy_accepted_at: privacyAceptada ? (config?.privacy_accepted_at ?? new Date().toISOString()) : undefined,
+        privacy_responsable: negocio.trim(),
       const cfg = await database.obtenerConfiguracion();
       setConfig(cfg);
       aplicarTema(cfg.color_acento);
@@ -271,6 +274,16 @@ export default function Configuracion({ onConfigChanged }: Props) {
         <h2>Módulos</h2>
         <p className="texto-vacio">Los módulos son independientes del núcleo. Desactivarlos conserva sus datos hasta que elijas borrarlos.</p>
         {listarModulos().map((modulo) => <ModuloConfig key={modulo.id} modulo={modulo} onMensaje={setMensaje} />)}
+      </section>
+
+      <section className="tarjeta">
+        <h2>Privacidad y datos personales</h2>
+        <p className="texto-vacio">Los datos de clientes permanecen en el dispositivo salvo una exportación, restauración, compartir o conexión explícitamente iniciada. CAMELLO no incorpora analítica ni telemetría.</p>
+        <p className="texto-vacio">Responsable del tratamiento: {negocio || 'tu negocio'}. La app ofrece herramientas de consentimiento; no constituye una declaración de cumplimiento legal. Consulta a un abogado sobre las obligaciones aplicables a tu negocio en Colombia.</p>
+        <label className="fila-checkbox">
+          <input type="checkbox" checked={privacyAceptada} onChange={e=>setPrivacyAceptada(e.target.checked)} />
+          Confirmo que he leído el aviso de privacidad y autorizo el tratamiento local de los datos registrados en CAMELLO.
+        </label>
       </section>
 
       <section className="tarjeta">
