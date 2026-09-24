@@ -98,13 +98,13 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     setPendiente(null);
     listoRef.current = true;
     decididoRef.current = true;
-    listoRef.current = true;
-    decididoRef.current = true;
   }
 
   async function limpiar(): Promise<void> {
     await database.eliminarBorrador(tipo, clave);
     setPendiente(null);
+    listoRef.current = true;
+    decididoRef.current = true;
   }
 
   return { pendiente, continuar, descartar, limpiar };
