@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: camello-${{ github.workflow }}-${{ github.ref }}
+  group: camello-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
