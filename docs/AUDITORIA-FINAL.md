@@ -55,3 +55,27 @@ Fecha: 2026-09-24
 - SQLCipher no activado porque no se puede validar aquí una migración cifrada completa con restauración entre teléfonos.
 - Agrupamiento de mapa a gran escala no implementado; se mantiene tope/listado visible.
 - Dependabot/SBOM quedan como mejora de suministro y documentación.
+
+## Auditoría final — estado de cierre 2026-09-24
+
+### CRÍTICOS
+- B0 — integridad de rutas/FK: corregido con reconstrucción segura y reparación v9; cubierto por verify-db, foreign_key_check e integrity_check.
+- Persistencia de ventas: transacciones, operacion_id e idempotencia; prueba real E2E preparada, pendiente de runner.
+- Pérdida de datos por migración: fixtures v1/v2/v7/v8 dañada, snapshot y conteos/totales; gate SQLite verde observado en Verify 789.
+
+### IMPORTANTES
+- Borradores: tabla v10, debounce y recuperación de paso; E2E preparado.
+- Rutas activas: estado en DB, banner global, aviso 12h sin autocierre, cuadre obligatorio.
+- Gastos: tablas v11, recurrentes idempotentes, resultado mensual y por rango, archivado y anulación.
+- U1: anulación auditada de venta/pago/gasto sin DELETE y exclusión de métricas/saldos.
+- Seguridad: PIN PBKDF2, AES-GCM para respaldo exportado, allowBackup=false, cleartext=false, FLAG_SECURE release, CSP, sin telemetría, SBOM y Dependabot.
+- Módulo aislado: contrato, prefijo de tablas, migraciones registradas, error boundary, toggle y build sin carpeta.
+
+### MENORES / PENDIENTES
+- Biometría opcional: pendiente de validación física.
+- SQLCipher: pendiente y desactivado por defecto.
+- Rutas de compatibilidad/actualización sobre APK instalado: manual.
+- Cualquier gate no observado por GitHub Actions no se presenta como PASÓ.
+
+### Evidencia CI
+La última compuerta web inequívocamente verde observada es Verify run 789 sobre a5d57fe. Los fallos posteriores de Actions registrados con steps=null se consideran fallos de infraestructura del runner.
