@@ -319,9 +319,12 @@ try {
     const clienteCarteraId = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
     if (clienteCarteraId.length !== 1) throw new Error('E2E: no se encontró el cliente para probar cartera.');
     await page.goto('http://127.0.0.1:5173/#/cartera?cliente=' + clienteCarteraId[0].id, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.getByRole('dialog', { name: 'Pagar a Cliente E2E' }).waitFor({ state: 'visible', timeout: 15000 });
-    await page.getByRole('button', { name: /^Efectivo/ }).click();
-    await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
+    const pagoDialog = page.getByRole('dialog', { name: 'Pagar a Cliente E2E' });
+    await pagoDialog.waitFor({ state: 'visible', timeout: 15000 });
+    await pagoDialog.getByRole('button', { name: 'Siguiente' }).click();
+    await pagoDialog.getByRole('button', { name: /^Efectivo/ }).click();
+    await pagoDialog.getByRole('button', { name: 'Siguiente' }).click();
+    await pagoDialog.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) >= Number(carteraAntes[0]?.pendiente)) throw new Error('E2E: el cobro no redujo la cartera.');
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
