@@ -1,7 +1,7 @@
 const CLAVE_ULTIMO_RESPALDO = 'camello.ultimoRespaldoAt';
 
 export function registrarExportacionRespaldo(date = new Date()): void {
-  try { localStorage.setItem(CLAVE_ULTIMO_RESPALDO, date.toISOString()); } catch {}
+  try { localStorage.setItem(CLAVE_ULTIMO_RESPALDO, date.toISOString()); } catch { /* localStorage puede estar bloqueado por el navegador; el respaldo principal sigue siendo válido. */ }
 }
 
 export function diasDesdeUltimoRespaldo(now = new Date()): number | null {
