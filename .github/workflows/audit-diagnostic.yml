@@ -1,0 +1,46 @@
+name: Auditoria diagnostica temporal
+on:
+  push:
+    branches: ["fix/sqlite-wasm-web"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Ejecutar pruebas y capturar salida
+        shell: bash
+        run: |
+          set +e
+          npm ci > /tmp/npm-ci.log 2>&1
+          npx tsc -b > /tmp/tsc.log 2>&1; echo $? > /tmp/tsc.exit
+          npm run lint > /tmp/lint.log 2>&1; echo $? > /tmp/lint.exit
+          npm run verify:ubicacion > /tmp/ubicacion.log 2>&1; echo $? > /tmp/ubicacion.exit
+          npm run verify:security > /tmp/security.log 2>&1; echo $? > /tmp/security.exit
+          npm run verify:modulos > /tmp/modulos.log 2>&1; echo $? > /tmp/modulos.exit
+          npm run verify:db > /tmp/db.log 2>&1; echo $? > /tmp/db.exit
+          npm run benchmark:db > /tmp/benchmark.log 2>&1; echo $? > /tmp/benchmark.exit
+          npm run build > /tmp/build.log 2>&1; echo $? > /tmp/build.exit
+          mkdir -p audit-output
+          cp /tmp/npm-ci.log /tmp/*.log /tmp/*.exit audit-output/ 2>/dev/null || true
+          failed=0
+          for f in audit-output/*.exit; do [ "$(cat "$f")" -eq 0 ] || failed=1; done
+          exit $failed
+      - name: Publicar diagnóstico
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: camello-auditoria-${{ github.run_number }}
+          path: audit-output
+          if-no-files-found: warn
+          retention-days: 3
