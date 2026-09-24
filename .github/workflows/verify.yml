@@ -169,7 +169,32 @@ jobs:
             );
             if (runtimeProblem) throw new Error('Error de runtime: ' + runtimeProblem);
 
-            await evaluate(cdp, "(async () => { const jeep = document.querySelector('jeep-sqlite'); await customElements.whenDefined('jeep-sqlite'); if (!jeep) throw new Error('No existe <jeep-sqlite>'); await jeep.createConnection({database: '" + dbName + "', version: 1}); await jeep.open({database: '" + dbName + "'}); await jeep.execute({database: '" + dbName + "', statements: 'CREATE TABLE smoke_test (id INTEGER PRIMARY KEY, value TEXT NOT NULL);'}); await jeep.run({database: '" + dbName + "', statement: 'INSERT INTO smoke_test (value) VALUES (?);', values: ['persisted']}); await jeep.saveToStore({database: '" + dbName + "}); await jeep.close({database: '" + dbName + "'}); return true; })()");
+            const firstRun = await evaluate(
+              cdp,
+              "(async () => { const jeep = document.querySelector('jeep-sqlite'); await customElements.whenDefined('jeep-sqlite'); if (!jeep) throw new Error('No existe <jeep-sqlite>'); await jeep.createConnection({database: '" + dbName + "', version: 1}); await jeep.open({database: '" + dbName + "'}); await jeep.execute({database: '" + dbName + "', statements: 'CREATE TABLE IF NOT EXISTS smoke_test (id INTEGER PRIMARY KEY, value TEXT NOT NULL);'}); await jeep.execute({database: '" + dbName + "', statements: 'DELETE FROM smoke_test;'}); await jeep.run({database: '" + dbName + "', statement: 'INSERT INTO smoke_test (value) VALUES (?);', values: ['persisted']}); await jeep.saveToStore({database: '" + dbName + "'}); const row = await jeep.query({database: '" + dbName + "', statement: 'SELECT value FROM smoke_test ORDER BY id DESC LIMIT 1;'}); if (row.values?.[0]?.value !== 'persisted') throw new Error('La lectura inicial no coincidió'); await jeep.close({database: '" + dbName + "'}); return true; })()"
+            );
+            if (firstRun !== true) throw new Error('La prueba inicial de SQLite no terminó correctamente');
+            if (runtimeProblem) throw new Error('Error de runtime: ' + runtimeProblem);
+
+            await cdp.call('Page.reload', { ignoreCache: true });
+            await waitFor(
+              () => evaluate(cdp, "document.querySelector('.app-shell') !== null"),
+              30000,
+              'recarga de CAMELLO'
+            );
+
+            const persisted = await evaluate(
+              cdp,
+              "(async () => { const jeep = document.querySelector('jeep-sqlite'); await customElements.whenDefined('jeep-sqlite'); await jeep.createConnection({database: '" + dbName + "', version: 1}); await jeep.open({database: '" + dbName + "'}); const row = await jeep.query({database: '" + dbName + "', statement: 'SELECT value FROM smoke_test ORDER BY id DESC LIMIT 1;'}); const value = row.values?.[0]?.value ?? null; await jeep.close({database: '" + dbName + "'}); await jeep.deleteDatabase({database: '" + dbName + "'}); return value; })()"
+            );
+            if (persisted !== 'persisted') {
+              throw new Error('Persistencia IndexedDB fallida. Valor tras recarga: ' + String(persisted));
+            }
+            if (runtimeProblem) throw new Error('Error de runtime tras recarga: ' + runtimeProblem);
+
+            console.log('WEB SQLITE OK: ' + bytes.byteLength + ' bytes, ' + contentType);
+            console.log('WEB SQLITE OK: tabla -> insert -> query -> saveToStore -> recarga -> query');
+            console.log('WEB SQLITE OK: sin LinkError/Aborted');
           } finally {
             cdp?.ws.close();
             browser.kill('SIGTERM');
