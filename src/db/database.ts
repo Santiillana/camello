@@ -93,6 +93,13 @@ function textoObligatorio(valor: string, campo: string): string {
   return resultado;
 }
 
+function textoLimitado(valor: string | undefined, campo: string, maximo: number): string | null {
+  if (valor == null) return null;
+  const resultado = valor.trim();
+  if (resultado.length > maximo) throw new Error(`${campo} supera el límite de ${maximo} caracteres.`);
+  return resultado || null;
+}
+
 function numeroNoNegativo(valor: number, campo: string): number {
   if (!Number.isSafeInteger(valor) || valor < 0) {
     throw new Error(campo + ' debe ser un número entero de pesos COP mayor o igual a 0.');
@@ -1150,6 +1157,10 @@ class Database {
 
   async crearCliente(c: Omit<Cliente, 'id' | 'fecha_registro' | 'estado'> & { fecha_registro?: string }): Promise<number> {
     const nombre = textoObligatorio(c.nombre, 'El nombre');
+    if (nombre.length > 120) throw new Error('El nombre supera el límite de 120 caracteres.');
+    const telefono1 = textoLimitado(c.telefono1, 'El teléfono 1', 30);
+    const telefono2 = textoLimitado(c.telefono2, 'El teléfono 2', 30);
+    const observaciones = textoLimitado(c.observaciones, 'Las observaciones', 1000);
     if (!coordenadaValida(c.lat, -90, 90) || !coordenadaValida(c.lng, -180, 180)) {
       throw new Error('La ubicación del cliente no es válida.');
     }
@@ -1165,14 +1176,14 @@ class Database {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
       [
         nombre,
-        c.telefono1?.trim() || null,
-        c.telefono2?.trim() || null,
+        telefono1,
+        telefono2,
         c.cumple_dia ?? null,
         c.cumple_mes ?? null,
         fecha,
         c.lat ?? null,
         c.lng ?? null,
-        c.observaciones?.trim() || null,
+        observaciones,
         normalizarTextoBusqueda(nombre),
       ]
     );
@@ -1206,7 +1217,11 @@ class Database {
     if ((c.lat == null) !== (c.lng == null)) throw new Error('La latitud y longitud deben venir juntas.');
     const fecha = c.fecha_registro ?? fechaLocalISO();
     for (const mascota of mascotas) {
-      textoObligatorio(mascota.nombre, 'El nombre de la mascota');
+      const mascotaNombre = textoObligatorio(mascota.nombre, 'El nombre de la mascota');
+      if (mascotaNombre.length > 80) throw new Error('El nombre de la mascota supera 80 caracteres.');
+      if ((mascota.raza ?? '').length > 80) throw new Error('La raza supera 80 caracteres.');
+      if ((mascota.preferencias ?? '').length > 500) throw new Error('Las preferencias superan 500 caracteres.');
+      if ((mascota.observaciones ?? '').length > 1000) throw new Error('Las observaciones de la mascota superan 1000 caracteres.');
       validarMesDia(mascota.cumple_mes, mascota.cumple_dia, 'Cumpleaños de la mascota');
     }
 
@@ -1554,6 +1569,10 @@ class Database {
 
   async crearMascota(m: Omit<Mascota, 'id' | 'estado'>): Promise<number> {
     const nombre = textoObligatorio(m.nombre, 'El nombre de la mascota');
+    if (nombre.length > 80) throw new Error('El nombre de la mascota supera 80 caracteres.');
+    if ((m.raza ?? '').length > 80) throw new Error('La raza supera 80 caracteres.');
+    if ((m.preferencias ?? '').length > 500) throw new Error('Las preferencias superan 500 caracteres.');
+    if ((m.observaciones ?? '').length > 1000) throw new Error('Las observaciones de la mascota superan 1000 caracteres.');
     const res = await this.conn().run(
       `INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, nombre_normalizado, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
@@ -1589,6 +1608,7 @@ class Database {
     const cambios = { ...m } as Record<string, unknown>;
     if (m.nombre !== undefined) {
       textoObligatorio(m.nombre, 'El nombre de la mascota');
+      if (m.nombre.length > 80) throw new Error('El nombre de la mascota supera 80 caracteres.');
       cambios.nombre_normalizado = normalizarTextoBusqueda(m.nombre);
     }
     const campos = Object.keys(cambios).filter((k) => camposPermitidos.has(k) || k === 'nombre_normalizado');
@@ -1637,7 +1657,10 @@ class Database {
 
   async actualizarProducto(id: number, p: Partial<Omit<Producto, 'id'>>): Promise<void> {
     if (!Number.isInteger(id) || id <= 0) throw new Error('Producto inválido.');
-    if (p.nombre !== undefined) textoObligatorio(p.nombre, 'El nombre del producto');
+    if (p.nombre !== undefined) {
+      const nombreProducto = textoObligatorio(p.nombre, 'El nombre del producto');
+      if (nombreProducto.length > 120) throw new Error('El nombre del producto supera 120 caracteres.');
+    }
     if (p.precio !== undefined) numeroNoNegativo(p.precio, 'El precio');
     if (p.costo !== undefined) numeroNoNegativo(p.costo, 'El costo');
     const campos = Object.keys(p).filter((k) => ['nombre', 'precio', 'costo'].includes(k));
