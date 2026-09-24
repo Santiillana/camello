@@ -14,10 +14,6 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isSqlValueArray(value: unknown): value is SqlValue[] {
-  return Array.isArray(value) && value.every((item) => item == null || typeof item === 'string' || typeof item === 'number' || item instanceof Uint8Array);
-}
-
 function toSqlParams(params: unknown[]): SqlValue[] {
   return params.map((value) => {
     if (value == null) return null;
