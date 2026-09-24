@@ -587,8 +587,7 @@ class Database {
       return sentencia;
     };
 
-    try {
-      for (const objeto of afectadas) {
+    for (const objeto of afectadas) {
         const nombre = objeto.name;
         const originalCols = await this.columnasDeTabla(nombre);
         const create = sentenciaTabla(nombre);
@@ -617,7 +616,6 @@ class Database {
           else throw new Error('Quedó una tabla temporal con datos: ' + objeto.name);
         }
       }
-    }
 
     for (const objeto of objetosNoTabla) {
       const sql = normalizarSql(objeto.sql);
@@ -2410,3 +2408,6 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
+    }
+  }
+}
