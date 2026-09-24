@@ -1475,8 +1475,8 @@ class Database {
   async crearMascota(m: Omit<Mascota, 'id' | 'estado'>): Promise<number> {
     const nombre = textoObligatorio(m.nombre, 'El nombre de la mascota');
     const res = await this.conn().run(
-      `INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, estado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
+      `INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, nombre_normalizado, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');`,
       [
         m.cliente_id,
         nombre,
@@ -1487,6 +1487,7 @@ class Database {
         m.tamano ?? null,
         m.preferencias?.trim() || null,
         m.observaciones?.trim() || null,
+        normalizarTextoBusqueda(nombre),
       ]
     );
     await this.persist();
@@ -1505,11 +1506,15 @@ class Database {
     if (!Number.isInteger(id) || id <= 0) throw new Error('Mascota inválida.');
     validarMesDia(m.cumple_mes, m.cumple_dia, 'Cumpleaños de la mascota');
     const camposPermitidos = new Set(['nombre', 'cumple_dia', 'cumple_mes', 'sexo', 'raza', 'tamano', 'preferencias', 'observaciones']);
-    const campos = Object.keys(m).filter((k) => camposPermitidos.has(k));
+    const cambios = { ...m } as Record<string, unknown>;
+    if (m.nombre !== undefined) {
+      textoObligatorio(m.nombre, 'El nombre de la mascota');
+      cambios.nombre_normalizado = normalizarTextoBusqueda(m.nombre);
+    }
+    const campos = Object.keys(cambios).filter((k) => camposPermitidos.has(k) || k === 'nombre_normalizado');
     if (!campos.length) return;
-    if (m.nombre !== undefined) textoObligatorio(m.nombre, 'El nombre de la mascota');
     const sets = campos.map((k) => `${k} = ?`).join(', ');
-    const valores = campos.map((k) => (m as Record<string, unknown>)[k] ?? null);
+    const valores = campos.map((k) => cambios[k] ?? null);
     const res = await this.conn().run(`UPDATE mascotas SET ${sets} WHERE id = ? AND estado = 'activo';`, [...valores, id]);
     if (!res.changes?.changes) throw new Error('La mascota no existe o está archivada.');
     await this.persist();
@@ -1534,9 +1539,9 @@ class Database {
     let sql = "SELECT m.*, c.nombre as cliente_nombre FROM mascotas m JOIN clientes c ON c.id = m.cliente_id WHERE m.estado = 'activo' AND c.estado = 'activo'";
     const params: unknown[] = [];
     if (opts?.texto?.trim()) {
-      sql += ' AND (m.nombre LIKE ? OR c.nombre LIKE ?)';
-      const t = opts.texto.trim();
-      params.push(`%${t}%`, `%${t}%`);
+      sql += ' AND (m.nombre_normalizado LIKE ? OR c.nombre_normalizado LIKE ?)';
+      const t = normalizarTextoBusqueda(opts.texto);
+      params.push('%' + t + '%', '%' + t + '%');
     }
     sql += ' ORDER BY m.nombre ASC;';
     const r = await this.conn().query(sql, params);
