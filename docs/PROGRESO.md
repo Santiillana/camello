@@ -83,6 +83,19 @@ Estado de ejecución: **NO EJECUTABLE AQUÍ** hasta disponer de emulador/disposi
 - `8440c93` — verificación de fixtures, conteos y totales.
 - El commit de esta documentación se registra en el siguiente estado de la rama.
 
-## Próxima compuerta
+## Cierre FASE 0
 
-Ejecutar `npm run verify` sobre el SHA final de FASE 0 y observar CI. No iniciar C1 hasta completar esta compuerta.
+- Este commit contiene el cierre documental de F0. La etiqueta se crea automáticamente por CI con el marcador `[phase-ok:fase-0-ok]`.
+- `npm run verify`: PASÓ en CI sobre `2cebdf4c847d0c5a7569cf1a2681e8f266de9ee6`.
+- `npm ls sql.js`: PASÓ.
+- `npm audit --audit-level=high`: PASÓ — 0 vulnerabilidades.
+- `npm run lint`: PASÓ — 0 warnings y 0 errors.
+- `npm run verify:db`: PASÓ — v1→v3 y v2→v3 conservan conteos, total_ventas y total_utilidad; enteros COP, pago atómico, anti-duplicado y rollback SQL.js.
+- `npm run build`: PASÓ.
+- Prueba con plugin SQLite nativo: NO EJECUTABLE AQUÍ (instrumented test preparado, requiere emulador/dispositivo Android).
+- Comprobación en pantalla de F0: NO EJECUTABLE AQUÍ como criterio visual de C1-C9; F0 es auditoría y cobertura de datos.
+
+## Próxima fase
+
+C1 — Interfaz base y navegación.
+
