@@ -167,6 +167,10 @@ try {
 
     await crearCliente(page);
 
+    const clienteCreado = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
+    if (clienteCreado.length !== 1 || clienteCreado[0]?.estado !== 'activo') {
+      throw new Error('E2E: el cliente creado por la UI no quedó persistido: ' + JSON.stringify(clienteCreado));
+    }
     await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
     await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
