@@ -131,6 +131,7 @@ async function eraseStore(name: string, key: string): Promise<void> {
 
 export class WebSqliteConnection {
   private db: SqlJsDatabase | null = null;
+  private persistChain: Promise<void> = Promise.resolve();
   private readonly wasmBasePath: string;
   private readonly databaseName: string;
 
@@ -222,7 +223,9 @@ export class WebSqliteConnection {
   }
 
   async persist(): Promise<void> {
-    await writeStore(STORE_DB, STORE_KEY, this.getDb().export());
+    const snapshot = this.getDb().export();
+    this.persistChain = this.persistChain.then(() => writeStore(STORE_DB, STORE_KEY, snapshot));
+    await this.persistChain;
   }
 
   exportBytes(): Uint8Array {
