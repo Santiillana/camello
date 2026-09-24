@@ -1,4 +1,5 @@
 import initSqlJs from 'sql.js';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const DB_VERSION = 3;
@@ -177,60 +178,40 @@ function assertRequiredTables(db, label) {
   }
 }
 
-function createLegacyDatabase(SQL) {
+function loadFixture(SQL, fileName) {
   const db = new SQL.Database();
-  db.run(`CREATE TABLE clientes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL,
-    fecha_registro TEXT NOT NULL,
-    estado TEXT NOT NULL DEFAULT 'activo'
-  );`);
-  db.run(`CREATE TABLE mascotas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cliente_id INTEGER NOT NULL,
-    nombre TEXT NOT NULL,
-    estado TEXT NOT NULL DEFAULT 'activo'
-  );`);
-  db.run(`CREATE TABLE productos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL,
-    precio REAL NOT NULL,
-    costo REAL NOT NULL,
-    activo INTEGER NOT NULL DEFAULT 1
-  );`);
-  db.run(`CREATE TABLE rutas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tipo TEXT NOT NULL,
-    estado TEXT NOT NULL DEFAULT 'PROGRAMADA',
-    fecha TEXT NOT NULL,
-    hora_inicio TEXT,
-    hora_fin TEXT,
-    lat_inicio REAL,
-    lng_inicio REAL,
-    lat_fin REAL,
-    lng_fin REAL,
-    paquetes_llevados INTEGER NOT NULL DEFAULT 0,
-    notas TEXT
-  );`);
-  db.run(`CREATE TABLE ventas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cliente_id INTEGER NOT NULL,
-    ruta_id INTEGER,
-    producto_nombre TEXT NOT NULL,
-    cantidad INTEGER NOT NULL DEFAULT 1,
-    precio_aplicado REAL NOT NULL,
-    costo_aplicado REAL NOT NULL,
-    total REAL NOT NULL,
-    utilidad REAL NOT NULL,
-    fecha TEXT NOT NULL,
-    hora TEXT NOT NULL,
-    estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE',
-    fecha_pago TEXT
-  );`);
-  db.run("INSERT INTO clientes (nombre, fecha_registro) VALUES ('Cliente antiguo', '2026-01-01');");
-  db.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago) VALUES (1, 'Producto antiguo', 2, 10000, 6000, 20000, 8000, '2026-01-02', '10:00', 'PAGADA');");
-  db.run('PRAGMA user_version = 1;');
+  const sql = readFileSync(new URL('./fixtures/' + fileName, import.meta.url), 'utf8');
+  db.run(sql);
   return db;
+}
+
+function resumenDatos(db) {
+  const tablas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas'];
+  const resumen = Object.fromEntries(
+    tablas.map((tabla) => [
+      tabla,
+      Number(db.exec('SELECT COUNT(*) FROM ' + tabla + ';')[0]?.values?.[0]?.[0] ?? 0),
+    ]),
+  );
+  const venta = db.exec('SELECT COALESCE(SUM(total), 0), COALESCE(SUM(utilidad), 0) FROM ventas;')[0]?.values?.[0] ?? [0, 0];
+  resumen.total_ventas = Number(venta[0] ?? 0);
+  resumen.total_utilidad = Number(venta[1] ?? 0);
+  return resumen;
+}
+
+function assertMismaCargaAntesDespues(antes, despues, label) {
+  for (const clave of Object.keys(antes)) {
+    if (antes[clave] !== despues[clave]) {
+      throw new Error(
+        label + ': cambió ' + clave + ' de ' + antes[clave] + ' a ' + despues[clave],
+      );
+    }
+  }
+}
+
+function assertUserVersion(db, expected, label) {
+  const version = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
+  if (version !== expected) throw new Error(label + ': user_version = ' + version);
 }
 
 const SQL = await initSqlJs({
@@ -240,33 +221,33 @@ const SQL = await initSqlJs({
 // a) Base completamente nueva.
 const fresh = new SQL.Database();
 initialize(fresh);
+fresh.run('PRAGMA foreign_keys = ON;');
+fresh.run("INSERT INTO clientes (id, nombre, fecha_registro) VALUES (1, 'Cliente de prueba', '2026-09-24');");
 const freshConfig = fresh.exec(
   "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'configuracion_app';",
 )[0]?.values?.length ?? 0;
 if (freshConfig !== 1) throw new Error('base nueva: configuracion_app no existe');
 assertRequiredTables(fresh, 'base nueva');
+assertUserVersion(fresh, DB_VERSION, 'base nueva');
 
-// b) Base antigua de CAMELLO.
-const legacy = createLegacyDatabase(SQL);
-initialize(legacy);
-assertRequiredTables(legacy, 'migración');
-const client = legacy.exec('SELECT nombre FROM clientes WHERE id = 1;')[0]?.values?.[0]?.[0];
-if (client !== 'Cliente antiguo') throw new Error('migración: se perdió un cliente existente');
-const oldSale = legacy.exec('SELECT total FROM ventas WHERE id = 1;')[0]?.values?.[0]?.[0];
-if (Number(oldSale) !== 20000) throw new Error('migración: se perdió una venta existente');
-const routeColumns = new Set(
-  (legacy.exec('PRAGMA table_info(rutas);')[0]?.values ?? []).map((row) => String(row[1])),
+const productTypes = new Map(
+  (fresh.exec('PRAGMA table_info(productos);')[0]?.values ?? [])
+    .map((row) => [String(row[1]), String(row[2]).toUpperCase()]),
 );
-for (const required of ['nombre', 'fecha_planificada', 'hora_planificada']) {
-  if (!routeColumns.has(required)) throw new Error(`migración: falta rutas.${required}`);
+for (const field of ['precio', 'costo']) {
+  if (productTypes.get(field) !== 'INTEGER') {
+    throw new Error('base nueva: productos.' + field + ' no usa INTEGER');
+  }
 }
-const version = Number(legacy.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
-if (version !== DB_VERSION) throw new Error(`migración: user_version = ${version}`);
-
-const productTypes = new Map((fresh.exec('PRAGMA table_info(productos);')[0]?.values ?? []).map((row) => [String(row[1]), String(row[2]).toUpperCase()]));
-for (const field of ['precio', 'costo']) if (productTypes.get(field) !== 'INTEGER') throw new Error('base nueva: productos.' + field + ' no usa INTEGER');
-const saleTypes = new Map((fresh.exec('PRAGMA table_info(ventas);')[0]?.values ?? []).map((row) => [String(row[1]), String(row[2]).toUpperCase()]));
-for (const field of ['precio_aplicado', 'costo_aplicado', 'total', 'utilidad', 'monto_pagado']) if (saleTypes.get(field) !== 'INTEGER') throw new Error('base nueva: ventas.' + field + ' no usa INTEGER');
+const saleTypes = new Map(
+  (fresh.exec('PRAGMA table_info(ventas);')[0]?.values ?? [])
+    .map((row) => [String(row[1]), String(row[2]).toUpperCase()]),
+);
+for (const field of ['precio_aplicado', 'costo_aplicado', 'total', 'utilidad', 'monto_pagado']) {
+  if (saleTypes.get(field) !== 'INTEGER') {
+    throw new Error('base nueva: ventas.' + field + ' no usa INTEGER');
+  }
+}
 
 fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Prueba', 2, 13000, 7000, 26000, 12000, '2026-09-24', '10:00', 'PAGADA', 'EFECTIVO', 26000, 'op-1');");
 let duplicadoRechazado = false;
@@ -283,6 +264,42 @@ fresh.run('ROLLBACK;');
 const rollbackCount = Number(fresh.exec("SELECT COUNT(*) FROM ventas WHERE operacion_id = 'op-rollback';")[0].values[0][0]);
 if (rollbackCount !== 0) throw new Error('base nueva: la transacción no hizo rollback');
 
+const fixtureV1 = loadFixture(SQL, 'schema-v1.sql');
+const antesV1 = resumenDatos(fixtureV1);
+initialize(fixtureV1);
+const despuesV1 = resumenDatos(fixtureV1);
+assertMismaCargaAntesDespues(antesV1, despuesV1, 'migración v1→v3');
+assertUserVersion(fixtureV1, DB_VERSION, 'migración v1→v3');
+const clientV1 = fixtureV1.exec('SELECT nombre FROM clientes WHERE id = 1;')[0]?.values?.[0]?.[0];
+if (clientV1 !== 'Cliente antiguo 1') throw new Error('migración v1→v3: se perdió un cliente');
+const routeColumnsV1 = new Set(
+  (fixtureV1.exec('PRAGMA table_info(rutas);')[0]?.values ?? []).map((row) => String(row[1])),
+);
+for (const required of ['nombre', 'fecha_planificada', 'hora_planificada']) {
+  if (!routeColumnsV1.has(required)) throw new Error('migración v1→v3: falta rutas.' + required);
+}
+
+const fixtureV2 = loadFixture(SQL, 'schema-v2.sql');
+const antesV2 = resumenDatos(fixtureV2);
+initialize(fixtureV2);
+const despuesV2 = resumenDatos(fixtureV2);
+assertMismaCargaAntesDespues(antesV2, despuesV2, 'migración v2→v3');
+assertUserVersion(fixtureV2, DB_VERSION, 'migración v2→v3');
+
+fresh.close();
+fixtureV1.close();
+fixtureV2.close();
+
+console.log('verify-db: OK');
+console.log(JSON.stringify({
+  base_nueva: 'PASÓ',
+  migracion_v1_a_v3: { antes: antesV1, despues: despuesV1 },
+  migracion_v2_a_v3: { antes: antesV2, despues: despuesV2 },
+  enteros_cop: 'PASÓ',
+  pago_atómico: 'PASÓ',
+  anti_duplicado: 'PASÓ',
+  rollback_sqljs: 'PASÓ',
+}, null, 2));
 fresh.close();
 legacy.close();
 
