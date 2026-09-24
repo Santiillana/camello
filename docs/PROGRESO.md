@@ -224,10 +224,11 @@ El informe final incluye hashes, estado CI/APK, Intacto verificado, Pendiente de
 
 ## Compuerta final B
 
-HEAD actual: ff6b5f160216c61d2b6c7919150dfa7fda35752b.
+Último HEAD de código funcional antes del cierre documental: ff6b5f160216c61d2b6c7919150dfa7fda35752b.
+Los commits posteriores a ese SHA son únicamente documentación (PROGRESO, DECISIONES, ARQUITECTURA, PRUEBAS, CHANGELOG y README).
 
-- Verify CAMELLO run 449: QUEUED.
-- APK debug run 456: QUEUED.
+- Verify CAMELLO run 449 sobre el último SHA de código: QUEUED.
+- APK debug run 456 sobre el último SHA de código: QUEUED.
 - UI smoke run 333: QUEUED.
 - E2E run 155: QUEUED.
 - Tags B0-B6: no creados; no existe una compuerta verde observada.
