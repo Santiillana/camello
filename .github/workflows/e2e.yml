@@ -2,7 +2,7 @@ name: E2E CAMELLO
 
 on:
   push:
-    branches: ["fix/sqlite-wasm-web"]
+    branches: ["release/v1"]
   pull_request:
     branches: ["**"]
   workflow_dispatch:
@@ -24,6 +24,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm install --no-save --no-package-lock playwright@1.55.0
-      - run: npx playwright@1.55.0 install --with-deps chromium
+      - run: npx playwright install --with-deps chromium
       - run: VITE_E2E=1 node scripts/e2e-core.mjs
