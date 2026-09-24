@@ -31,10 +31,6 @@ export function coordenadasParecenInvertidas(lat: number, lng: number): boolean 
   return advertenciaCoordenadasPura(lat, lng)?.startsWith('Las coordenadas parecen estar invertidas') ?? false;
 }
 
-function estaEnColombia(lat: number, lng: number): boolean {
-  return advertenciaCoordenadasPura(lat, lng) == null;
-}
-
 const DOMINIOS_GOOGLE = new Set([
   'maps.app.goo.gl',
   'goo.gl',
