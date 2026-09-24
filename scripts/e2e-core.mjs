@@ -74,8 +74,21 @@ async function crearCliente(page) {
   });
 
   await siguiente(page);
-  for (let i = 0; i < 6; i += 1) await omitir(page);
-  await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
+  for (let i = 0; i < 5; i += 1) await omitir(page);
+  const guardarCliente = page.getByRole('button', { name: 'Guardar cliente' });
+  if (await guardarCliente.count()) await guardarCliente.click();
+  else await omitir(page);
+
+  let creado = false;
+  for (let intento = 0; intento < 20; intento += 1) {
+    const filas = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
+    if (filas.length === 1 && filas[0]?.estado === 'activo') {
+      creado = true;
+      break;
+    }
+    await sleep(250);
+  }
+  if (!creado) throw new Error('E2E: el cliente no quedó persistido tras guardar el formulario.');
 }
 
 async function expectOption(select, label) {
