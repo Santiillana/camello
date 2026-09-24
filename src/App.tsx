@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import type { Ruta } from './types';
+import { Link } from 'react-router-dom';
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { database } from './db/database';
 import BottomNav from './components/BottomNav';
 import SideNav from './components/SideNav';
 import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import { aplicarTema } from './utils/theme';
-import { fechaLocalISO } from './utils/format';
+import { fechaLocalISO, formatoFecha } from './utils/format';
 import { guardarRespaldoAutomatico, necesitaRespaldoAutomatico } from './utils/respaldoAutomatico';
 import type { ConfiguracionApp } from './types';
 
@@ -54,6 +56,35 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
   const location = useLocation();
   const navigate = useNavigate();
   const esInicio = location.pathname === '/';
+  const [rutaActiva, setRutaActiva] = useState<Ruta | null>(null);
+  const [rutaAviso12h, setRutaAviso12h] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    const cargarRuta = async () => {
+      try {
+        const ruta = await database.obtenerRutaActiva();
+        if (!activo) return;
+        setRutaActiva(ruta);
+        if (ruta?.fecha && ruta.hora_inicio) {
+          const inicio = new Date(ruta.fecha + 'T' + ruta.hora_inicio + ':00-05:00');
+          const supera = Date.now() - inicio.getTime() >= 12 * 60 * 60 * 1000;
+          if (supera) {
+            const clave = 'camello.ruta12h.' + ruta.id;
+            if (sessionStorage.getItem(clave) !== '1') {
+              sessionStorage.setItem(clave, '1');
+              setRutaAviso12h(true);
+            }
+          }
+        }
+      } catch {
+        // El banner nunca bloquea la navegación.
+      }
+    };
+    void cargarRuta();
+    const intervalo = window.setInterval(() => void cargarRuta(), 30000);
+    return () => { activo = false; window.clearInterval(intervalo); };
+  }, [location.pathname]);
 
   return (
     <div className="app-shell">
@@ -78,6 +109,11 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
           ☰
         </button>
       </header>
+      {rutaActiva && (
+        <Link to={`/rutas/${rutaActiva.id}`} className="banner-ruta-activa banner-ruta-global">
+          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · paquetes {rutaActiva.paquetes_llevados}
+        </Link>
+      )}
       <main className="app-contenido">
         <Suspense fallback={<CargandoPagina />}>
           <Routes>
@@ -99,6 +135,16 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
         </Suspense>
       </main>
       <BottomNav />
+      {rutaAviso12h && rutaActiva && (
+        <div className="modal-flotante" role="dialog" aria-modal="true" aria-label="Ruta en curso por más de 12 horas">
+          <div className="tarjeta">
+            <p className="texto-kicker">Ruta activa</p>
+            <h2>¿Sigues en ruta?</h2>
+            <p>La ruta “{rutaActiva.nombre}” empezó el {formatoFecha(rutaActiva.fecha)} a las {rutaActiva.hora_inicio} y lleva más de 12 horas. No se cerrará automáticamente.</p>
+            <button type="button" className="boton-primario" onClick={() => setRutaAviso12h(false)}>Sí, sigo en ruta</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
