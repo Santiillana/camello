@@ -101,6 +101,7 @@ export default function NuevaVenta() {
       contenido: mostrarNuevoCliente ? (
         <ClienteForm
           textoBoton="Guardar y seleccionar"
+          borradorClave="venta-nuevo-cliente"
           onGuardado={async (id) => {
             const nuevos = await database.listarClientes({ soloActivos: true });
             setClientes(nuevos);
