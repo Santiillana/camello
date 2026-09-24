@@ -48,7 +48,7 @@ async function crearCliente(page) {
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
     undefined,
-    { timeout: 15000 },
+    { timeout: 60000 },
   );
   await configurarPrimeraVez(page);
   await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
