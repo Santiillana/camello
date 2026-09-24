@@ -267,31 +267,68 @@ class Database {
     }
 
     const migraciones = [
-      { version: 2, ejecutar: () => this.migrarVersion2() },
-      { version: 3, ejecutar: () => this.migrarVersion3() },
-      { version: 4, ejecutar: () => this.migrarVersion4() },
-      { version: 5, ejecutar: () => this.migrarVersion5() },
-      { version: 6, ejecutar: () => this.migrarVersion6() },
-      { version: 7, ejecutar: () => this.migrarVersion7() },
-      { version: 8, ejecutar: () => this.migrarVersion8() },
-      { version: 9, ejecutar: () => this.migrarVersion9() },
-      { version: 10, ejecutar: () => this.migrarVersion10() },
-      { version: 11, ejecutar: () => this.migrarVersion11() },
-      { version: 12, ejecutar: () => this.migrarVersion12() },
-      { version: 13, ejecutar: () => this.migrarVersion13() },
-      { version: 14, ejecutar: () => this.migrarVersion14() },
-    ];
+      { version: 2, ejecutar: () => this.migrarVersion2(), foreignKeysOff: false },
+      { version: 3, ejecutar: () => this.migrarVersion3(), foreignKeysOff: true },
+      { version: 4, ejecutar: () => this.migrarVersion4(), foreignKeysOff: false },
+      { version: 5, ejecutar: () => this.migrarVersion5(), foreignKeysOff: false },
+      { version: 6, ejecutar: () => this.migrarVersion6(), foreignKeysOff: false },
+      { version: 7, ejecutar: () => this.migrarVersion7(), foreignKeysOff: false },
+      { version: 8, ejecutar: () => this.migrarVersion8(), foreignKeysOff: true },
+      { version: 9, ejecutar: () => this.migrarVersion9(), foreignKeysOff: true },
+      { version: 10, ejecutar: () => this.migrarVersion10(), foreignKeysOff: false },
+      { version: 11, ejecutar: () => this.migrarVersion11(), foreignKeysOff: false },
+      { version: 12, ejecutar: () => this.migrarVersion12(), foreignKeysOff: false },
+      { version: 13, ejecutar: () => this.migrarVersion13(), foreignKeysOff: false },
+      { version: 14, ejecutar: () => this.migrarVersion14(), foreignKeysOff: false },
+    ] as const;
+
     for (const migracion of migraciones) {
-      if (version < migracion.version) await migracion.ejecutar();
+      if (version >= migracion.version) continue;
+      if (migracion.foreignKeysOff) await db.execute('PRAGMA foreign_keys = OFF;', false);
+      try {
+        await db.beginTransaction();
+        await migracion.ejecutar();
+        await db.execute('PRAGMA user_version = ' + migracion.version + ';', false);
+        await db.commitTransaction();
+      } catch (error) {
+        try { await db.rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya deshizo la transacción. */ }
+        throw error;
+      } finally {
+        if (migracion.foreignKeysOff) await db.execute('PRAGMA foreign_keys = ON;', false);
+      }
     }
-    // v9 es una reparación idempotente: también corre sobre bases que ya
-    // tengan user_version alto si quedaron referencias a tablas temporales.
-    await this.migrarVersion9();
+    // v9 es una reparación idempotente que también se revisa sobre bases
+    // con user_version alto, por compatibilidad con versiones anteriores.
+    if (version >= 9) {
+      if (await this.existenReferenciasMigracionPendientes()) {
+        await db.execute('PRAGMA foreign_keys = OFF;', false);
+        try {
+          await db.beginTransaction();
+          await this.migrarVersion9();
+          await db.commitTransaction();
+        } catch (error) {
+          try { await db.rollbackTransaction(); } catch { /* Rollback best-effort. */ }
+          throw error;
+        } finally {
+          await db.execute('PRAGMA foreign_keys = ON;', false);
+        }
+      }
+    }
     for (const stmt of SCHEMA_STATEMENTS.filter((statement) => /^CREATE (INDEX|TRIGGER) IF NOT EXISTS /i.test(statement.trim()))) {
       await db.execute(stmt);
     }
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
     await this.verificarEsquemaCompleto();
+  }
+
+  private async existenReferenciasMigracionPendientes(): Promise<boolean> {
+    const r = await this.conn().query(`
+      SELECT 1
+      FROM sqlite_master
+      WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\'
+      LIMIT 1;
+    `);
+    return (r.values ?? []).length > 0;
   }
 
   private async columnasDeTabla(tabla: string): Promise<Map<string, string>> {
@@ -313,7 +350,6 @@ class Database {
     const ventasListas = ventas.get('precio_aplicado') === 'INTEGER' && ventas.get('costo_aplicado') === 'INTEGER' && ventas.get('total') === 'INTEGER' && ventas.get('utilidad') === 'INTEGER' && ventas.has('metodo_pago') && ventas.has('monto_pagado') && ventas.has('operacion_id');
     if (productosListos && ventasListas) return;
     const db = this.conn();
-    await db.execute('PRAGMA foreign_keys = OFF;', false);
     try {
       await db.beginTransaction();
       if (!productosListos) {
@@ -337,12 +373,8 @@ class Database {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);', false);
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);', false);
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);', false);
-      await db.commitTransaction();
-    } catch (error) {
-      try { await db.rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
-      throw error;
     } finally {
-      await db.execute('PRAGMA foreign_keys = ON;', false);
+      // La transacción y el estado de foreign_keys los controla el coordinador de migraciones.
     }
   }
 
@@ -432,7 +464,6 @@ class Database {
 
     // No usar ALTER TABLE ... RENAME sobre rutas: SQLite puede reescribir
     // las FK de tablas hijas para apuntar al nombre temporal.
-    await db.execute('PRAGMA foreign_keys = OFF;', false);
     let reemplazoCreado = false;
     try {
       await db.execute('DROP TABLE IF EXISTS rutas_reconstruccion_v8;', false);
@@ -496,44 +527,8 @@ class Database {
       const filasDespues = Number(despues.values?.[0]?.n ?? 0);
       if (filasAntes !== filasDespues) throw new Error('La migración v8 cambió el conteo de rutas.');
     } catch (error) {
-      // Sin transacción explícita: si el proceso quedó a mitad, restauramos
-      // rutas desde el snapshot para no dejar una tabla incompleta.
-      try {
-        await db.execute('DROP TABLE IF EXISTS rutas_reconstruccion_v8;', false);
-        await db.execute('DROP TABLE IF EXISTS rutas;', false);
-        await db.execute(`CREATE TABLE rutas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          nombre TEXT NOT NULL DEFAULT '',
-          tipo TEXT NOT NULL,
-          estado TEXT NOT NULL DEFAULT 'EN_CURSO',
-          fecha TEXT NOT NULL,
-          hora_inicio TEXT,
-          hora_fin TEXT,
-          lat_inicio REAL,
-          lng_inicio REAL,
-          lat_fin REAL,
-          lng_fin REAL,
-          paquetes_llevados INTEGER NOT NULL DEFAULT 0,
-          paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
-          notas TEXT
-        );`, false);
-        for (const row of (snapshot.values ?? []) as unknown[][]) {
-          await db.run(
-            `INSERT INTO rutas (
-              id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
-              lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
-              paquetes_sobrantes, notas
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-            row.map((value) => value == null ? null : value),
-            false,
-          );
-        }
-      } catch {
-        // El error original conserva más contexto.
-      }
+      // El coordinador de migraciones revierte toda la transacción, incluida la reconstrucción.
       throw error;
-    } finally {
-      await db.execute('PRAGMA foreign_keys = ON;', false);
     }
     if (!reemplazoCreado) throw new Error('La reconstrucción v8 no terminó.');
     const fk = await db.query('PRAGMA foreign_key_check;');
@@ -597,7 +592,6 @@ class Database {
       return sentencia;
     };
 
-    await db.execute('PRAGMA foreign_keys = OFF;', false);
     try {
       for (const objeto of afectadas) {
         const nombre = objeto.name;
@@ -628,8 +622,6 @@ class Database {
           else throw new Error('Quedó una tabla temporal con datos: ' + objeto.name);
         }
       }
-    } finally {
-      await db.execute('PRAGMA foreign_keys = ON;', false);
     }
 
     for (const objeto of objetosNoTabla) {
@@ -2423,27 +2415,3 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
-      // Los datos propios del módulo ya forman parte del export SQLite completo.
-      // La sección modulos del sobre se conserva para versionado/auditoría; no se reinyecta
-      // para evitar duplicar filas. Las migraciones del módulo se ejecutan al arrancar. 
-      await this.persist();
-    }
-  }
-
-  async limpiarAplicacion(respaldoVerificado: string): Promise<void> {
-    if (!this.db) throw new Error('SQLite no está inicializado.');
-    const valido = await this.validarRespaldo(respaldoVerificado);
-    if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
-    await this.db.delete();
-    this.db = null;
-    this.activeDbName = DB_NAME;
-    await this.abrirConexion();
-    await this.prepararEsquema();
-    await this.seedProductosSiVacio();
-    const runtime = crearContexto(this);
-    await runtime.limpiarTodo();
-    await this.persist();
-  }
-}
-
-export const database = new Database();
