@@ -180,8 +180,16 @@ El informe final incluye hashes, estado CI/APK, Intacto verificado, Pendiente de
 
 ## Compuerta final
 
-HEAD de la rama al cerrar esta auditoría: `72ae8214034a6b338ebd760cbaae5623f56de562` o posterior si la documentación final agrega un commit.
+HEAD verificado de la rama al cierre de este turno: `2f3228ed047b1ae5736b483fbf9fed3d86c74d4d`.
 
-CI del HEAD final: EN COLA en GitHub Actions; por honestidad se reporta como NO PASÓ / NO EJECUTABLE, no como verde.
+- Verify: QUEUED en GitHub Actions (runs 344 y 345).
+- UI smoke: QUEUED (runs 228 y 229).
+- E2E: QUEUED (runs 50 y 51).
+- APK debug: QUEUED (runs 351 y 352).
+- Etiquetado de fases: SKIPPED porque no existe un commit con marcador `[phase-ok:...]` posterior a F0.
+- Release firmado: PENDIENTE DE SECRETOS de GitHub.
+- Instrumented Android: NO EJECUTABLE AQUÍ.
+
+Tags reales al cierre: `fase-0-ok` existe; `fase-c1-ok` a `fase-c9-ok` no existen porque no se obtuvo una compuerta verde final para esas fases.
 
 No se ha tocado `main` ni se ha hecho merge.
