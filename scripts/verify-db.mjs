@@ -38,8 +38,7 @@ function migrate3(db) {
   const ventasOk = v.has('metodo_pago') && v.has('monto_pagado') && v.has('operacion_id') &&
     (db.exec('PRAGMA table_info(ventas);')[0]?.values ?? []).filter(r => ['precio_aplicado','costo_aplicado','total','utilidad'].includes(String(r[1]))).every(r => String(r[2]).toUpperCase() === 'INTEGER');
   if (productosOk && ventasOk) return;
-  try {
-    if (!productosOk) {
+  if (!productosOk) {
       db.run('ALTER TABLE productos RENAME TO productos_migracion_v3;');
       db.run("CREATE TABLE productos (id INTEGER PRIMARY KEY AUTOINCREMENT,nombre TEXT NOT NULL,precio INTEGER NOT NULL,costo INTEGER NOT NULL,activo INTEGER NOT NULL DEFAULT 1);");
       db.run('INSERT INTO productos SELECT id,nombre,CAST(ROUND(precio) AS INTEGER),CAST(ROUND(costo) AS INTEGER),activo FROM productos_migracion_v3;');
@@ -57,7 +56,6 @@ function migrate3(db) {
       db.run("INSERT INTO ventas SELECT id,cliente_id,ruta_id,producto_nombre,cantidad,CAST(ROUND(precio_aplicado) AS INTEGER),CAST(ROUND(costo_aplicado) AS INTEGER),CAST(ROUND(total) AS INTEGER),CAST(ROUND(utilidad) AS INTEGER),fecha,hora,estado_pago,fecha_pago,"+metodo+","+monto+","+operacion+" FROM ventas_migracion_v3;");
       db.run('DROP TABLE ventas_migracion_v3;');
     }
-  }
 }
 function migrate4(db) {
   addColumn(db,'clientes','ubicacion_precision_m','ubicacion_precision_m REAL');
@@ -74,16 +72,14 @@ function migrate8(db) {
   const cols = columnNames(db,'rutas');
   if (!cols.has('fecha_planificada') && !cols.has('hora_planificada')) return;
   const snap = db.exec("SELECT id,nombre,tipo,estado,fecha,hora_inicio,hora_fin,lat_inicio,lng_inicio,lat_fin,lng_fin,paquetes_llevados,COALESCE(paquetes_sobrantes,0),notas FROM rutas ORDER BY id;")[0]?.values ?? [];
-  try {
-    db.run('DROP TABLE IF EXISTS rutas_reconstruccion_v8;');
+  db.run('DROP TABLE IF EXISTS rutas_reconstruccion_v8;');
     db.run(`CREATE TABLE rutas_reconstruccion_v8 (id INTEGER PRIMARY KEY AUTOINCREMENT,nombre TEXT NOT NULL DEFAULT '',tipo TEXT NOT NULL,estado TEXT NOT NULL DEFAULT 'EN_CURSO',fecha TEXT NOT NULL,hora_inicio TEXT,hora_fin TEXT,lat_inicio REAL,lng_inicio REAL,lat_fin REAL,lng_fin REAL,paquetes_llevados INTEGER NOT NULL DEFAULT 0,paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,notas TEXT);`);
     db.run(`INSERT INTO rutas_reconstruccion_v8 SELECT id,nombre,tipo,CASE WHEN estado='PROGRAMADA' THEN 'CANCELADA' ELSE estado END,fecha,hora_inicio,hora_fin,lat_inicio,lng_inicio,lat_fin,lng_fin,paquetes_llevados,COALESCE(paquetes_sobrantes,0),notas FROM rutas;`);
     db.run('DROP TABLE rutas;');
     db.run(`CREATE TABLE rutas (id INTEGER PRIMARY KEY AUTOINCREMENT,nombre TEXT NOT NULL DEFAULT '',tipo TEXT NOT NULL,estado TEXT NOT NULL DEFAULT 'EN_CURSO',fecha TEXT NOT NULL,hora_inicio TEXT,hora_fin TEXT,lat_inicio REAL,lng_inicio REAL,lat_fin REAL,lng_fin REAL,paquetes_llevados INTEGER NOT NULL DEFAULT 0,paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,notas TEXT);`);
     db.run('INSERT INTO rutas SELECT * FROM rutas_reconstruccion_v8;');
     db.run('DROP TABLE rutas_reconstruccion_v8;');
-    if (Number(db.exec('SELECT COUNT(*) FROM rutas;')[0].values[0][0]) !== snap.length) throw new Error('v8: cambió el número de rutas.');
-  }
+  if (Number(db.exec('SELECT COUNT(*) FROM rutas;')[0].values[0][0]) !== snap.length) throw new Error('v8: cambió el número de rutas.');
 }
 function migrate9(db) {
   const refs = db.exec("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';")[0]?.values ?? [];
@@ -94,8 +90,7 @@ function migrate9(db) {
     for (const match of String(row[3] ?? '').match(rx) ?? []) refsMap.set(match,match.split('_migracion_')[0]);
     if (String(row[1]).includes('_migracion_')) refsMap.set(String(row[1]),String(row[1]).split('_migracion_')[0]);
   }
-  try {
-    for (const row of refs.filter(r => String(r[0]) === 'table' && !String(r[1]).includes('_migracion_') && [...refsMap.keys()].some(t => String(r[3]).includes(t)))) {
+  for (const row of refs.filter(r => String(r[0]) === 'table' && !String(r[1]).includes('_migracion_') && [...refsMap.keys()].some(t => String(r[3]).includes(t)))) {
       const name=String(row[1]), create=CURRENT_SCHEMA.find(s=>s.trimStart().startsWith('CREATE TABLE IF NOT EXISTS '+name+' '));
       if(!create) throw new Error('v9: no hay esquema canónico para '+name);
       const oldCols=[...columnNames(db,name)], temp=name+'_reparacion_v9';
@@ -108,7 +103,6 @@ function migrate9(db) {
       const canonical=refsMap.get(String(row[1])); if(!canonical)continue;
       const exists=Number(db.exec("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"+canonical.replace(/'/g,"''")+"'")[0].values[0][0]??0);
       if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)db.run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
-    }
   }
   health(db,'v9');
 }
