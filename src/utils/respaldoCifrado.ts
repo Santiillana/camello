@@ -6,13 +6,15 @@ function b64(bytes: Uint8Array): string { let s=''; for (const b of bytes) s += 
 function bytes(s: string): Uint8Array { const b=atob(s); const out=new Uint8Array(b.length); for(let i=0;i<b.length;i+=1) out[i]=b.charCodeAt(i); return out; }
 async function keyFromPassword(password:string,salt:Uint8Array){
   const base=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:ITERACIONES,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:saltBuffer,iterations:ITERACIONES,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 export async function cifrarRespaldo(texto:string,password:string):Promise<string>{
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
   if(password.length<10) throw new Error('La contraseña debe tener al menos 10 caracteres.');
   const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
-  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},await keyFromPassword(password,salt),enc.encode(texto));
+  const ivBuffer = iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer;
+  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv:ivBuffer},await keyFromPassword(password,salt),enc.encode(texto));
   return JSON.stringify({camello_encrypted_backup_version:1,kdf:'PBKDF2-SHA256',iterations:ITERACIONES,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(cipher))});
 }
 export async function descifrarRespaldo(texto:string,password:string):Promise<string>{
@@ -20,7 +22,13 @@ export async function descifrarRespaldo(texto:string,password:string):Promise<st
   const data=JSON.parse(texto) as Record<string,unknown>;
   if(Number(data.camello_encrypted_backup_version)!==1) throw new Error('Formato de respaldo cifrado no reconocido.');
   try {
-    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes(String(data.iv))},await keyFromPassword(password,bytes(String(data.salt))),bytes(String(data.ciphertext)));
+    const iv = bytes(String(data.iv));
+    const salt = bytes(String(data.salt));
+    const ciphertext = bytes(String(data.ciphertext));
+    const ivBuffer = iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer;
+    const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+    const cipherBuffer = ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer;
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:ivBuffer},await keyFromPassword(password,salt),cipherBuffer);
     return dec.decode(plain);
   } catch { throw new Error('Contraseña incorrecta o respaldo cifrado alterado.'); }
 }
