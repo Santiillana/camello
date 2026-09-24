@@ -324,7 +324,7 @@ try {
     await pagoDialog.getByRole('button', { name: 'Siguiente' }).click();
     await pagoDialog.getByRole('button', { name: /^Efectivo/ }).click();
     await pagoDialog.getByRole('button', { name: 'Siguiente' }).click();
-    await pagoDialog.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
+    await pagoDialog.getByRole('article').getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) >= Number(carteraAntes[0]?.pendiente)) throw new Error('E2E: el cobro no redujo la cartera.');
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
