@@ -56,6 +56,10 @@ function normalizarTelefono(valor?: string): string {
   return (valor ?? '').replace(/\D/g, '');
 }
 
+function escaparGlob(valor: string): string {
+  return valor.replace(/[\\*?\[]/g, (caracter) => caracter === '\\' ? '[\\\\]' : '[' + caracter + ']');
+}
+
 function validarMesDia(mes: number | undefined, dia: number | undefined, campo: string): void {
   if (mes == null && dia == null) return;
   if (mes == null || dia == null || !Number.isInteger(mes) || !Number.isInteger(dia)) {
@@ -1346,8 +1350,9 @@ class Database {
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
     if (opts?.texto?.trim()) {
       const texto = normalizarTextoBusqueda(opts.texto);
-      cond.push(`(nombre_normalizado LIKE ? OR telefono1 LIKE ? OR telefono2 LIKE ? OR id IN (SELECT cliente_id FROM mascotas WHERE estado = 'activo' AND nombre_normalizado LIKE ?))`);
-      params.push(texto + '%', opts.texto.trim() + '%', opts.texto.trim() + '%', texto + '%');
+      const glob = escaparGlob(texto) + '*';
+      cond.push(`(nombre_normalizado GLOB ? OR telefono1 LIKE ? OR telefono2 LIKE ? OR id IN (SELECT cliente_id FROM mascotas WHERE estado = 'activo' AND nombre_normalizado GLOB ?))`);
+      params.push(glob, opts.texto.trim() + '%', opts.texto.trim() + '%', glob);
     }
     if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
     sql += ' ORDER BY nombre_normalizado ASC, id ASC LIMIT ? OFFSET ?;';
