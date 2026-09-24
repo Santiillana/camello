@@ -315,8 +315,10 @@ try {
     if (Number(ventasBase[0]?.total) <= 0) throw new Error('E2E: total vendido en SQLite inválido.');
 
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    const carteraAntes = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
-    await page.getByRole('link', { name: 'Pagar' }).first().click({ force: true });
+    const carteraAntes = await sql(page, "SELECT id, COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa' GROUP BY cliente_id;");
+    const clienteCarteraId = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
+    if (clienteCarteraId.length !== 1) throw new Error('E2E: no se encontró el cliente para probar cartera.');
+    await page.goto('http://127.0.0.1:5173/#/cartera?cliente=' + clienteCarteraId[0].id, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('dialog', { name: 'Pagar a Cliente E2E' }).waitFor({ state: 'visible', timeout: 15000 });
     await page.getByRole('button', { name: 'Efectivo' }).click();
     await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
