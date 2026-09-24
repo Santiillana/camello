@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SCHEMA_STATEMENTS, DB_VERSION } from '../src/db/schema.ts';
+import { DB_VERSION, SCHEMA_STATEMENTS as CURRENT_SCHEMA } from '../src/db/schema.ts';
 
 const REQUIRED = [
   'clientes','mascotas','productos','rutas','ventas','fotos','seguimiento_clientes',
@@ -129,7 +129,7 @@ function initialize(db){
   applySchema(db);
   const current=Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0]??0);
   if(current>DB_VERSION)throw new Error('Esquema '+current+' incompatible con '+DB_VERSION);
-  const migrations=[[2,migrate2],[3,migrate3],[4,migrate4],[5,migrate5],[6,migrate6],[7,migrate7],[8,migrate8],[9,migrate9],[10,migrate10],[11,migrate11],[12,migrate12],[13,migrate13]];
+  const migrations=[[2,migrate2],[3,migrate3],[4,migrate4],[5,migrate5],[6,migrate6],[7,migrate7],[8,migrate8],[9,migrate9],[10,migrate10],[11,migrate11],[12,migrate12],[13,migrate13],[14,migrate14]];
   for(const [version,fn] of migrations)if(current<version)fn(db);
   db.run('PRAGMA user_version='+DB_VERSION+';');
   const rows=db.exec("SELECT name FROM sqlite_master WHERE type='table';")[0]?.values??[];
