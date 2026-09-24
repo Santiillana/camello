@@ -889,7 +889,9 @@ class Database {
   private async migrarVersion14(): Promise<void> {
     const add = async (table: string, column: string) => {
       const cols = await this.columnasDeTabla(table);
-      if (!cols.has(column)) await this.conn().execute('ALTER TABLE ' + table + ' ADD COLUMN nombre_normalizado TEXT NOT NULL DEFAULT "";', false);
+      if (!cols.has(column)) {
+        await this.conn().execute('ALTER TABLE ' + table + ' ADD COLUMN ' + column + ' TEXT NOT NULL DEFAULT "";', false);
+      }
     };
     await add('clientes','nombre_normalizado');
     await add('mascotas','nombre_normalizado');
