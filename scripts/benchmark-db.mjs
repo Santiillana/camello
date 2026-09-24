@@ -118,12 +118,79 @@ insertVenta.free();
 db.run('COMMIT;');
 
 const pruebas = [
-  ['inicio', "SELECT COALESCE(SUM(total),0), COALESCE(SUM(monto_pagado),0), COALESCE(SUM(total-monto_pagado),0) FROM ventas WHERE fecha BETWEEN '2026-09-01' AND '2026-09-20';"],
-  ['clientes', "SELECT c.id,c.nombre,COUNT(DISTINCT m.id) mascotas,COALESCE(SUM(v.total),0) total FROM clientes c LEFT JOIN mascotas m ON m.cliente_id=c.id LEFT JOIN ventas v ON v.cliente_id=c.id WHERE c.estado='activo' GROUP BY c.id ORDER BY c.nombre LIMIT 2000;"],
-  ['cartera', "SELECT c.id,c.nombre,SUM(v.total-v.monto_pagado) saldo FROM clientes c JOIN ventas v ON v.cliente_id=c.id AND v.total>v.monto_pagado WHERE c.estado='activo' GROUP BY c.id,c.nombre ORDER BY saldo DESC;"],
-  ['rutas', "SELECT r.id,r.nombre,COUNT(v.id),COALESCE(SUM(v.total),0),COALESCE(SUM(v.monto_pagado),0) FROM rutas r LEFT JOIN ventas v ON v.ruta_id=r.id GROUP BY r.id ORDER BY r.fecha DESC;"],
-  ['informes', "SELECT fecha,COUNT(*),SUM(total),SUM(monto_pagado),SUM(total-monto_pagado) FROM ventas GROUP BY fecha ORDER BY fecha;"],
-  ['mapa', "SELECT c.id,c.nombre,c.lat,c.lng FROM clientes c WHERE c.estado='activo' AND c.lat IS NOT NULL AND c.lng IS NOT NULL LIMIT 2000;"],
+  ['inicio',
+    `SELECT
+       COALESCE(SUM(total),0) AS ventas,
+       COALESCE(SUM(monto_pagado),0) AS cobrado,
+       COALESCE(SUM(total-monto_pagado),0) AS pendiente,
+       COALESCE(SUM(costo_aplicado*cantidad),0) AS costos,
+       COALESCE(SUM(utilidad),0) AS utilidad,
+       COUNT(*) AS numero_ventas
+     FROM ventas
+     WHERE fecha BETWEEN '2026-09-01' AND '2026-09-20';`],
+  ['clientes',
+    `SELECT
+       c.id,
+       c.nombre,
+       (SELECT COUNT(*) FROM mascotas m WHERE m.cliente_id=c.id AND m.estado='activo') AS mascotas,
+       (SELECT COALESCE(SUM(v.total),0) FROM ventas v WHERE v.cliente_id=c.id) AS total_comprado,
+       (SELECT MAX(v.fecha) FROM ventas v WHERE v.cliente_id=c.id) AS ultima_compra,
+       (SELECT COALESCE(SUM(v.total-v.monto_pagado),0) FROM ventas v WHERE v.cliente_id=c.id) AS pendiente
+     FROM clientes c
+     WHERE c.estado='activo'
+     ORDER BY c.nombre
+     LIMIT 2000;`],
+  ['cartera',
+    `SELECT
+       c.id,
+       c.nombre,
+       COALESCE(SUM(v.total-v.monto_pagado),0) AS saldo
+     FROM clientes c
+     JOIN ventas v ON v.cliente_id=c.id AND v.total>v.monto_pagado
+     WHERE c.estado='activo'
+     GROUP BY c.id,c.nombre
+     ORDER BY saldo DESC;`],
+  ['rutas',
+    `SELECT
+       r.id,
+       r.nombre,
+       r.paquetes_llevados,
+       r.paquetes_sobrantes,
+       COALESCE(x.vendidos,0) AS vendidos,
+       COALESCE(x.total_vendido,0) AS total_vendido,
+       COALESCE(x.cobrado,0) AS cobrado
+     FROM rutas r
+     LEFT JOIN (
+       SELECT ruta_id,
+              SUM(cantidad) AS vendidos,
+              SUM(total) AS total_vendido,
+              SUM(monto_pagado) AS cobrado
+       FROM ventas
+       GROUP BY ruta_id
+     ) x ON x.ruta_id=r.id
+     ORDER BY r.id DESC;`],
+  ['informes',
+    `SELECT
+       fecha,
+       COUNT(*) AS numero_ventas,
+       SUM(total) AS ventas,
+       SUM(monto_pagado) AS cobrado,
+       SUM(total-monto_pagado) AS pendiente,
+       SUM(utilidad) AS utilidad
+     FROM ventas
+     WHERE fecha BETWEEN '2026-09-01' AND '2026-09-20'
+     GROUP BY fecha
+     ORDER BY fecha;`],
+  ['mapa',
+    `SELECT
+       c.id,
+       c.nombre,
+       c.lat,
+       c.lng
+     FROM clientes c
+     WHERE c.estado='activo' AND c.lat IS NOT NULL AND c.lng IS NOT NULL
+     ORDER BY c.nombre
+     LIMIT 2000;`],
 ];
 
 const resultados = [];
