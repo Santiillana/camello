@@ -1001,8 +1001,8 @@ class Database {
               COALESCE(SUM(costo_aplicado * cantidad),0) as costos,
               COALESCE(SUM(cantidad),0) as paquetes,
               COALESCE(SUM(utilidad),0) as utilidad,
-              COALESCE(SUM(CASE WHEN estado_pago='PAGADA' THEN total ELSE 0 END),0) as pagado,
-              COALESCE(SUM(CASE WHEN estado_pago='PENDIENTE' THEN total ELSE 0 END),0) as pendiente,
+              COALESCE((SELECT SUM(p.monto) FROM pagos p WHERE p.fecha BETWEEN ? AND ?),0) as pagado,
+              COALESCE(SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END),0) as pendiente,
               COUNT(*) as numero_ventas
        FROM ventas WHERE fecha BETWEEN ? AND ?;`,
       [desde, hasta]
