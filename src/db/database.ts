@@ -163,6 +163,7 @@ class Database {
 
     await this.abrirConexion();
     await this.prepararEsquema();
+    await this.verificarSalud();
     await this.seedProductosSiVacio();
     await this.persist();
   }
