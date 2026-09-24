@@ -23,7 +23,6 @@ const COLOR_FILTRO: Record<string, string> = {
 
 export default function Mapa() {
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
-  const [filtro, setFiltro] = useState<Filtro>('todos');
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const capaMarcadoresRef = useRef<L.LayerGroup | null>(null);
@@ -35,10 +34,24 @@ export default function Mapa() {
   const clientesConUbicacion = useMemo(() => clientes.filter((c) => c.lat != null && c.lng != null), [clientes]);
 
   const clientesFiltrados = useMemo(() => {
-    if (filtro === 'todos') return clientesConUbicacion;
-    if (filtro === 'pendientes') return clientesConUbicacion.filter((c) => c.pendiente > 0);
-    return clientesConUbicacion.filter((c) => c.seguimiento === filtro);
-  }, [clientesConUbicacion, filtro]);
+    const texto = filtros.texto.trim().toLowerCase();
+    const min = filtros.minDias === '' ? null : Number(filtros.minDias);
+    const max = filtros.maxDias === '' ? null : Number(filtros.maxDias);
+    return clientesConUbicacion.filter((c) => {
+      if (texto) {
+        const base = [c.nombre, c.telefono1 ?? '', c.telefono2 ?? '', ...c.mascotas.map((m) => m.nombre)].join(' ').toLowerCase();
+        if (!base.includes(texto)) return false;
+      }
+      if (filtros.estado === 'pendientes' && c.pendiente <= 0) return false;
+      if (filtros.estado !== 'todos' && filtros.estado !== 'pendientes' && c.seguimiento !== filtros.estado) return false;
+      if (clientesRuta && !clientesRuta.has(c.id)) return false;
+      const dias = c.dias_desde_ultima_compra;
+      if (min != null && (dias == null || dias < min)) return false;
+      if (max != null && (dias == null || dias > max)) return false;
+      if (filtros.recompraVencida && (dias == null || dias < c.ritmo_dias)) return false;
+      return true;
+    });
+  }, [clientesConUbicacion, filtros, clientesRuta]);
 
   useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
@@ -95,18 +108,67 @@ export default function Mapa() {
     });
   }, [clientesFiltrados]);
 
+  async function centrarEnMiUbicacion() {
+    try {
+      const ubicacion = await obtenerMejorUbicacion();
+      setMiUbicacion({ lat: ubicacion.lat, lng: ubicacion.lng, precision: ubicacion.precision_m });
+      mapaRef.current?.setView([ubicacion.lat, ubicacion.lng], 16);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className="pantalla pantalla-mapa">
       <header className="encabezado">
-        <h1>Mapa de clientes</h1>
+        <div>
+          <p className="texto-kicker">Clientes geolocalizados</p>
+          <h1>Mapa de clientes</h1>
+        </div>
+        <button className="boton-secundario" onClick={() => void centrarEnMiUbicacion()}>Centrar en mí</button>
       </header>
+
+      {error && <p className="texto-error">{error}</p>}
+      {offline && <p className="banner-info">Sin internet: mapa base no disponible; los pines guardados siguen disponibles.</p>}
+
+      <section className="tarjeta">
+        <div className="grid-dos-columnas">
+          <label>
+            Buscar cliente o mascota
+            <input value={filtros.texto} onChange={(e) => setFiltros((v) => ({ ...v, texto: e.target.value }))} />
+          </label>
+          <label>
+            Visitados en ruta
+            <select value={filtros.rutaId} onChange={(e) => setFiltros((v) => ({ ...v, rutaId: e.target.value }))}>
+              <option value="">Todas las rutas</option>
+              {rutas.filter((r) => r.estado !== 'CANCELADA').map((r) => (
+                <option key={r.id} value={r.id}>{r.nombre || r.tipo} · {r.fecha}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="grid-dos-columnas">
+          <label>Desde días sin comprar<input type="number" min={0} value={filtros.minDias} onChange={(e) => setFiltros((v) => ({ ...v, minDias: e.target.value }))} /></label>
+          <label>Hasta días sin comprar<input type="number" min={0} value={filtros.maxDias} onChange={(e) => setFiltros((v) => ({ ...v, maxDias: e.target.value }))} /></label>
+        </div>
+        <label className="fila-checkbox">
+          <input type="checkbox" checked={filtros.recompraVencida} onChange={(e) => setFiltros((v) => ({ ...v, recompraVencida: e.target.checked }))} />
+          Recompra vencida según ritmo
+        </label>
+        <div className="fila-botones">
+          <button className="boton-secundario" onClick={() => setFiltros(FILTROS_DEFAULT)}>Limpiar filtros</button>
+          <button className="boton-primario" onClick={() => void centrarEnMiUbicacion()}>Centrar en mi ubicación</button>
+        </div>
+      </section>
+
+      <p className="detalle-cliente">{clientesFiltrados.length} de {clientesConUbicacion.length} clientes con ubicación cumplen los filtros.</p>
 
       <div className="filtros-mapa">
         {(['todos', 'ACTIVO', 'POR_CONTACTAR', 'INACTIVO', 'pendientes'] as Filtro[]).map((f) => (
           <button
             key={f}
-            className={'chip-filtro' + (filtro === f ? ' activo' : '')}
-            onClick={() => setFiltro(f)}
+            className={'chip-filtro' + (filtros.estado === f ? ' activo' : '')}
+            onClick={() => setFiltros((v) => ({ ...v, estado: f }))}
           >
             {f === 'todos' ? 'Todos' : f === 'ACTIVO' ? 'Activos' : f === 'POR_CONTACTAR' ? 'Por contactar' : f === 'INACTIVO' ? 'Inactivos' : 'Con pagos pendientes'}
           </button>
