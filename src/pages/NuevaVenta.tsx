@@ -118,10 +118,13 @@ export default function NuevaVenta() {
             Buscar cliente o mascota
             <input value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} placeholder="Nombre o mascota…" />
           </label>
-          <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
-            <option value="">Selecciona un cliente…</option>
-            {clientesFiltrados.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
+          <label>
+            Cliente
+            <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">Selecciona un cliente…</option>
+              {clientesFiltrados.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </label>
           <div className="fila-botones">
             <button type="button" className="boton-secundario" onClick={() => setMostrarNuevoCliente(true)}>+ Nuevo cliente</button>
             {clienteId && (
