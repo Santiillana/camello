@@ -2,11 +2,17 @@ const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 const ITERACIONES = 180000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
 function b64(bytes: Uint8Array): string { let s=''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); }
 function bytes(s: string): Uint8Array { const b=atob(s); const out=new Uint8Array(b.length); for(let i=0;i<b.length;i+=1) out[i]=b.charCodeAt(i); return out; }
 async function keyFromPassword(password:string,salt:Uint8Array){
   const base=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:ITERACIONES,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:toArrayBuffer(salt),iterations:ITERACIONES,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 export async function cifrarRespaldo(texto:string,password:string):Promise<string>{
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
@@ -26,7 +32,7 @@ export async function descifrarRespaldo(texto:string,password:string):Promise<st
     const iv = bytes(String(data.iv));
     const salt = bytes(String(data.salt));
     const ciphertext = bytes(String(data.ciphertext));
-    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},await keyFromPassword(password,salt),ciphertext);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:toArrayBuffer(iv)},await keyFromPassword(password,salt),toArrayBuffer(ciphertext));
     return dec.decode(plain);
   } catch { throw new Error('Contraseña incorrecta o respaldo cifrado alterado.'); }
 }
