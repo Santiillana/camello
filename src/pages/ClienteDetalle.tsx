@@ -8,6 +8,7 @@ import type {
   SexoMascota,
   TamanoMascota,
   Venta,
+  ModoRitmo,
   Foto,
 } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
@@ -150,6 +151,13 @@ export default function ClienteDetalle() {
           )}
         </section>
       )}
+
+      <RitmoCompra
+        cliente={cliente}
+        onGuardado={async () => {
+          await cargar();
+        }}
+      />
 
       {mostrarUbicacion && (
         <FormUbicacion
@@ -556,6 +564,78 @@ function FormMascota({
         </button>
       </div>
     </form>
+  );
+}
+
+function RitmoCompra({
+  cliente,
+  onGuardado,
+}: {
+  cliente: ClienteConResumen;
+  onGuardado: () => Promise<void>;
+}) {
+  const [modo, setModo] = useState<ModoRitmo>(cliente.ritmo_modo);
+  const [dias, setDias] = useState(String(cliente.ritmo_dias));
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+
+  async function guardar() {
+    setGuardando(true);
+    setMensaje(null);
+    try {
+      await database.guardarRitmoCliente(cliente.id, {
+        modo,
+        dias: modo === 'manual' ? Number(dias) : null,
+      });
+      await onGuardado();
+      setMensaje('Ritmo guardado.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <section className="tarjeta">
+      <div className="fila-titulo-boton">
+        <div>
+          <p className="texto-kicker">Seguimiento</p>
+          <h2>Ritmo de compra</h2>
+        </div>
+        <span className="etiqueta-estado">{modo === 'manual' ? 'Manual' : 'Automático'}</span>
+      </div>
+      <div className="formulario">
+        <label>
+          Modo
+          <select value={modo} onChange={(e) => setModo(e.target.value as ModoRitmo)}>
+            <option value="automatico">Automático</option>
+            <option value="manual">Manual</option>
+          </select>
+        </label>
+        {modo === 'manual' ? (
+          <>
+            <label>
+              Frecuencia
+              <select value={dias} onChange={(e) => setDias(e.target.value)}>
+                <option value="7">Semanal (7 días)</option>
+                <option value="14">Quincenal (14 días)</option>
+                <option value="30">Mensual (30 días)</option>
+              </select>
+            </label>
+            <label>
+              O usa N días
+              <input type="number" min={1} step={1} value={dias} onChange={(e) => setDias(e.target.value)} />
+            </label>
+          </>
+        ) : (
+          <p className="texto-vacio">CAMELLO calcula el promedio de las últimas compras. Sin datos usa 20 días.</p>
+        )}
+        <p className="detalle-cliente">Actualmente: cada {cliente.ritmo_dias} días · Última compra: {cliente.ultima_compra ? formatoFecha(cliente.ultima_compra) : 'sin compras'}</p>
+        <button className="boton-primario" onClick={() => void guardar()} disabled={guardando}>
+          {guardando ? 'Guardando…' : 'Guardar ritmo'}
+        </button>
+        {mensaje && <p className="banner-exito">{mensaje}</p>}
+      </div>
+    </section>
   );
 }
 
