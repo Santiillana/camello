@@ -1,0 +1,30 @@
+name: Sync lockfile temporary
+on:
+  push:
+    branches: ["release/v1"]
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Sincronizar lockfile
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Retirar workflow temporal
+        run: rm -f .github/workflows/sync-lockfile-temporary.yml
+      - name: Commit lockfile sincronizado
+        env:
+          BRANCH: release/v1
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json .github/workflows/sync-lockfile-temporary.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: sincronizar lockfile de Vitest"
+          git push origin HEAD:$BRANCH
