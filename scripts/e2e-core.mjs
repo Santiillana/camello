@@ -275,7 +275,10 @@ try {
     await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
     await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await expectOption(page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ }), 'Cliente E2E', page);
+    const clienteVenta = page.getByLabel('Cliente', { exact: true });
+    const clienteVentaRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
+    if (clienteVentaRow.length !== 1) throw new Error('E2E: Cliente E2E no existe antes de abrir ventas.');
+    await clienteVenta.selectOption(String(clienteVentaRow[0].id));
 
     const efectivo = await venta(page, 'EFECTIVO', 1, true);
     if (!efectivo.includes('Efectivo') && !efectivo.includes('Pagado')) throw new Error('No se generó voucher de efectivo.');
