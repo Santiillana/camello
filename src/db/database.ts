@@ -185,6 +185,7 @@ class Database {
       { version: 5, ejecutar: () => this.migrarVersion5() },
       { version: 6, ejecutar: () => this.migrarVersion6() },
       { version: 7, ejecutar: () => this.migrarVersion7() },
+      { version: 8, ejecutar: () => this.migrarVersion8() },
     ];
     for (const migracion of migraciones) if (version <= migracion.version) await migracion.ejecutar();
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
@@ -310,6 +311,64 @@ class Database {
     const rutas = await this.columnasDeTabla('rutas');
     if (!rutas.has('paquetes_sobrantes')) {
       await this.conn().execute('ALTER TABLE rutas ADD COLUMN paquetes_sobrantes INTEGER NOT NULL DEFAULT 0;');
+    }
+  }
+
+  private async migrarVersion8(): Promise<void> {
+    const rutas = await this.columnasDeTabla('rutas');
+    const necesitaRehacer = rutas.has('fecha_planificada') || rutas.has('hora_planificada');
+    if (!necesitaRehacer) return;
+
+    const db = this.conn();
+    await db.execute('PRAGMA foreign_keys = OFF;', false);
+    try {
+      await db.beginTransaction();
+      await db.execute('ALTER TABLE rutas RENAME TO rutas_migracion_v8;', false);
+      await db.execute(`CREATE TABLE rutas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL DEFAULT '',
+        tipo TEXT NOT NULL,
+        estado TEXT NOT NULL DEFAULT 'EN_CURSO',
+        fecha TEXT NOT NULL,
+        hora_inicio TEXT,
+        hora_fin TEXT,
+        lat_inicio REAL,
+        lng_inicio REAL,
+        lat_fin REAL,
+        lng_fin REAL,
+        paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+        paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
+        notas TEXT
+      );`, false);
+      await db.execute(`INSERT INTO rutas (
+        id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
+        lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
+        paquetes_sobrantes, notas
+      )
+      SELECT
+        id,
+        nombre,
+        tipo,
+        CASE WHEN estado = 'PROGRAMADA' THEN 'CANCELADA' ELSE estado END,
+        fecha,
+        hora_inicio,
+        hora_fin,
+        lat_inicio,
+        lng_inicio,
+        lat_fin,
+        lng_fin,
+        paquetes_llevados,
+        COALESCE(paquetes_sobrantes, 0),
+        notas
+      FROM rutas_migracion_v8;`, false);
+      await db.execute('DROP TABLE rutas_migracion_v8;', false);
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);', false);
+      await db.commitTransaction();
+    } catch (error) {
+      try { await db.rollbackTransaction(); } catch {}
+      throw error;
+    } finally {
+      await db.execute('PRAGMA foreign_keys = ON;', false);
     }
   }
 
@@ -804,30 +863,6 @@ class Database {
   }
 
   // RUTAS
-
-  async crearRuta(r: { nombre: string; tipo: Ruta['tipo']; fecha_planificada: string; hora_planificada?: string; paquetes_llevados: number; notas?: string }): Promise<number> {
-    const nombre = textoObligatorio(r.nombre, 'El nombre de la ruta');
-    const paquetes = enteroPositivo(r.paquetes_llevados, 'Los paquetes llevados');
-    if (!r.fecha_planificada) throw new Error('La fecha planificada es obligatoria.');
-    const res = await this.conn().run(
-      "INSERT INTO rutas (nombre, tipo, estado, fecha, fecha_planificada, hora_planificada, paquetes_llevados, notas) VALUES (?, ?, 'PROGRAMADA', ?, ?, ?, ?, ?);",
-      [nombre, r.tipo, r.fecha_planificada, r.fecha_planificada, r.hora_planificada || null, paquetes, r.notas?.trim() || null]
-    );
-    await this.persist();
-    return Number(res.changes?.lastId ?? 0);
-  }
-
-  async iniciarRutaProgramada(id: number, ubicacion?: { lat_inicio?: number; lng_inicio?: number }): Promise<void> {
-    if (await this.obtenerRutaActiva()) throw new Error('Ya existe una ruta en curso.');
-    if (!coordenadaValida(ubicacion?.lat_inicio, -90, 90) || !coordenadaValida(ubicacion?.lng_inicio, -180, 180)) throw new Error('La ubicación de inicio no es válida.');
-    const ahora = new Date();
-    const res = await this.conn().run(
-      "UPDATE rutas SET estado = 'EN_CURSO', fecha = ?, hora_inicio = ?, lat_inicio = ?, lng_inicio = ? WHERE id = ? AND estado = 'PROGRAMADA';",
-      [fechaLocalISO(ahora), horaLocalHHMM(ahora), ubicacion?.lat_inicio ?? null, ubicacion?.lng_inicio ?? null, id]
-    );
-    if (!res.changes?.changes) throw new Error('La ruta no existe o ya comenzó.');
-    await this.persist();
-  }
 
   async iniciarRuta(r: { nombre?: string; tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
     const paquetes = enteroPositivo(r.paquetes_llevados, 'Los paquetes llevados');
