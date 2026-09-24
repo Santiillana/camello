@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { database } from '../db/database';
-function esEstadoGasto(value: string): value is EstadoGasto {
+import AsistenteTarjetas from '../components/AsistenteTarjetas';(value: string): value is EstadoGasto {
   return value === 'pagado' || value === 'pendiente' || value === 'anulado';
 }
 function esNaturalezaGasto(value: string): value is 'operativo' | 'compra_insumos' | 'retiro_dueno' {
   return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno';
 }
 
-import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
 import { formatoMoneda, hoyISO } from '../utils/format';
@@ -54,7 +53,7 @@ export default function Gastos(){
     </header>
     {gastoEditando&&<EditorGasto gasto={gastoEditando} categorias={categorias} onGuardado={()=>{setGastoEditando(null);void cargar();}} onCancelar={()=>setGastoEditando(null)} />}
     {mostrar&&<FormularioGasto categorias={categorias} onCategoriaCreada={async()=>{await cargar();}} onGuardado={()=>{setMostrar(false);setParams({});void cargar();}} onCancelar={()=>{setMostrar(false);setParams({});}} />}
-    <section className="periodo-selector">{['hoy','semana','mes'].map((x: FiltroPeriodo).map(x=><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
+    <section className="periodo-selector">{(['hoy','semana','mes'] as const).map((x) =><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
     <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><div className="fila-botones"><strong>{formatoMoneda(total)}</strong><button type="button" className="boton-secundario" onClick={()=>descargarCSV(gastos)}>Exportar CSV</button>
 <button type="button" className="boton-secundario" onClick={()=>void compartirCSV(gastos)}>Compartir CSV</button></div></div>
       <div className="grid-dos-columnas">
