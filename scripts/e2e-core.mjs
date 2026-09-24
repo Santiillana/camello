@@ -136,6 +136,10 @@ async function crearCliente(page) {
     }).catch((error) => ({ pageError: String(error) }));
     throw new Error(
       'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga)
+      + ' jeep-open=' + JSON.stringify(await page.evaluate(() => ({
+        clientes: document.documentElement.dataset.camelloOpenClientes || 'unset',
+        dbName: document.documentElement.dataset.camelloOpenDbName || 'unset',
+      })))
       + ' jeep-sqlite=' + JSON.stringify(dbDiag)
       + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
     );
