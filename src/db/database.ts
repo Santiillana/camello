@@ -235,15 +235,6 @@ class Database {
     marcarEtapaSqlite('db-open');
     await this.db.open();
     marcarEtapaSqlite('db-open-ok');
-    if (import.meta.env.VITE_E2E === '1') {
-      try {
-        const probe = await this.db.query('SELECT COUNT(*) AS n FROM clientes;');
-        document.documentElement.dataset.camelloOpenClientes = String(probe.values?.[0]?.n ?? 0);
-        document.documentElement.dataset.camelloOpenDbName = this.activeDbName;
-      } catch {
-        document.documentElement.dataset.camelloOpenClientes = 'probe-error';
-      }
-    }
     await this.db.execute('PRAGMA foreign_keys = ON;');
     marcarEtapaSqlite('foreign-keys-ok');
   }
