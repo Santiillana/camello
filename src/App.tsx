@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Ruta } from './types';
 import PinLock from './components/PinLock';
 import { Link, Navigate } from 'react-router-dom';
-import { inicializarModulos, listarModulos, obtenerModulo, crearContexto } from './modulos/runtime';
+import { inicializarModulos, listarModulos, obtenerModulo } from './modulos/runtime';
 import ModuloErrorBoundary from './modulos/ModuloErrorBoundary';
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { database } from './db/database';
