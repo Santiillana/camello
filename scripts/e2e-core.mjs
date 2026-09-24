@@ -123,8 +123,20 @@ async function crearCliente(page) {
   );
   const trasRecarga = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
   if (trasRecarga.length !== 1 || trasRecarga[0]?.estado !== 'activo') {
+    const dbDiag = await page.evaluate(async () => {
+      const el = document.querySelector('jeep-sqlite');
+      if (!el) return { element: false };
+      try {
+        const list = await el.getDatabaseList();
+        const exists = await el.isDatabase({ database: 'camello' });
+        return { element: true, list, exists };
+      } catch (error) {
+        return { element: true, error: String(error) };
+      }
+    }).catch((error) => ({ pageError: String(error) }));
     throw new Error(
       'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga)
+      + ' jeep-sqlite=' + JSON.stringify(dbDiag)
       + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
     );
   }
