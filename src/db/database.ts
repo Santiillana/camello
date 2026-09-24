@@ -917,6 +917,24 @@ class Database {
     return Number(r.changes?.lastId ?? 0);
   }
 
+  async editarGasto(id: number, data: { monto?: number; categoria_id?: number; fecha?: string; descripcion?: string; metodo_pago?: string; fecha_limite?: string | null; proveedor?: string }): Promise<void> {
+    const existente = await this.conn().query('SELECT id, estado FROM gastos WHERE id=? AND archivado=0;', [id]);
+    if (!existente.values?.length) throw new Error('El gasto no existe.');
+    const cambios: string[] = [];
+    const params: unknown[] = [];
+    if (data.monto !== undefined) { cambios.push('monto=?'); params.push(enteroPositivo(data.monto,'El monto')); }
+    if (data.categoria_id !== undefined) { const cat=await this.conn().query('SELECT id FROM categorias_gasto WHERE id=? AND activa=1;',[data.categoria_id]); if(!cat.values?.length)throw new Error('La categoría no existe.'); cambios.push('categoria_id=?'); params.push(data.categoria_id); }
+    if (data.fecha !== undefined) { if(!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha))throw new Error('La fecha no es válida.'); cambios.push('fecha=?','periodo=?'); params.push(data.fecha,data.fecha.slice(0,7)); }
+    if (data.descripcion !== undefined) { if(data.descripcion.length>500)throw new Error('La descripción es demasiado larga.'); cambios.push('descripcion=?'); params.push(data.descripcion.trim()||null); }
+    if (data.metodo_pago !== undefined) { cambios.push('metodo_pago=?'); params.push(data.metodo_pago); }
+    if (data.fecha_limite !== undefined) { cambios.push('fecha_limite=?'); params.push(data.fecha_limite || null); }
+    if (data.proveedor !== undefined) { if(data.proveedor.length>160)throw new Error('El proveedor es demasiado largo.'); cambios.push('proveedor=?'); params.push(data.proveedor.trim()||null); }
+    if (!cambios.length) return;
+    cambios.push('updated_at=?'); params.push(new Date().toISOString(), id);
+    await this.conn().run('UPDATE gastos SET '+cambios.join(', ')+' WHERE id=?;', params);
+    await this.persist();
+  }
+
   async pagarGasto(id: number, montoReal: number, metodo: string): Promise<void> {
     const monto = enteroPositivo(montoReal, 'El monto real');
     const r = await this.conn().query('SELECT estado FROM gastos WHERE id = ? AND archivado = 0;', [id]);
@@ -950,6 +968,33 @@ class Database {
       );
     }
     await this.persist();
+  }
+
+  async resultadoRango(desde: string, hasta: string): Promise<ResultadoMes> {
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(desde)||!/^\d{4}-\d{2}-\d{2}$/.test(hasta)||desde>hasta) throw new Error('Rango de fechas inválido.');
+    const ventas = await this.conn().query(
+      `SELECT COALESCE(SUM(total),0) ventas, COALESCE(SUM(costo_aplicado*cantidad),0) costos,
+              COALESCE((SELECT SUM(monto) FROM pagos WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa'),0) cobrado
+       FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa';`,
+      [desde,hasta,desde,hasta],
+    );
+    const gastos = await this.conn().query(
+      `SELECT COALESCE(SUM(CASE WHEN c.naturaleza='operativo' AND g.estado<>'anulado' THEN g.monto ELSE 0 END),0) operativo,
+              COALESCE(SUM(CASE WHEN g.estado='pendiente' AND c.naturaleza='operativo' THEN g.monto ELSE 0 END),0) pendientes,
+              COALESCE(SUM(CASE WHEN g.estado='pagado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) pagados
+       FROM gastos g JOIN categorias_gasto c ON c.id=g.categoria_id
+       WHERE g.fecha BETWEEN ? AND ? AND g.archivado=0;`,
+      [desde,hasta],
+    );
+    const row=ventas.values?.[0]??{}; const gr=gastos.values?.[0]??{};
+    const utilidadBruta=Number(row.ventas??0)-Number(row.costos??0); const op=Number(gr.operativo??0);
+    return {
+      desde,hasta,periodo:desde.slice(0,7),ventas:Number(row.ventas??0),costo_materia_prima:Number(row.costos??0),
+      utilidad_bruta:utilidadBruta,gastos_operativos:op,utilidad_neta:utilidadBruta-op,
+      margen_neto:Number(row.ventas??0)>0?((utilidadBruta-op)/Number(row.ventas))*100:0,
+      cobrado:Number(row.cobrado??0),gastos_pagados:Number(gr.pagados??0),
+      flujo_caja:Number(row.cobrado??0)-Number(gr.pagados??0),gastos_pendientes:Number(gr.pendientes??0),
+    };
   }
 
   async resultadoMes(periodo: string): Promise<ResultadoMes> {
