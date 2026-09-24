@@ -102,6 +102,13 @@ async function crearCliente(page) {
       + ' pantalla=' + pantalla.slice(0, 5000),
     );
   }
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.documentElement.dataset.camelloSqliteStage === 'persist', undefined, { timeout: 15000 });
+  const trasRecarga = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
+  if (trasRecarga.length !== 1 || trasRecarga[0]?.estado !== 'activo') {
+    throw new Error('E2E: el cliente no sobrevivió a una recarga completa: ' + JSON.stringify(trasRecarga));
+  }
 }
 
 async function expectOption(select, label) {
