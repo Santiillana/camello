@@ -21,10 +21,10 @@ export async function initWebSqlite(): Promise<void> {
   await customElements.whenDefined('jeep-sqlite');
 
   const base = webBasePath();
-  let jeepEl = document.querySelector('jeep-sqlite') as HTMLElement & { wasmPath?: string } | null;
+  let jeepEl = document.querySelector('jeep-sqlite') as (HTMLElement & { wasmPath?: string; isStoreOpen?: () => Promise<boolean> }) | null;
 
   if (!jeepEl) {
-    jeepEl = document.createElement('jeep-sqlite') as HTMLElement & { wasmPath?: string };
+    jeepEl = document.createElement('jeep-sqlite') as HTMLElement & { wasmPath?: string; isStoreOpen?: () => Promise<boolean> };
   }
 
   jeepEl.wasmPath = base + 'assets';
@@ -36,14 +36,14 @@ export async function initWebSqlite(): Promise<void> {
 
   const inicio = Date.now();
   while (Date.now() - inicio < 10000) {
-    const abierto = await jeepEl.isStoreOpen().catch(() => false);
+    const abierto = await jeepEl.isStoreOpen?.().catch(() => false) ?? false;
     if (abierto) {
       marcarEtapa('store-open');
       break;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 25));
   }
-  if (!(await jeepEl.isStoreOpen().catch(() => false))) {
+  if (!(await jeepEl.isStoreOpen?.().catch(() => false) ?? false)) {
     throw new Error('jeep-sqlite no abrió el WebStore a tiempo.');
   }
   marcarEtapa('ready');
