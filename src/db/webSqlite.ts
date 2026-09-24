@@ -14,8 +14,8 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isStoredArray(value: unknown): value is StoredValue[] {
-  return Array.isArray(value);
+function isSqlValueArray(value: unknown): value is SqlValue[] {
+  return Array.isArray(value) && value.every((item) => item == null || typeof item === 'string' || typeof item === 'number' || item instanceof Uint8Array);
 }
 
 function toSqlParams(params: unknown[]): SqlValue[] {
@@ -268,7 +268,7 @@ export class WebSqliteConnection {
 
         const values = Array.isArray(rawTable.values) ? rawTable.values : [];
         for (const rawRow of values) {
-          if (!isStoredArray(rawRow) || rawRow.length === 0) continue;
+          if (!isSqlValueArray(rawRow) || rawRow.length === 0) continue;
           next.run(
             'INSERT INTO ' + quote(name) + ' VALUES (' + rawRow.map(() => '?').join(', ') + ');',
             rawRow.filter((value): value is string | number | Uint8Array | null => value == null || typeof value === 'string' || typeof value === 'number' || value instanceof Uint8Array),
