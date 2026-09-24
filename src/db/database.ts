@@ -197,7 +197,7 @@ class Database {
     const ventasListas = ventas.get('precio_aplicado') === 'INTEGER' && ventas.get('costo_aplicado') === 'INTEGER' && ventas.get('total') === 'INTEGER' && ventas.get('utilidad') === 'INTEGER' && ventas.has('metodo_pago') && ventas.has('monto_pagado') && ventas.has('operacion_id');
     if (productosListos && ventasListas) return;
     const db = this.conn();
-    await db.execute('PRAGMA foreign_keys = OFF;');
+    await db.execute('PRAGMA foreign_keys = OFF;', false);
     try {
       await db.beginTransaction();
       if (!productosListos) {
@@ -226,7 +226,7 @@ class Database {
       try { await db.rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       throw error;
     } finally {
-      await db.execute('PRAGMA foreign_keys = ON;');
+      await db.execute('PRAGMA foreign_keys = ON;', false);
     }
   }
 
