@@ -953,6 +953,14 @@ class Database {
     await this.persist();
   }
 
+  async verificarSalud(): Promise<void> {
+    const fk = await this.conn().query('PRAGMA foreign_key_check;');
+    if ((fk.values ?? []).length) throw new Error('foreign_key_check encontró registros inválidos.');
+    const integrity = await this.conn().query('PRAGMA integrity_check;');
+    const resultado = String(integrity.values?.[0]?.integrity_check ?? integrity.values?.[0]?.[0] ?? '');
+    if (resultado.toLowerCase() !== 'ok') throw new Error('integrity_check = ' + resultado);
+  }
+
   private async verificarEsquemaCompleto(): Promise<void> {
     const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes', 'borradores', 'categorias_gasto', 'gastos', 'gastos_recurrentes'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
@@ -1924,6 +1932,8 @@ class Database {
   }
 
   async validarRespaldo(jsonTexto: string): Promise<{ version: number; checksum: string | null; exportData: Record<string, unknown> }> {
+    const bytes = new TextEncoder().encode(jsonTexto).byteLength;
+    if (bytes > 25 * 1024 * 1024) throw new Error('El respaldo supera el límite de 25 MB.');
     let parsed: unknown;
     try {
       parsed = JSON.parse(jsonTexto);
