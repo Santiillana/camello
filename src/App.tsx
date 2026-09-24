@@ -44,7 +44,11 @@ function CargandoPagina() {
 
 function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp; onConfigChanged: (config: ConfiguracionApp) => void }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const [menuExpandido, setMenuExpandido] = useState(false);
+  const [menuExpandido, setMenuExpandido] = useState(() => localStorage.getItem('camello.menuExpandido') === '1');
+
+  useEffect(() => {
+    localStorage.setItem('camello.menuExpandido', menuExpandido ? '1' : '0');
+  }, [menuExpandido]);
   const location = useLocation();
   const navigate = useNavigate();
   const esInicio = location.pathname === '/';
@@ -52,9 +56,12 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
   return (
     <div className="app-shell">
       <SideNav
-        abierto={menuAbierto}
+        abierto={menuAbierto || menuExpandido}
         expandido={menuExpandido}
-        onCerrar={() => setMenuAbierto(false)}
+        onCerrar={() => {
+          setMenuAbierto(false);
+          setMenuExpandido(false);
+        }}
         onAlternarExpandido={() => setMenuExpandido((valor) => !valor)}
       />
       <header className="app-topbar">
