@@ -32,6 +32,7 @@ import type {
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
 import { calcularChecksum } from '../utils/respaldo';
+import { crearContexto, listarModulos } from '../modulos/runtime';
 
 type SqliteExportData = Record<string, unknown> & {
   database: string;
@@ -2265,7 +2266,6 @@ class Database {
   async exportarRespaldo(): Promise<string> {
     const json = await this.conn().exportToJson('full');
     if (!json.export) throw new Error('SQLite no devolvió un respaldo válido.');
-    const { crearContexto } = await import('../modulos/runtime');
     const modulos = await crearContexto(this).exportarTodo();
     const checksum = await calcularChecksum(JSON.stringify({ data: json.export, modulos }));
     const envelope = {
