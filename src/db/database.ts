@@ -150,7 +150,7 @@ class Database {
 
     const faltantes = await this.tablasFaltantes();
     if (faltantes.length > 0) {
-      await this.repararEsquemaInconsistente(faltantes);
+      await this.repararEsquemaInconsistente();
       return true;
     }
 
@@ -210,7 +210,7 @@ class Database {
     return TABLAS_ESPERADAS.filter((tabla) => !existentes.has(tabla));
   }
 
-  private async repararEsquemaInconsistente(faltantes: string[]): Promise<void> {
+  private async repararEsquemaInconsistente(): Promise<void> {
     await this.ejecutarMigracion(DB_VERSION, SCHEMA_STATEMENTS);
     const pendientes = await this.tablasFaltantes();
 
