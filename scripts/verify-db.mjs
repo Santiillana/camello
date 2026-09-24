@@ -300,7 +300,3 @@ console.log(JSON.stringify({
   anti_duplicado: 'PASÓ',
   rollback_sqljs: 'PASÓ',
 }, null, 2));
-fresh.close();
-legacy.close();
-
-console.log('verify-db: OK (base nueva + migración v1→v3 + enteros COP + pago atómico + anti-duplicado)');
