@@ -231,6 +231,7 @@ class Database {
       { version: 6, ejecutar: () => this.migrarVersion6() },
       { version: 7, ejecutar: () => this.migrarVersion7() },
       { version: 8, ejecutar: () => this.migrarVersion8() },
+      { version: 9, ejecutar: () => this.migrarVersion9() },
       { version: 10, ejecutar: () => this.migrarVersion10() },
       { version: 11, ejecutar: () => this.migrarVersion11() },
       { version: 12, ejecutar: () => this.migrarVersion12() },
