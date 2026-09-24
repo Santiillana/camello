@@ -114,6 +114,8 @@ async function crearCliente(page) {
   }
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+  await page.getByText('Cliente E2E', { exact: true }).waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
     undefined,
