@@ -449,3 +449,249 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .pantalla-inicial { padding-left: 10px; padding-right: 10px; }
   .tarjeta-inicial { padding: 18px; }
 }
+
+
+/* --- Navegación C1 --- */
+.app-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: env(safe-area-inset-top, 0px) 12px 0;
+  z-index: 30;
+  pointer-events: none;
+}
+.app-topbar > * { pointer-events: auto; }
+.app-topbar-boton,
+.app-topbar-menu {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.96);
+  color: var(--color-texto);
+  font-size: 22px;
+  line-height: 1;
+  box-shadow: var(--sombra);
+}
+.app-menu-boton { display: none; }
+
+.side-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 0;
+  background: rgba(17,17,17,0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+.side-nav-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.side-nav {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 78px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-superficie);
+  border-right: 1px solid var(--color-borde);
+  transform: translateX(-100%);
+  transition: transform .18s ease, width .18s ease;
+  box-shadow: 6px 0 24px rgba(17,17,17,0.05);
+}
+.side-nav.abierto { transform: translateX(0); }
+.side-nav.expandido { width: 248px; }
+.side-nav-cabecera {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--color-borde);
+}
+.side-nav-marca {
+  flex: 1;
+  font-size: 13px;
+  letter-spacing: .12em;
+}
+.side-nav-toggle,
+.side-nav-cerrar {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-borde);
+  border-radius: 10px;
+  background: var(--color-superficie);
+}
+.side-nav-cerrar { display: inline-flex; }
+.side-nav-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  overflow-y: auto;
+}
+.side-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 11px;
+  color: var(--color-texto-suave);
+  font-weight: 600;
+}
+.side-nav-item:hover { background: #f5f5f5; color: var(--color-texto); }
+.side-nav-item.activo { background: var(--color-primario); color: #fff; }
+.side-nav-icono {
+  width: 22px;
+  flex: 0 0 22px;
+  text-align: center;
+  font-size: 19px;
+}
+.side-nav-texto { display: none; white-space: nowrap; }
+.side-nav.expandido .side-nav-texto { display: inline; }
+
+.bottom-nav-actions {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  z-index: 25;
+}
+.bottom-nav-fab {
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-primario);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  box-shadow: 0 8px 22px rgba(17,17,17,0.22);
+}
+.bottom-nav-fab.abierto { transform: rotate(45deg); }
+.bottom-nav-menu {
+  position: absolute;
+  right: 0;
+  bottom: 66px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid var(--color-borde);
+  border-radius: 14px;
+  background: var(--color-superficie);
+  box-shadow: var(--sombra);
+}
+.bottom-nav-menu button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  color: var(--color-texto);
+}
+.bottom-nav-menu button:hover { background: #f5f5f5; }
+.bottom-nav-menu span { display: inline-block; width: 24px; color: var(--color-primario); }
+
+.asistente-tarjetas {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.asistente-encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.asistente-encabezado h2,
+.asistente-tarjeta h3 { margin: 0; }
+.asistente-progreso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--color-texto-suave);
+}
+.asistente-progreso-barra {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ececec;
+}
+.asistente-progreso-barra span {
+  display: block;
+  height: 100%;
+  background: var(--color-primario);
+  border-radius: inherit;
+  transition: width .18s ease;
+}
+.asistente-tarjeta {
+  border: 1px solid var(--color-borde);
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--color-superficie);
+  box-shadow: var(--sombra);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.asistente-contenido { min-height: 92px; }
+.asistente-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+@media (min-width: 768px) {
+  .app-topbar { display: none; }
+  .side-nav {
+    transform: translateX(0);
+    width: 72px;
+  }
+  .side-nav.abierto { width: 72px; }
+  .side-nav.expandido,
+  .side-nav.abierto.expandido { width: 248px; }
+  .side-nav-backdrop,
+  .side-nav-cerrar { display: none; }
+  .side-nav-cabecera { padding-top: 16px; }
+  .side-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .side-nav.expandido .side-nav-texto { display: inline; }
+  .app-contenido {
+    padding-left: 88px;
+    padding-top: 0;
+    padding-bottom: 92px;
+  }
+  .pantalla { max-width: 680px; }
+  .bottom-nav {
+    left: calc(50% + 44px);
+    right: auto;
+    width: min(680px, calc(100% - 120px));
+    transform: translateX(-50%);
+    border: 1px solid var(--color-borde);
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+  }
+  .bottom-nav-actions {
+    right: max(24px, env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (max-width: 767px) {
+  .app-contenido { padding-top: 58px; }
+  .side-nav { width: min(86vw, 320px); }
+  .side-nav.expandido { width: min(86vw, 320px); }
+  .side-nav.expandido .side-nav-texto { display: inline; }
+  .side-nav-toggle { display: none; }
+  .side-nav-marca { margin-right: auto; }
+}
