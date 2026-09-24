@@ -256,7 +256,7 @@ async function sql(page, query, params = []) {
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  const clienteSelect = page.getByLabel('Cliente');
+  const clienteSelect = page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ });
   await page.getByLabel('Buscar cliente o mascota').waitFor({ state: 'visible', timeout: 15000 });
   await expectOption(clienteSelect, 'Cliente E2E');
   await clienteSelect.selectOption({ label: 'Cliente E2E' });
