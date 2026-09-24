@@ -9,7 +9,8 @@ function webBasePath(): string {
 export async function initWebSqlite(): Promise<void> {
   if (Capacitor.getPlatform() !== 'web') return;
 
-  const { defineCustomElements } = await import('jeep-sqlite/loader');
+  const { defineCustomElements, applyPolyfills } = await import('jeep-sqlite/loader');
+  await applyPolyfills();
   defineCustomElements(window);
   await customElements.whenDefined('jeep-sqlite');
 
@@ -25,4 +26,9 @@ export async function initWebSqlite(): Promise<void> {
   if (!jeepEl.isConnected) {
     document.body.appendChild(jeepEl);
   }
+  const listo = jeepEl as HTMLElement & {
+    wasmPath?: string;
+    componentOnReady?: () => Promise<unknown>;
+  };
+  if (listo.componentOnReady) await listo.componentOnReady();
 }
