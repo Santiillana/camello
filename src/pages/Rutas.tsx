@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { database } from '../db/database';
 import type { RutaConResumen, TipoRuta } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
+import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
 
@@ -119,11 +120,53 @@ function FormNuevaRuta({
     paso: pasoInicial,
   });
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
+  const tarjetas = [
+    {
+      id: 'nombre',
+      titulo: 'Nombre de la ruta',
+      contenido: <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} />,
+      validar: () => nombre.trim() ? null : 'Escribe un nombre para la ruta.',
+    },
+    {
+      id: 'tipo',
+      titulo: 'Tipo de recorrido',
+      contenido: <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoRuta)}>
+        {TIPOS.map((item) => <option key={item}>{item}</option>)}
+      </select>,
+    },
+    {
+      id: 'paquetes',
+      titulo: 'Paquetes llevados',
+      contenido: <input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} inputMode="numeric" />,
+      validar: () => Number.isInteger(paquetes) && paquetes > 0 ? null : 'La cantidad debe ser mayor que 0.',
+    },
+    {
+      id: 'gps',
+      titulo: 'Ubicación de inicio',
+      opcional: true,
+      contenido: (
+        <label className="fila-checkbox">
+          <input type="checkbox" checked={usarGps} onChange={(e) => setUsarGps(e.target.checked)} />
+          Registrar ubicación de inicio con GPS
+        </label>
+      ),
+    },
+    {
+      id: 'confirmar',
+      titulo: 'Confirmar ruta',
+      contenido: <div className="resumen-venta"><div className="lista-resumen">
+        <div><span>Nombre</span><strong>{nombre}</strong></div>
+        <div><span>Tipo</span><strong>{tipo}</strong></div>
+        <div><span>Paquetes</span><strong>{paquetes}</strong></div>
+        <div><span>GPS</span><strong>{usarGps ? 'Sí' : 'No'}</strong></div>
+      </div></div>,
+    },
+  ];
+
+  async function guardar() {
+    if (guardando) return;
     setGuardando(true);
     setError(null);
-
     try {
       let lat: number | undefined;
       let lng: number | undefined;
@@ -142,9 +185,8 @@ function FormNuevaRuta({
           // La ubicación de inicio es opcional.
         }
       }
-
       const id = await database.iniciarRuta({
-        nombre,
+        nombre: nombre.trim(),
         tipo,
         paquetes_llevados: paquetes,
         lat_inicio: lat,
@@ -177,43 +219,18 @@ function FormNuevaRuta({
           }}
         />
       )}
-      <form className="formulario-tarjeta" onSubmit={guardar}>
-      <div className="separador-seccion">
-        <strong>Iniciar ruta ahora</strong>
-        <span className="texto-vacio">La ruta queda guardada y continúa aunque cierres la app.</span>
-      </div>
-
-      <label>
-        Nombre de la ruta
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} required />
-      </label>
-
-      <label>
-        Tipo de recorrido
-        <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoRuta)}>
-          {TIPOS.map((t) => <option key={t}>{t}</option>)}
-        </select>
-      </label>
-
-      <label>
-        ¿Cuántos paquetes llevas?
-        <input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} required />
-      </label>
-
-      <label className="fila-checkbox">
-        <input type="checkbox" checked={usarGps} onChange={(e) => setUsarGps(e.target.checked)} />
-        Registrar ubicación de inicio con GPS
-      </label>
-
       {error && <p className="texto-error">{error}</p>}
-
-      <div className="fila-botones">
-        <button type="button" className="boton-secundario" onClick={onCancelar}>Cancelar</button>
-        <button type="submit" className="boton-primario boton-grande" disabled={guardando}>
-          {guardando ? 'Iniciando…' : '▶ Iniciar ruta'}
-        </button>
-      </div>
-    </form>
+      <AsistenteTarjetas
+        titulo="Nueva ruta"
+        tarjetas={tarjetas}
+        onCompletar={guardar}
+        onCancelar={onCancelar}
+        textoFinal={guardando ? 'Iniciando…' : 'Iniciar ruta'}
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
+      />
     </>
   );
 }
