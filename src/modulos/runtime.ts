@@ -34,7 +34,7 @@ export function crearContexto(runtimeApi: {
         try {
           await modulo.limpiar(await runtimeApi.crearContextoModulo(modulo.id));
           await runtimeApi.limpiarModuloDatosPrefijados(modulo.id);
-        } catch {}
+        } catch { /* La limpieza de almacenamiento auxiliar es best-effort y no debe bloquear el arranque del módulo. */ }
       }
     },
     async migrarTodo() {
