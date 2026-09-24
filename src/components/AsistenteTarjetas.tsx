@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { App } from '@capacitor/app';
 
@@ -84,7 +84,7 @@ export default function AsistenteTarjetas({
     setPaso((valor) => Math.max(0, valor - 1));
   }
 
-  async function cancelar() {
+  const cancelar = useCallback(async () => {
     if (!tieneCambios) {
       onCancelar();
       return;
@@ -97,7 +97,7 @@ export default function AsistenteTarjetas({
     }
     await onGuardarBorrador?.();
     onCancelar();
-  }
+  }, [onCancelar, onDescartarBorrador, onGuardarBorrador, tieneCambios]);
 
   useEffect(() => {
     let remover: (() => void) | null = null;
@@ -112,7 +112,7 @@ export default function AsistenteTarjetas({
       remover = () => listener.remove();
     }).catch(() => undefined);
     return () => remover?.();
-  }, [paso]);
+  }, [cancelar, paso]);
 
   useEffect(() => {
     const primerCampo = contenidoRef.current?.querySelector<HTMLElement>('input, textarea, select, button');
