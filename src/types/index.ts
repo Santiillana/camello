@@ -6,7 +6,7 @@ export type EstadoMascota = 'activo' | 'archivado';
 export type EstadoPago = 'PAGADA' | 'PENDIENTE';
 export type MetodoPago = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
 export type EstadoRuta = 'PROGRAMADA' | 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
-export type TipoRuta = 'Puerta a puerta' | 'Barrio' | 'Vereda' | 'Sector' | 'Visita comercial';
+export type TipoRuta = 'Puerta a puerta' | 'Venta local móvil';
 export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
 export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
@@ -98,6 +98,7 @@ export interface Ruta {
   lat_fin?: number;
   lng_fin?: number;
   paquetes_llevados: number;
+  paquetes_sobrantes?: number;
   notas?: string;
 }
 
@@ -153,6 +154,11 @@ export interface RutaConResumen extends Ruta {
   total_vendido: number;
   total_pendiente: number;
   clientes_atendidos: number;
+  clientes_recompran?: number;
+  cobrado?: number;
+  fiado?: number;
+  ticket_promedio?: number;
+  ventas_por_hora?: number;
 }
 
 export interface ResumenPeriodo {
