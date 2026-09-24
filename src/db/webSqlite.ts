@@ -1,12 +1,28 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 
 type SqlValue = string | number | Uint8Array | null;
-type StoredValue = Uint8Array | ArrayBuffer | Blob | number[] | Record<string, unknown> | null | undefined;
+type StoredValue = string | Uint8Array | ArrayBuffer | Blob | number[] | Record<string, unknown> | null | undefined;
 
 const STORE_DB = 'camelloWebSqlite';
 const STORE_NAME = 'databases';
 const STORE_KEY = 'camelloSQLite.db';
 const LEGACY_STORE_DB = 'jeepSqliteStore';
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 function toSqlParams(params: unknown[]): SqlValue[] {
   return params.map((value) => {
@@ -18,6 +34,9 @@ function toSqlParams(params: unknown[]): SqlValue[] {
 
 function toBytes(value: StoredValue): Promise<Uint8Array | null> {
   if (value == null) return Promise.resolve(null);
+  if (typeof value === 'string') {
+    try { return Promise.resolve(base64ToBytes(value)); } catch { return Promise.resolve(null); }
+  }
   if (value instanceof Uint8Array) return Promise.resolve(new Uint8Array(value));
   if (value instanceof ArrayBuffer) return Promise.resolve(new Uint8Array(value));
   if (typeof Blob !== 'undefined' && value instanceof Blob) {
@@ -63,7 +82,7 @@ async function writeStore(name: string, key: string, bytes: Uint8Array): Promise
   const db = await openStore(name);
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(new Uint8Array(bytes), key);
+    tx.objectStore(STORE_NAME).put(bytesToBase64(bytes), key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar SQLite en IndexedDB.'));
     tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de SQLite.'));
