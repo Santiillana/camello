@@ -2,7 +2,7 @@ import initSqlJs from 'sql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const REQUIRED_TABLES = [
   'clientes',
   'mascotas',
@@ -11,6 +11,7 @@ const REQUIRED_TABLES = [
   'ventas',
   'configuracion_app',
   'fotos',
+  'pagos',
 ];
 
 const SCHEMA_STATEMENTS = [
@@ -98,6 +99,19 @@ const SCHEMA_STATEMENTS = [
     creado_at TEXT NOT NULL,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
   );`,
+  `CREATE TABLE IF NOT EXISTS pagos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    venta_id INTEGER NOT NULL,
+    cliente_id INTEGER NOT NULL,
+    monto INTEGER NOT NULL,
+    fecha TEXT NOT NULL,
+    hora TEXT NOT NULL,
+    metodo_pago TEXT NOT NULL,
+    operacion_id TEXT UNIQUE,
+    FOREIGN KEY (venta_id) REFERENCES ventas(id),
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+    CHECK (monto > 0)
+  );`,
   `CREATE TABLE IF NOT EXISTS configuracion_app (
     clave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
@@ -108,6 +122,8 @@ const SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);',
   'CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);',
   'CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);',
+  'CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);',
+  'CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);',
 ];
 
 function applySchema(db) {
@@ -183,6 +199,37 @@ function migrateVersion4(db) {
   db.run('CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);');
 }
 
+function migrateVersion5(db) {
+  db.run(`CREATE TABLE IF NOT EXISTS pagos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    venta_id INTEGER NOT NULL,
+    cliente_id INTEGER NOT NULL,
+    monto INTEGER NOT NULL,
+    fecha TEXT NOT NULL,
+    hora TEXT NOT NULL,
+    metodo_pago TEXT NOT NULL,
+    operacion_id TEXT UNIQUE,
+    FOREIGN KEY (venta_id) REFERENCES ventas(id),
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+    CHECK (monto > 0)
+  );`);
+  db.run('CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);');
+
+  const count = Number(db.exec('SELECT COUNT(*) FROM pagos;')[0]?.values?.[0]?.[0] ?? 0);
+  if (count === 0) {
+    const pagadas = db.exec(
+      "SELECT id, cliente_id, total, fecha, hora, COALESCE(metodo_pago,'EFECTIVO') FROM ventas WHERE estado_pago = 'PAGADA' AND COALESCE(monto_pagado,total) > 0;",
+    )[0]?.values ?? [];
+    for (const row of pagadas) {
+      db.run(
+        'INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago) VALUES (?, ?, ?, ?, ?, ?);',
+        [Number(row[0]), Number(row[1]), Number(row[2]), String(row[3]), String(row[4]), String(row[5])],
+      );
+    }
+  }
+}
+
 function initialize(db) {
   applySchema(db);
   const currentVersion = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
@@ -196,6 +243,7 @@ function initialize(db) {
   migrateVersion2(db);
   migrateVersion3(db);
   migrateVersion4(db);
+  migrateVersion5(db);
   db.run(`PRAGMA user_version = ${DB_VERSION};`);
   assertRequiredTables(db, 'inicialización');
 }
@@ -318,6 +366,19 @@ initialize(fixtureV2);
 const despuesV2 = resumenDatos(fixtureV2);
 assertMismaCargaAntesDespues(antesV2, despuesV2, 'migración v2→v3');
 assertUserVersion(fixtureV2, DB_VERSION, 'migración v2→v3');
+
+// c) Cobro parcial FIFO y saldo restante.
+fresh.run("INSERT INTO clientes (id, nombre, fecha_registro) VALUES (2, 'Cliente cartera', '2026-09-24');");
+fresh.run("INSERT INTO ventas (id, cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, monto_pagado, metodo_pago, operacion_id) VALUES (2, 2, 'Deuda 1', 1, 10000, 5000, 10000, 5000, '2026-09-20', '09:00', 'PENDIENTE', 0, 'FIADO', 'venta-deuda-1');");
+fresh.run("INSERT INTO ventas (id, cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, monto_pagado, metodo_pago, operacion_id) VALUES (3, 2, 'Deuda 2', 1, 8000, 4000, 8000, 4000, '2026-09-21', '10:00', 'PENDIENTE', 0, 'FIADO', 'venta-deuda-2');");
+fresh.run("INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (2, 2, 7000, '2026-09-24', '10:30', 'EFECTIVO', 'cobro-1-2');");
+fresh.run("UPDATE ventas SET monto_pagado = 7000, metodo_pago = 'EFECTIVO' WHERE id = 2;");
+fresh.run("INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (3, 2, 5000, '2026-09-24', '10:30', 'EFECTIVO', 'cobro-1-3');");
+fresh.run("UPDATE ventas SET monto_pagado = 5000, metodo_pago = 'EFECTIVO' WHERE id = 3;");
+const saldoCartera = Number(fresh.exec("SELECT SUM(total - monto_pagado) FROM ventas WHERE cliente_id = 2;")[0].values[0][0]);
+if (saldoCartera !== 6000) throw new Error('cartera: el saldo después de abonos no es 6000');
+const cobradoHoy = Number(fresh.exec("SELECT SUM(monto) FROM pagos WHERE cliente_id = 2 AND fecha = '2026-09-24';")[0].values[0][0]);
+if (cobradoHoy !== 12000) throw new Error('cartera: cobrado hoy no es 12000');
 
 fresh.close();
 fixtureV1.close();
