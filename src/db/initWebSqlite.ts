@@ -21,18 +21,10 @@ export async function initWebSqlite(): Promise<void> {
   await customElements.whenDefined('jeep-sqlite');
 
   const base = webBasePath();
-  let jeepEl = document.querySelector('jeep-sqlite') as (HTMLElement & { wasmPath?: string; isStoreOpen?: () => Promise<boolean> }) | null;
-
-  if (!jeepEl) {
-    jeepEl = document.createElement('jeep-sqlite') as HTMLElement & { wasmPath?: string; isStoreOpen?: () => Promise<boolean> };
-  }
-
+  const jeepEl = document.querySelector('jeep-sqlite') as (HTMLElement & { wasmPath?: string; isStoreOpen?: () => Promise<boolean> }) | null;
+  if (!jeepEl) throw new Error('No se encontró el elemento jeep-sqlite en index.html.');
   jeepEl.wasmPath = base + 'assets';
-
   marcarEtapa('element-create');
-  if (!jeepEl.isConnected) {
-    document.body.appendChild(jeepEl);
-  }
 
   const inicio = Date.now();
   while (Date.now() - inicio < 10000) {
