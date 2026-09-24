@@ -12,10 +12,32 @@ type MetaRespaldo = {
 
 const HISTORIAL_KEY = 'camello.respaldos.historial.v1';
 
+function esObjeto(valor: unknown): valor is Record<string, unknown> {
+  return Boolean(valor) && typeof valor === 'object' && !Array.isArray(valor);
+}
+
+function metaRespaldoDesdeObjeto(valor: unknown): MetaRespaldo | null {
+  if (!esObjeto(valor)) return null;
+  if (typeof valor.exported_at !== 'string' || !Number.isInteger(Number(valor.schema_version)) || typeof valor.checksum !== 'string') return null;
+  return {
+    exported_at: valor.exported_at,
+    schema_version: Number(valor.schema_version),
+    checksum: valor.checksum,
+  };
+}
+
+function metaRespaldoDesdeJson(json: string): MetaRespaldo {
+  const meta = metaRespaldoDesdeObjeto(JSON.parse(json));
+  if (!meta) throw new Error('El respaldo no contiene metadatos válidos.');
+  return meta;
+}
+
 function leerHistorial(): MetaRespaldo[] {
   try {
     const raw = localStorage.getItem(HISTORIAL_KEY);
-    return raw ? (JSON.parse(raw) as MetaRespaldo[]) : [];
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(metaRespaldoDesdeObjeto).filter((meta): meta is MetaRespaldo => meta !== null) : [];
   } catch {
     return [];
   }
@@ -46,12 +68,7 @@ export default function Respaldo() {
     try {
       const json = await database.exportarRespaldo();
       respaldoRef.current = json;
-      const parsed = JSON.parse(json) as { exported_at: string; schema_version: number; checksum: string };
-      const nuevaMeta = {
-        exported_at: parsed.exported_at,
-        schema_version: parsed.schema_version,
-        checksum: parsed.checksum,
-      };
+      const nuevaMeta = metaRespaldoDesdeJson(json);
       const nuevas = [nuevaMeta, ...historial].slice(0, 8);
       localStorage.setItem(HISTORIAL_KEY, JSON.stringify(nuevas));
       setHistorial(nuevas);
@@ -86,7 +103,14 @@ export default function Respaldo() {
     const texto = respaldoRef.current;
     if (!texto) return;
 
-    const esCifrado = (()=>{try{const parsed=JSON.parse(texto) as Record<string,unknown>;return Number(parsed.camello_encrypted_backup_version)===1;}catch{return false;}})();
+    const esCifrado = (() => {
+      try {
+        const parsed: unknown = JSON.parse(texto);
+        return esObjeto(parsed) && Number(parsed.camello_encrypted_backup_version) === 1;
+      } catch {
+        return false;
+      }
+    })();
     const ver = esCifrado ? null : await database.validarRespaldo(texto);
     const fecha = (ver?.version ?? 0) + '-' + new Date().toISOString().slice(0, 10);
     const archivo = new File([texto], 'camello-respaldo-' + fecha + '.json', {
@@ -122,8 +146,12 @@ export default function Respaldo() {
     try {
       const texto = await file.text();
       let plano=texto;
-      const parsed=JSON.parse(texto) as Record<string,unknown>;
-      if(parsed.camello_encrypted_backup_version===1){const password=window.prompt('Contraseña del respaldo cifrado');if(!password)throw new Error('Restauración cancelada.');plano=await descifrarRespaldo(texto,password);}
+      const parsed: unknown = JSON.parse(texto);
+      if (esObjeto(parsed) && parsed.camello_encrypted_backup_version === 1) {
+        const password=window.prompt('Contraseña del respaldo cifrado');
+        if(!password) throw new Error('Restauración cancelada.');
+        plano=await descifrarRespaldo(texto,password);
+      }
       const ver = await database.validarRespaldo(plano);
       await database.importarRespaldo(plano);
       respaldoRef.current = plano;
@@ -225,7 +253,12 @@ export default function Respaldo() {
                   className="boton-chip"
                   onClick={() => {
                     respaldoRef.current = item.json;
-                    setMeta({ exported_at: item.date, schema_version: Number(JSON.parse(item.json).schema_version ?? 0), checksum: item.checksum });
+                    const parsed: unknown = JSON.parse(item.json);
+                    setMeta({
+                      exported_at: item.date,
+                      schema_version: esObjeto(parsed) ? Number(parsed.schema_version ?? 0) : 0,
+                      checksum: item.checksum,
+                    });
                     setMensaje('Respaldo automático seleccionado y verificado. Puedes restaurarlo o descargarlo.');
                   }}
                 >
