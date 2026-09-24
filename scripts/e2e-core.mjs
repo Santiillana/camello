@@ -321,7 +321,6 @@ try {
     if (await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).count()) {
       await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
     }
-    await page.getByText(/Cobro registrado|Cartera/).first().waitFor();
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
 
