@@ -9,7 +9,7 @@ export type FotoBorrador = {
 };
 
 function esCategoriaFoto(valor: string): CategoriaFoto {
-  return valor === 'cliente' || valor === 'mascota' || valor === 'producto' || valor === 'otro' ? valor : 'otro';
+  return valor === 'cliente' || valor === 'mascota' || valor === 'casa' ? valor : 'cliente';
 }
 
 type Props = {
