@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { database } from '../db/database';
 import { calcularChecksum, descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
+import { listarRespaldosAutomaticos, type BackupItem } from '../utils/respaldoAutomatico';
 
 type MetaRespaldo = {
   exported_at: string;
@@ -27,10 +28,15 @@ export default function Respaldo() {
   const [limpiando, setLimpiando] = useState(false);
   const [meta, setMeta] = useState<MetaRespaldo | null>(null);
   const [historial, setHistorial] = useState<MetaRespaldo[]>(leerHistorial);
+  const [automaticos, setAutomaticos] = useState<BackupItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const respaldoRef = useRef<string | null>(null);
 
   const ultimo = useMemo(() => meta ?? historial[0] ?? null, [meta, historial]);
+
+  useEffect(() => {
+    void listarRespaldosAutomaticos().then(setAutomaticos).catch(() => setAutomaticos([]));
+  }, []);
 
   async function exportar() {
     setExportando(true);
@@ -188,6 +194,31 @@ export default function Respaldo() {
           }}
         />
         {importando && <p>Restaurando…</p>}
+      </section>
+
+      <section className="tarjeta">
+        <h2>Respaldos automáticos</h2>
+        {automaticos.length === 0 ? (
+          <p className="texto-vacio">Todavía no hay respaldos automáticos guardados.</p>
+        ) : (
+          <ul className="lista-resumen">
+            {automaticos.map((item) => (
+              <li key={item.id} className="fila-recordatorio">
+                <span>{item.kind === 'weekly' ? 'Semanal' : 'Diario'} · {item.date}</span>
+                <button
+                  className="boton-chip"
+                  onClick={() => {
+                    respaldoRef.current = item.json;
+                    setMeta({ exported_at: item.date, schema_version: Number(JSON.parse(item.json).schema_version ?? 0), checksum: item.checksum });
+                    setMensaje('Respaldo automático seleccionado y verificado. Puedes restaurarlo o descargarlo.');
+                  }}
+                >
+                  Seleccionar
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="tarjeta">
