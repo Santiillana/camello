@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Ruta } from './types';
 import PinLock from './components/PinLock';
 import { Link, Navigate } from 'react-router-dom';
@@ -30,9 +30,9 @@ const Configuracion = lazy(() => import('./pages/Configuracion'));
 
 const DB_INIT_TIMEOUT_MS = 15_000;
 
-function duracionRuta(fecha: string, hora: string): string {
+function duracionRuta(fecha: string, hora: string, ahora = Date.now()): string {
   const inicio = new Date(fecha + 'T' + hora + ':00-05:00').getTime();
-  const minutos = Math.max(0, Math.floor((Date.now() - inicio) / 60000));
+  const minutos = Math.max(0, Math.floor((ahora - inicio) / 60000));
   return String(Math.floor(minutos / 60)).padStart(2, '0') + ':' + String(minutos % 60).padStart(2, '0');
 }
 
@@ -144,7 +144,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
       </header>
       {rutaActiva && (
         <Link to={`/rutas/${rutaActiva.id}`} className="banner-ruta-activa banner-ruta-global">
-          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · {duracionRuta(rutaActiva.fecha, rutaActiva.hora_inicio)} · paquetes {rutaActiva.paquetes_llevados}
+          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · {duracionRuta(rutaActiva.fecha, rutaActiva.hora_inicio, ahoraMs)} · paquetes {rutaActiva.paquetes_llevados}
         </Link>
       )}
       <main className="app-contenido">
