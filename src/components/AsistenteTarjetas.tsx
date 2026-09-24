@@ -42,11 +42,18 @@ export default function AsistenteTarjetas({
   function setPaso(valor: number | ((anterior: number) => number)) {
     setPasoState((anterior) => {
       const siguiente = typeof valor === 'function' ? valor(anterior) : valor;
-      const acotado = Math.min(Math.max(0, siguiente), Math.max(0, tarjetas.length - 1));
-      onPasoChange?.(acotado);
-      return acotado;
+      return Math.min(Math.max(0, siguiente), Math.max(0, tarjetas.length - 1));
     });
   }
+  useEffect(() => {
+    const acotado = Math.min(Math.max(0, pasoInicial), Math.max(0, tarjetas.length - 1));
+    setPasoState(acotado);
+  }, [pasoInicial, tarjetas.length]);
+
+  useEffect(() => {
+    onPasoChange?.(paso);
+  }, [paso, onPasoChange]);
+
   const porcentaje = useMemo(
     () => Math.round(((paso + 1) / Math.max(1, tarjetas.length)) * 100),
     [paso, tarjetas.length],
@@ -81,7 +88,7 @@ export default function AsistenteTarjetas({
       onCancelar();
       return;
     }
-    const descartar = window.confirm('¿Descartar el borrador?\n\nAceptar = Descartar\nCancelar = Guardar borrador');
+    const descartar = window.confirm('Guardar borrador / Descartar\n\nAceptar = Descartar\nCancelar = Guardar borrador');
     if (descartar) {
       await onDescartarBorrador?.();
       onCancelar();
@@ -121,6 +128,7 @@ export default function AsistenteTarjetas({
       role="dialog"
       aria-modal="true"
       onKeyDown={manejarEnter}
+      onInput={() => setTieneCambios(true)}
     >
       <div className="asistente-encabezado">
         <div>
