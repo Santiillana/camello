@@ -130,8 +130,35 @@ async function crearCliente(page) {
   );
   const trasRecarga = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
   if (trasRecarga.length !== 1 || trasRecarga[0]?.estado !== 'activo') {
+    const persistDiag = await page.evaluate(async () => {
+      const out = { indexed: null, local: null };
+      try {
+        const rawLocal = localStorage.getItem('camello.sqlite.v1');
+        out.local = rawLocal ? { length: rawLocal.length, prefix: rawLocal.slice(0, 20) } : null;
+        const requestDb = indexedDB.open('camelloWebSqlite');
+        out.indexed = await new Promise((resolve, reject) => {
+          requestDb.onerror = () => reject(requestDb.error ?? new Error('No se pudo abrir store SQLite.'));
+          requestDb.onsuccess = () => {
+            const db = requestDb.result;
+            const req = db.transaction('databases', 'readonly').objectStore('databases').get('camelloSQLite.db');
+            req.onerror = () => reject(req.error ?? new Error('No se pudo leer blob SQLite.'));
+            req.onsuccess = () => {
+              const value = req.result;
+              resolve(typeof value === 'string'
+                ? { type: 'string', length: value.length, prefix: value.slice(0, 20) }
+                : { type: value?.constructor?.name ?? typeof value, byteLength: value?.byteLength ?? null });
+              db.close();
+            };
+          };
+        });
+      } catch (error) {
+        return { error: String(error), indexed: out.indexed, local: out.local };
+      }
+      return out;
+    });
     throw new Error(
-      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga),
+      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga)
+      + ' persistencia=' + JSON.stringify(persistDiag),
     );
   }
 }
