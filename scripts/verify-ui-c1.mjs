@@ -39,8 +39,11 @@ try {
     await page.getByRole('button', { name: 'Abrir menú' }).click();
     console.log('ui-c1: contar secciones');
     const menuLinks = page.locator('.side-nav .side-nav-item');
-    if (await menuLinks.count() !== 10) throw new Error('C1: el menú lateral no muestra las 10 secciones.');
+    if (await menuLinks.count() !== 11) throw new Error('C1/B4: el menú lateral no muestra las 11 secciones principales.');
     if (await page.getByRole('link', { name: 'Vender' }).count() !== 0) throw new Error('C1: todavía existe Vender en la barra inferior.');
+    if (await page.getByRole('link', { name: 'Gastos' }).count() !== 1) throw new Error('B4: falta Gastos en el menú lateral.');
+    const marca = await page.locator('.side-nav-marca').innerText();
+    if (marca !== 'CAMELLO') throw new Error('B4: el nombre CAMELLO no se muestra completo.');
     await page.locator('.side-nav-cerrar').click();
     console.log('ui-c1: comprobar +');
     const fab = page.getByRole('button', { name: 'Nueva acción' });
@@ -48,6 +51,11 @@ try {
     await fab.click();
     if (await page.getByRole('menu').getByRole('button', { name: /Nueva venta/ }).count() !== 1) throw new Error('C1: falta Nueva venta en el +.');
     if (await page.getByRole('menu').getByRole('button', { name: /Nueva ruta/ }).count() !== 1) throw new Error('C1: falta Nueva ruta en el +.');
+
+    await page.setViewportSize({ width: 360, height: 800 });
+    const contenidoMovil = page.locator('.app-contenido');
+    const paddingLeft = await contenidoMovil.evaluate((el) => getComputedStyle(el).paddingLeft);
+    if (Number.parseFloat(paddingLeft) < 50) throw new Error('B4: el contenido móvil no reserva espacio para el riel.');
 
     console.log('ui-c1: comprobar escritorio');
     await page.setViewportSize({ width: 1200, height: 800 });
@@ -58,7 +66,7 @@ try {
     const ancho = await contenido.evaluate((el) => getComputedStyle(el).maxWidth);
     if (ancho === 'none' || ancho === '100%') throw new Error('C1: el contenido perdió el ancho máximo en escritorio.');
 
-    console.log('ui-c1: PASÓ — 10 secciones, sin Vender, + con Nueva venta/Nueva ruta, riel lateral y ancho limitado.');
+    console.log('ui-c1: PASÓ — 11 secciones, Gastos, sin Vender, + con Nueva venta/Nueva ruta, riel 360px y ancho limitado.');
   } finally {
     await browser.close();
   }
