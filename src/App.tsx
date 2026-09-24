@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { database } from './db/database';
 import BottomNav from './components/BottomNav';
 import SideNav from './components/SideNav';
@@ -44,6 +44,9 @@ function CargandoPagina() {
 function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp; onConfigChanged: (config: ConfiguracionApp) => void }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [menuExpandido, setMenuExpandido] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const esInicio = location.pathname === '/';
 
   return (
     <div className="app-shell">
@@ -53,14 +56,18 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
         onCerrar={() => setMenuAbierto(false)}
         onAlternarExpandido={() => setMenuExpandido((valor) => !valor)}
       />
-      <button
-        type="button"
-        className="app-menu-boton"
-        aria-label="Abrir menú"
-        onClick={() => setMenuAbierto(true)}
-      >
-        ☰
-      </button>
+      <header className="app-topbar">
+        {!esInicio ? (
+          <button type="button" className="app-topbar-boton" aria-label="Volver" onClick={() => navigate(-1)}>
+            ←
+          </button>
+        ) : (
+          <span />
+        )}
+        <button type="button" className="app-topbar-menu" aria-label="Abrir menú" onClick={() => setMenuAbierto(true)}>
+          ☰
+        </button>
+      </header>
       <main className="app-contenido">
         <Suspense fallback={<CargandoPagina />}>
           <Routes>
