@@ -100,6 +100,19 @@ export default function App() {
   useEffect(() => {
     let activo = true;
 
+    if (import.meta.env.VITE_UI_SMOKE === '1') {
+      const configPrueba: ConfiguracionApp = {
+        negocio_nombre: 'CAMELLO',
+        usuario_nombre: 'Prueba',
+        color_acento: '#c2642b',
+        moneda: 'COP',
+      };
+      setConfig(configPrueba);
+      aplicarTema(configPrueba.color_acento);
+      setListo(true);
+      return () => { activo = false; };
+    }
+
     inicializarBaseDeDatosConTimeout()
       .then(() => database.obtenerConfiguracion())
       .then((resultado) => {
