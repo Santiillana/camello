@@ -315,13 +315,13 @@ try {
     if (Number(ventasBase[0]?.total) <= 0) throw new Error('E2E: total vendido en SQLite inválido.');
 
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const carteraAntes = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     await page.getByRole('link', { name: 'Pagar' }).first().click({ force: true });
-    await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor().catch(() => {});
-    await page.getByRole('button', { name: 'Efectivo' }).click().catch(() => {});
-    if (await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).count()) {
-      await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
-    }
+    await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor({ timeout: 15000 });
+    await page.getByRole('button', { name: 'Efectivo' }).click();
+    await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).click();
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
+    if (Number(carteraBase[0]?.pendiente) >= Number(carteraAntes[0]?.pendiente)) throw new Error('E2E: el cobro no redujo la cartera.');
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
 
     await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
