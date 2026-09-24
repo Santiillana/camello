@@ -23,16 +23,6 @@ async function esperarServidor(url, timeoutMs = 30000) {
   throw new Error('Vite no inició a tiempo.\n' + logs);
 }
 
-async function configurarPrimeraVez(page) {
-  await page.getByLabel('Nombre del negocio').fill('COMBOPITT');
-  await page.getByLabel('Nombre de quien lleva la app').fill('Alisson');
-  await page.getByLabel('Nombre del producto').fill('Galletas');
-  await page.getByLabel('Precio de venta').fill('13000');
-  await page.getByLabel('Costo unitario').fill('7000');
-  await page.getByRole('button', { name: 'Entrar a CAMELLO' }).click();
-  await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor();
-}
-
 try {
   await esperarServidor('http://127.0.0.1:5173');
 
@@ -40,7 +30,7 @@ try {
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'networkidle' });
-    await configurarPrimeraVez(page);
+    await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor();
 
     await page.getByRole('button', { name: 'Abrir menú' }).click();
     const menuLinks = page.locator('.side-nav .side-nav-item');
