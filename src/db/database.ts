@@ -671,7 +671,7 @@ class Database {
     await this.persist();
   }
 
-  private   calcularSeguimiento 
+  private calcularSeguimiento
 (ultimaCompraISO: string | null): EstadoSeguimiento {
     if (!ultimaCompraISO) return 'POR_CONTACTAR';
     const dias = diasDesdeISO(ultimaCompraISO);
