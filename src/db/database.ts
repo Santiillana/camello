@@ -68,25 +68,53 @@ class Database {
     return this.ready;
   }
 
-  private async _init(): Promise<void> {
-    this.sqlite = new SQLiteConnection(CapacitorSQLite);
-
-    if (Capacitor.getPlatform() === 'web') {
-      const jeepEl = document.querySelector('jeep-sqlite');
-      if (!jeepEl) {
-        throw new Error('SQLite web no está listo: no se encontró <jeep-sqlite> en el DOM.');
-      }
-
-      await customElements.whenDefined('jeep-sqlite');
-      await this.sqlite.initWebStore();
+  async reintentar(): Promise<void> {
+    const actual = this.ready;
+    if (actual) {
+      const resultado = await actual.then(() => true, () => false);
+      if (resultado) return;
     }
 
-    await this.abrirConexion();
-    await this.seedProductosSiVacio();
-    await this.persist();
+    await this.cerrarConexion();
+    this.db = null;
+    this.sqlite = null;
+    this.ready = null;
+    await this.init();
   }
 
-  private async abrirConexion(): Promise<void> {
+  private async _init(): Promise<void> {
+    try {
+      if (!this.sqlite) this.sqlite = new SQLiteConnection(CapacitorSQLite);
+
+      if (Capacitor.getPlatform() === 'web') {
+        const jeepEl = document.querySelector('jeep-sqlite');
+        if (!jeepEl) {
+          throw new Error('SQLite web no está listo: no se encontró <jeep-sqlite> en el DOM.');
+        }
+
+        await customElements.whenDefined('jeep-sqlite');
+        await this.sqlite.initWebStore();
+      }
+
+      const schemaActualizado = await this.abrirConexion();
+      const productosCreados = await this.seedProductosSiVacio();
+
+      if (schemaActualizado || productosCreados) {
+        await this.persist();
+      }
+    } catch (error) {
+      try {
+        await this.cerrarConexion();
+      } catch (cleanupError) {
+        const original = error instanceof Error ? error.message : String(error);
+        const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        throw new Error(original + ' La limpieza de la conexión también falló: ' + cleanup);
+      }
+      throw error;
+    }
+  }
+
+  private async abrirConexion(): Promise<boolean> {
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
 
     const isConn = (await this.sqlite.isConnection(DB_NAME, false)).result;
@@ -95,28 +123,30 @@ class Database {
       : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
 
     await this.db.open();
+    const currentVersion = await this.db.getVersion();
+    if (currentVersion > DB_VERSION) {
+      throw new Error('La base de datos tiene una versión ' + currentVersion + ' superior a la compatible (' + DB_VERSION + ').');
+    }
+
     await this.db.execute('PRAGMA foreign_keys = ON;');
 
-    for (const stmt of SCHEMA_STATEMENTS) {
-      await this.db.execute(stmt);
+    if (currentVersion < DB_VERSION) {
+      for (const stmt of SCHEMA_STATEMENTS) {
+        await this.db.execute(stmt);
+      }
+      await this.db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
+      return true;
     }
+
+    return false;
   }
 
   private async cerrarConexion(): Promise<void> {
     if (!this.sqlite) return;
 
-    if (this.db) {
-      try {
-        await this.db.close();
-      } catch {
-        // Ya estaba cerrada; continuamos con el cierre de la conexión.
-      }
-    }
-
-    try {
+    const isConn = (await this.sqlite.isConnection(DB_NAME, false)).result;
+    if (isConn) {
       await this.sqlite.closeConnection(DB_NAME, false);
-    } catch {
-      // La conexión puede no existir después de una restauración fallida.
     }
 
     this.db = null;
@@ -133,7 +163,7 @@ class Database {
     }
   }
 
-  private async seedProductosSiVacio(): Promise<void> {
+  private async seedProductosSiVacio(): Promise<boolean> {
     const r = await this.conn().query('SELECT COUNT(*) as n FROM productos;');
     const n = Number(r.values?.[0]?.n ?? 0);
     if (n === 0) {
@@ -141,7 +171,9 @@ class Database {
         'INSERT INTO productos (nombre, precio, costo, activo) VALUES (?, ?, ?, 1);',
         ['Galletas naturales para mascota', 13000, 7000]
       );
+      return true;
     }
+    return false;
   }
 
   // CLIENTES
