@@ -350,8 +350,6 @@ class Database {
     const ventasListas = ventas.get('precio_aplicado') === 'INTEGER' && ventas.get('costo_aplicado') === 'INTEGER' && ventas.get('total') === 'INTEGER' && ventas.get('utilidad') === 'INTEGER' && ventas.has('metodo_pago') && ventas.has('monto_pagado') && ventas.has('operacion_id');
     if (productosListos && ventasListas) return;
     const db = this.conn();
-    try {
-      await db.beginTransaction();
       if (!productosListos) {
         await db.execute('ALTER TABLE productos RENAME TO productos_migracion_v3;', false);
         await db.execute('CREATE TABLE productos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, precio INTEGER NOT NULL, costo INTEGER NOT NULL, activo INTEGER NOT NULL DEFAULT 1);', false);
@@ -373,9 +371,6 @@ class Database {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);', false);
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);', false);
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);', false);
-    } finally {
-      // La transacción y el estado de foreign_keys los controla el coordinador de migraciones.
-    }
   }
 
   private async migrarVersion4(): Promise<void> {
