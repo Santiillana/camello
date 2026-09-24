@@ -241,6 +241,12 @@ export default function App() {
         await inicializarModulos(database);
         const seguridad = await database.obtenerSeguridadPin();
         if (activo) { setSeguridadPin({habilitado:seguridad.habilitado,lock_minutos:seguridad.lock_minutos}); setDesbloqueado(!seguridad.habilitado); }
+        if (import.meta.env.VITE_E2E === '1') {
+          (window as Window & typeof globalThis & { __CAMELLO_TEST_SQL__?: (sql: string, params?: unknown[]) => Promise<unknown[]> }).__CAMELLO_TEST_SQL__ = async (sql, params = []) => {
+            const r = await database.connForTesting(sql, params);
+            return r;
+          };
+        }
         const resultado = await database.obtenerConfiguracion();
         if (import.meta.env.VITE_E2E === '1' && !resultado.negocio_nombre) {
           await database.guardarConfiguracionInicial(
