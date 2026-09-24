@@ -32,6 +32,13 @@ import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO 
 import { initWebSqlite } from './initWebSqlite';
 import { calcularChecksum } from '../utils/respaldo';
 
+type SqliteExportData = Record<string, unknown> & {
+  database: string;
+  mode: string;
+  encrypted?: boolean;
+  tables: unknown[];
+};
+
 const DEFAULT_CONFIG: ConfiguracionApp = {
   negocio_nombre: '',
   usuario_nombre: '',
@@ -1876,6 +1883,17 @@ class Database {
     }
   }
 
+  async listarPagosCliente(clienteId: number): Promise<Pago[]> {
+    if (!Number.isInteger(clienteId) || clienteId <= 0) throw new Error('Cliente inválido.');
+    const r = await this.conn().query(
+      `SELECT * FROM pagos
+       WHERE cliente_id = ?
+       ORDER BY fecha DESC, hora DESC, id DESC;`,
+      [clienteId],
+    );
+    return (r.values ?? []) as Pago[];
+  }
+
   async registrarPagoCliente(
     clienteId: number,
     montoSolicitado: number,
@@ -2173,7 +2191,7 @@ class Database {
     return JSON.stringify(envelope, null, 2);
   }
 
-  async validarRespaldo(jsonTexto: string): Promise<{ version: number; checksum: string | null; exportData: Record<string, unknown> }> {
+  async validarRespaldo(jsonTexto: string): Promise<{ version: number; checksum: string | null; exportData: SqliteExportData; modulos: Record<string, unknown> }> {
     const bytes = new TextEncoder().encode(jsonTexto).byteLength;
     if (bytes > 25 * 1024 * 1024) throw new Error('El respaldo supera el límite de 25 MB.');
     let parsed: unknown;
@@ -2187,8 +2205,9 @@ class Database {
     }
     const data = parsed as Record<string, unknown>;
     if (Number(data.camello_backup_version ?? 0) === 1 && data.data && typeof data.data === 'object') {
-      const exportData = data.data as Record<string, unknown>;
+      const exportData = data.data as SqliteExportData;
       const checksum = String(data.checksum ?? '');
+      const modulos = data.modulos && typeof data.modulos === 'object' && !Array.isArray(data.modulos) ? data.modulos as Record<string, unknown> : {};
       if (!checksum) throw new Error('El respaldo no tiene checksum.');
       const calculado = await calcularChecksum(JSON.stringify(
         data.modulos && typeof data.modulos === 'object'
@@ -2200,26 +2219,26 @@ class Database {
       if (!Number.isInteger(version) || version < 1 || version > DB_VERSION) {
         throw new Error('Versión de respaldo no compatible.');
       }
-      return { version, checksum, exportData };
+      return { version, checksum, exportData, modulos };
     }
 
     const version = Number(data.version);
     if (!Number.isInteger(version) || version < 1 || version > DB_VERSION) {
       throw new Error('Versión de respaldo no compatible.');
     }
-    return { version, checksum: null, exportData: data };
+    return { version, checksum: null, exportData: data as SqliteExportData, modulos: {} };
   }
 
   async importarRespaldo(jsonTexto: string): Promise<void> {
     if (!this.sqlite) throw new Error('SQLite no está inicializado.');
     const valido = await this.validarRespaldo(jsonTexto);
-    const data = { ...valido.exportData, database: this.activeDbName };
+    const data: SqliteExportData = { ...valido.exportData, database: this.activeDbName };
 
     if (data.database !== DB_NAME && data.database !== DB_NAME + '.db' && data.database !== this.activeDbName) {
       throw new Error('Este respaldo no pertenece a CAMELLO.');
     }
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
-    if (data.encrypted !== false) throw new Error('No se admiten respaldos cifrados en esta versión.');
+    if (data.encrypted === true) throw new Error('No se admiten respaldos cifrados en esta versión.');
     if (!Array.isArray(data.tables)) throw new Error('El respaldo está incompleto.');
 
     const serialized = JSON.stringify(data);
@@ -2246,9 +2265,9 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
-      if (data.modulos && typeof data.modulos === 'object') {
+      if (Object.keys(valido.modulos).length > 0) {
         const { crearContexto } = await import('../modulos/runtime');
-        await crearContexto(this).importarTodo(data.modulos);
+        await crearContexto(this).importarTodo(valido.modulos);
       }
       await this.persist();
     }

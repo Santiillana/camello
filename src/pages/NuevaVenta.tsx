@@ -286,8 +286,7 @@ export default function NuevaVenta() {
       'Pagado: ' + formatoMoneda(voucher.pagado),
       'Pendiente: ' + formatoMoneda(voucher.pendiente),
     ].join('\n');
-    const share = navigator.share;
-    if (share) {
+    if (typeof navigator.share === 'function') {
       await navigator.share({ title: 'Venta #' + voucher.id, text: texto });
       return;
     }

@@ -26,7 +26,6 @@ export async function descifrarRespaldo(texto:string,password:string):Promise<st
     const salt = bytes(String(data.salt));
     const ciphertext = bytes(String(data.ciphertext));
     const ivBuffer = iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer;
-    const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
     const cipherBuffer = ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer;
     const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:ivBuffer},await keyFromPassword(password,salt),cipherBuffer);
     return dec.decode(plain);
