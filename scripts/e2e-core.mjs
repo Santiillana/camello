@@ -205,7 +205,14 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   }
   await siguiente(page);
 
-  await page.getByRole('button', { name: metodo === 'TRANSFERENCIA_NEQUI' ? 'Transferencia / Nequi' : metodo === 'PARCIAL' ? 'Pago parcial' : metodo === 'FIADO' ? 'Fiado' : 'Efectivo' }).click();
+  const etiquetaMetodo = metodo === 'TRANSFERENCIA_NEQUI'
+    ? 'Transferencia / Nequi'
+    : metodo === 'PARCIAL'
+      ? 'Pago parcial'
+      : metodo === 'FIADO'
+        ? 'Fiado'
+        : 'Efectivo';
+  await page.locator('.metodo-pago-card').filter({ hasText: etiquetaMetodo }).first().click();
   if (metodo === 'PARCIAL') {
     await page.getByLabel('¿Cuánto paga ahora?').fill('1000');
   }
