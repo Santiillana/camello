@@ -9,6 +9,7 @@ let serverLog = '';
 
 const build = spawn('npm', ['run', 'build'], {
   stdio: ['ignore', 'pipe', 'pipe'],
+  env: { ...process.env, VITE_E2E: '1' },
 });
 build.stdout.on('data', (chunk) => { serverLog += chunk.toString(); });
 build.stderr.on('data', (chunk) => { serverLog += chunk.toString(); });
