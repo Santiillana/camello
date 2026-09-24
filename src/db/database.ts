@@ -460,7 +460,6 @@ class Database {
     // No usar ALTER TABLE ... RENAME sobre rutas: SQLite puede reescribir
     // las FK de tablas hijas para apuntar al nombre temporal.
     let reemplazoCreado = false;
-    try {
       await db.execute('DROP TABLE IF EXISTS rutas_reconstruccion_v8;', false);
       await db.execute(`CREATE TABLE rutas_reconstruccion_v8 (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
