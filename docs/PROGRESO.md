@@ -224,8 +224,8 @@ El informe final incluye hashes, estado CI/APK, Intacto verificado, Pendiente de
 
 ## Compuerta final B
 
-Último HEAD de código funcional antes del cierre documental: ff6b5f160216c61d2b6c7919150dfa7fda35752b.
-Los commits posteriores a ese SHA son únicamente documentación (PROGRESO, DECISIONES, ARQUITECTURA, PRUEBAS, CHANGELOG y README).
+Último ajuste técnico de código del bloque B: 5103dc41824f7003d27fc056b33a3b3b77dd4d25.
+Después de ese SHA se hizo un ajuste técnico menor en AsistenteTarjetas (5103dc41824f7003d27fc056b33a3b3b77dd4d25) para estabilizar el callback de cierre; no cambia el alcance funcional. El resto de los commits posteriores son documentales.
 
 - Verify CAMELLO run 449 sobre el último SHA de código: QUEUED.
 - APK debug run 456 sobre el último SHA de código: QUEUED.
