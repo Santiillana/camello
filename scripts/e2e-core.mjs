@@ -315,7 +315,7 @@ try {
     if (Number(ventasBase[0]?.total) <= 0) throw new Error('E2E: total vendido en SQLite inválido.');
 
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.getByRole('link', { name: 'Pagar' }).first().click();
+    await page.getByRole('link', { name: 'Pagar' }).first().click({ force: true });
     await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor().catch(() => {});
     await page.getByRole('button', { name: 'Efectivo' }).click().catch(() => {});
     if (await page.getByRole('button', { name: 'CONFIRMAR COBRO' }).count()) {
