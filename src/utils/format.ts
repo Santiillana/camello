@@ -75,3 +75,11 @@ export function diasDesdeISO(iso: string, hoy = new Date()): number {
   const actualUTC = Date.UTC(actual[0], actual[1] - 1, actual[2]);
   return Math.max(0, Math.floor((actualUTC - inicioUTC) / 86_400_000));
 }
+
+export function sumarDiasISO(iso: string, dias: number): string {
+  const partes = calendarioDesdeISO(iso);
+  if (!partes || !Number.isInteger(dias)) return iso;
+  const fecha = new Date(Date.UTC(partes[0], partes[1] - 1, partes[2]));
+  fecha.setUTCDate(fecha.getUTCDate() + dias);
+  return isoDesdeCalendario(fecha.getUTCFullYear(), fecha.getUTCMonth() + 1, fecha.getUTCDate());
+}
