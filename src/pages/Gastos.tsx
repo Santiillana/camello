@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { database } from '../db/database';
-import AsistenteTarjetas from '../components/AsistenteTarjetas';(value: string): value is EstadoGasto {
-  return value === 'pagado' || value === 'pendiente' || value === 'anulado';
-}
-function esNaturalezaGasto(value: string): value is 'operativo' | 'compra_insumos' | 'retiro_dueno' {
-  return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno';
-}
-
+import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
 import { formatoMoneda, hoyISO } from '../utils/format';
 import type { CategoriaGasto, Gasto, EstadoGasto, ResultadoMes } from '../types';
 import { comprimirArchivo } from '../components/FotosSelector';
-import { useSearchParams } from 'react-router-dom';
+
+function esEstadoGasto(value: string): value is EstadoGasto {
+  return value === 'pagado' || value === 'pendiente' || value === 'anulado';
+}
+function esNaturalezaGasto(value: string): value is 'operativo' | 'compra_insumos' | 'retiro_dueno' {
+  return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno';
+}
 
 type FiltroPeriodo='hoy'|'semana'|'mes';
 function inicioSemana(fecha:string){ const d=new Date(fecha+'T00:00:00Z'); const n=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()-(n-1)); return d.toISOString().slice(0,10); }
