@@ -160,7 +160,14 @@ async function webStoreSnapshot(page) {
             req.onerror = () => reject(req.error ?? new Error('No se pudo leer camelloSQLite.db.'));
             req.onsuccess = () => resolve(req.result);
           });
-          dbResult.sizes[storeName] = value instanceof Uint8Array ? value.byteLength : value && typeof value === 'object' && 'byteLength' in value ? Number(value.byteLength) : value == null ? null : -1;
+          if (value instanceof Uint8Array) {
+            const texto = new TextDecoder().decode(value);
+            dbResult.sizes[storeName] = value.byteLength;
+            dbResult.containsClienteE2E = texto.includes('Cliente E2E');
+          } else {
+            dbResult.sizes[storeName] = value && typeof value === 'object' && 'byteLength' in value ? Number(value.byteLength) : value == null ? null : -1;
+            dbResult.containsClienteE2E = false;
+          }
         }
       }
       db.close();
