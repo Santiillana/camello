@@ -14,9 +14,7 @@ export async function initWebSqlite(): Promise<void> {
   if (Capacitor.getPlatform() !== 'web') return;
 
   marcarEtapa('loader-import');
-  const { defineCustomElements, applyPolyfills } = await import('jeep-sqlite/loader');
-  marcarEtapa('polyfills');
-  await applyPolyfills();
+  const { defineCustomElements } = await import('jeep-sqlite/loader');
   marcarEtapa('define-element');
   defineCustomElements(window);
   marcarEtapa('defined');
