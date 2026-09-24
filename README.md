@@ -14,9 +14,9 @@ Aplicación Android local, offline-first, para que **COMBOPITT** registre client
 - Mapa con filtros persistentes y popup seguro.
 - Respaldo con checksum, restauración y rotación automática.
 - Configuración inicial y productos.
-- SQLite nativo con migraciones v2→v10, reparación v9 para referencias temporales y borradores persistentes.
+- SQLite nativo en Android y SQLite web con persistencia IndexedDB, con migraciones v2→v14, reparación v9 para referencias temporales y borradores persistentes.
 - CI para verify, UI smoke, E2E y APK; los tests de migración y parser se conservan como puertas del verify.
-- Release firmado preparado para secretos de GitHub.
+- Release firmado preparado para secretos de GitHub; el keystore permanece fuera del repositorio.
 
 ## Arquitectura
 
