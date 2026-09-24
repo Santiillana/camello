@@ -24,6 +24,7 @@ export default function Dashboard({ config }: Props) {
     mes: null,
   });
   const [cartera, setCartera] = useState<CarteraItem[]>([]);
+  const [recordatorios, setRecordatorios] = useState<CarteraItem[]>([]);
   const [rutaActivaId, setRutaActivaId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,17 +104,36 @@ export default function Dashboard({ config }: Props) {
 
           <section className="tarjeta">
             <div className="fila-titulo-boton">
-              <h2>Actividad</h2>
-              {periodo !== 'hoy' && (
-                <span className="detalle-cliente">{resumen.rutas_realizadas ?? 0} rutas</span>
-              )}
+              <div>
+                <p className="texto-kicker">Seguimiento</p>
+                <h2>Recordatorio de recompra</h2>
+              </div>
+              <Link to="/recordatorios" className="boton-texto">Ver todos</Link>
             </div>
-            <div className="lista-resumen">
-              <div><span>Clientes nuevos</span><strong>{resumen.clientes_nuevos}</strong></div>
-              <div><span>Clientes recurrentes</span><strong>{resumen.clientes_recurrentes ?? 0}</strong></div>
-              <div><span>Clientes por contactar</span><strong>{resumen.clientes_por_contactar ?? 0}</strong></div>
-              {periodo === 'mes' && <div><span>Clientes activos</span><strong>{resumen.clientes_activos ?? 0}</strong></div>}
-            </div>
+            {recordatorios.length === 0 ? (
+              <p className="texto-vacio">No hay clientes con más de 20 días sin comprar.</p>
+            ) : (
+              <ul className="lista-recordatorios">
+                {recordatorios.map((item) => (
+                  <li key={item.cliente_id} className="fila-recordatorio">
+                    <Link to={`/clientes/${item.cliente_id}`}>
+                      <strong>{item.nombre}</strong>
+                      <span>Más de 20 días sin comprar</span>
+                    </Link>
+                    {item.telefono1 && (
+                      <a
+                        className="boton-chip"
+                        href={'https://wa.me/57' + item.telefono1.replace(/\D/g, '')}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Escribir
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </>
       ) : (
@@ -121,8 +141,8 @@ export default function Dashboard({ config }: Props) {
       )}
 
       <section className="accesos-rapidos">
-        <Link to="/venta-nueva" className="acceso-boton primario">➕ Nueva venta</Link>
-        <Link to="/rutas?nueva=1" className="acceso-boton">🧭 Nueva ruta</Link>
+        <Link to="/venta-nueva" className="acceso-boton venta">➕ Nueva venta</Link>
+        <Link to="/rutas?nueva=1" className="acceso-boton ruta">🧭 Nueva ruta</Link>
       </section>
 
       <section className="tarjeta cartera-resumen">
@@ -144,7 +164,10 @@ export default function Dashboard({ config }: Props) {
                   <strong>{item.nombre}</strong>
                   <span>{item.ventas_pendientes} pendiente(s)</span>
                 </Link>
-                <span className="etiqueta-pendiente">{formatoMoneda(item.pendiente)}</span>
+                <div className="lado-derecho-cliente">
+                  <span className="etiqueta-pendiente">{formatoMoneda(item.pendiente)}</span>
+                  <Link className="boton-chip" to="/cartera">Pagar</Link>
+                </div>
               </li>
             ))}
           </ul>
