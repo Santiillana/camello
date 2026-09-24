@@ -1,23 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { database } from '../db/database';
 import type { RutaConResumen, TipoRuta } from '../types';
-import { fechaLocalISO, formatoFecha, formatoMoneda } from '../utils/format';
+import { formatoFecha, formatoMoneda } from '../utils/format';
 
-const TIPOS: TipoRuta[] = ['Puerta a puerta', 'Barrio', 'Vereda', 'Sector', 'Visita comercial'];
+const TIPOS: TipoRuta[] = ['Puerta a puerta', 'Venta local móvil'];
 const ETIQUETA_ESTADO: Record<string, string> = {
-  PROGRAMADA: 'Programada',
   EN_CURSO: 'En curso',
   FINALIZADA: 'Finalizada',
   CANCELADA: 'Cancelada',
+  PROGRAMADA: 'Pendiente',
 };
 
 export default function Rutas() {
   const [rutas, setRutas] = useState<RutaConResumen[]>([]);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
 
   async function cargar() {
     try {
@@ -28,12 +26,9 @@ export default function Rutas() {
     }
   }
 
-  useEffect(() => {
-    setMostrarForm(params.get('nueva') === '1');
-    void cargar();
-  }, [params]);
+  useEffect(() => { void cargar(); }, []);
 
-  const rutaActiva = rutas.find((r) => r.estado === 'EN_CURSO');
+  const rutaActiva = rutas.find((r) => r.estado === 'EN_CURSO') ?? null;
 
   return (
     <div className="pantalla">
@@ -43,7 +38,7 @@ export default function Rutas() {
           <h1>Rutas</h1>
         </div>
         {!rutaActiva && (
-          <button className="boton-secundario" onClick={() => setMostrarForm((v) => !v)}>
+          <button className="boton-primario" onClick={() => setMostrarForm((v) => !v)}>
             {mostrarForm ? 'Cancelar' : '+ Nueva ruta'}
           </button>
         )}
@@ -51,7 +46,7 @@ export default function Rutas() {
 
       {rutaActiva && (
         <Link to={'/rutas/' + rutaActiva.id} className="banner-ruta-activa">
-          🧭 Ruta en curso: {rutaActiva.nombre || rutaActiva.tipo}
+          🧭 Ruta en curso · {rutaActiva.nombre || rutaActiva.tipo}
         </Link>
       )}
 
@@ -59,10 +54,10 @@ export default function Rutas() {
 
       {mostrarForm && !rutaActiva && (
         <FormNuevaRuta
-          onCreada={async (id, iniciarAhora) => {
+          onCreada={async (id) => {
             setMostrarForm(false);
             await cargar();
-            if (iniciarAhora) navigate('/rutas/' + id);
+            window.location.hash = '#/rutas/' + id;
           }}
           onCancelar={() => setMostrarForm(false)}
         />
@@ -75,17 +70,22 @@ export default function Rutas() {
               <div>
                 <strong>{ruta.nombre || ruta.tipo}</strong>
                 <div className="detalle-cliente">
-                  {ruta.tipo} · {formatoFecha(ruta.fecha_planificada || ruta.fecha)} · {ETIQUETA_ESTADO[ruta.estado]}
+                  {ruta.tipo} · {formatoFecha(ruta.fecha)} · {ETIQUETA_ESTADO[ruta.estado] ?? ruta.estado}
+                </div>
+                <div className="detalle-cliente">
+                  {ruta.vendidos} vendidos · {ruta.clientes_atendidos} clientes · {formatoMoneda(ruta.total_vendido)}
                 </div>
               </div>
               <div className="lado-derecho-cliente">
-                <span>{ruta.vendidos}/{ruta.paquetes_llevados} vendidos</span>
-                <strong>{formatoMoneda(ruta.total_vendido)}</strong>
+                <strong>{ruta.estado === 'EN_CURSO' ? 'Abierta' : formatoMoneda(ruta.total_vendido)}</strong>
+                {ruta.estado === 'FINALIZADA' && (
+                  <span className="detalle-cliente">{ruta.paquetes_sobrantes ?? ruta.sobrantes} sobrantes</span>
+                )}
               </div>
             </Link>
-            {ruta.estado === 'PROGRAMADA' && !rutaActiva && (
+            {ruta.estado === 'EN_CURSO' && (
               <Link className="boton-primario boton-grande" to={'/rutas/' + ruta.id}>
-                ▶ Iniciar ruta
+                Continuar ruta
               </Link>
             )}
           </li>
@@ -100,15 +100,12 @@ function FormNuevaRuta({
   onCreada,
   onCancelar,
 }: {
-  onCreada: (id: number, iniciarAhora: boolean) => Promise<void>;
+  onCreada: (id: number) => Promise<void>;
   onCancelar: () => void;
 }) {
   const [nombre, setNombre] = useState('Ruta de hoy');
   const [tipo, setTipo] = useState<TipoRuta>('Puerta a puerta');
-  const [fecha, setFecha] = useState(fechaLocalISO());
-  const [hora, setHora] = useState('');
   const [paquetes, setPaquetes] = useState(20);
-  const [iniciarAhora, setIniciarAhora] = useState(false);
   const [usarGps, setUsarGps] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,39 +116,32 @@ function FormNuevaRuta({
     setError(null);
 
     try {
-      if (iniciarAhora) {
-        let lat: number | undefined;
-        let lng: number | undefined;
-        if (usarGps && navigator.geolocation) {
-          try {
-            const pos = await new Promise<GeolocationPosition>((res, rej) =>
-              navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 30000 }),
-            );
-            lat = pos.coords.latitude;
-            lng = pos.coords.longitude;
-          } catch {
-            // La ubicación es opcional.
-          }
+      let lat: number | undefined;
+      let lng: number | undefined;
+      if (usarGps && navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, {
+              enableHighAccuracy: true,
+              maximumAge: 0,
+              timeout: 10000,
+            }),
+          );
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        } catch {
+          // La ubicación de inicio es opcional.
         }
-
-        const id = await database.iniciarRuta({
-          nombre,
-          tipo,
-          paquetes_llevados: paquetes,
-          lat_inicio: lat,
-          lng_inicio: lng,
-        });
-        await onCreada(id, true);
-      } else {
-        const id = await database.crearRuta({
-          nombre,
-          tipo,
-          fecha_planificada: fecha,
-          hora_planificada: hora || undefined,
-          paquetes_llevados: paquetes,
-        });
-        await onCreada(id, false);
       }
+
+      const id = await database.iniciarRuta({
+        nombre,
+        tipo,
+        paquetes_llevados: paquetes,
+        lat_inicio: lat,
+        lng_inicio: lng,
+      });
+      await onCreada(id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -162,8 +152,8 @@ function FormNuevaRuta({
   return (
     <form className="formulario-tarjeta" onSubmit={guardar}>
       <div className="separador-seccion">
-        <strong>{iniciarAhora ? 'Iniciar ruta' : 'Programar ruta'}</strong>
-        <span className="texto-vacio">Puedes dejarla programada y arrancarla después.</span>
+        <strong>Iniciar ruta ahora</strong>
+        <span className="texto-vacio">La ruta queda guardada y continúa aunque cierres la app.</span>
       </div>
 
       <label>
@@ -178,37 +168,24 @@ function FormNuevaRuta({
         </select>
       </label>
 
-      {!iniciarAhora && (
-        <div className="grid-dos-columnas">
-          <label>Fecha planificada<input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} required /></label>
-          <label>Hora planificada<input type="time" value={hora} onChange={(e) => setHora(e.target.value)} /></label>
-        </div>
-      )}
-
       <label>
         ¿Cuántos paquetes llevas?
         <input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} required />
       </label>
 
-      {iniciarAhora && (
-        <label className="fila-checkbox">
-          <input type="checkbox" checked={usarGps} onChange={(e) => setUsarGps(e.target.checked)} />
-          Registrar ubicación de inicio con GPS
-        </label>
-      )}
+      <label className="fila-checkbox">
+        <input type="checkbox" checked={usarGps} onChange={(e) => setUsarGps(e.target.checked)} />
+        Registrar ubicación de inicio con GPS
+      </label>
 
       {error && <p className="texto-error">{error}</p>}
 
       <div className="fila-botones">
         <button type="button" className="boton-secundario" onClick={onCancelar}>Cancelar</button>
-        <button type="button" className="boton-secundario" onClick={() => setIniciarAhora((v) => !v)}>
-          {iniciarAhora ? 'Programar' : 'Iniciar ahora'}
+        <button type="submit" className="boton-primario boton-grande" disabled={guardando}>
+          {guardando ? 'Iniciando…' : '▶ Iniciar ruta'}
         </button>
       </div>
-
-      <button type="submit" className="boton-primario boton-grande" disabled={guardando}>
-        {guardando ? 'Guardando…' : iniciarAhora ? '▶ Iniciar ruta' : 'Guardar ruta'}
-      </button>
     </form>
   );
 }
