@@ -223,6 +223,27 @@ class Database {
     const versionResult = await db.query('PRAGMA user_version;');
     const version = Number(versionResult.values?.[0]?.user_version ?? 0);
     if (version > DB_VERSION) throw new Error('La base de datos usa una versión de esquema más nueva (' + version + ') que esta app (' + DB_VERSION + ').');
+
+    const clientesColumnas = await this.columnasDeTabla('clientes');
+    const ventasColumnas = await this.columnasDeTabla('ventas');
+    const rutasColumnas = await this.columnasDeTabla('rutas');
+    const esBaseNuevaCanonical =
+      version === 0 &&
+      clientesColumnas.has('nombre_normalizado') &&
+      clientesColumnas.has('ubicacion_precision_m') &&
+      ventasColumnas.has('operacion_id') &&
+      ventasColumnas.has('estado_registro') &&
+      rutasColumnas.has('paquetes_sobrantes');
+
+    if (esBaseNuevaCanonical) {
+      for (const stmt of SCHEMA_STATEMENTS.filter((statement) => /^CREATE (INDEX|TRIGGER) IF NOT EXISTS /i.test(statement.trim()))) {
+        await db.execute(stmt, false);
+      }
+      await db.execute('PRAGMA user_version = ' + DB_VERSION + ';', false);
+      await this.verificarEsquemaCompleto();
+      return;
+    }
+
     const migraciones = [
       { version: 2, ejecutar: () => this.migrarVersion2() },
       { version: 3, ejecutar: () => this.migrarVersion3() },
