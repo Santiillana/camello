@@ -23,6 +23,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   const decididoRef = useRef(false);
   const timerRef = useRef<number | null>(null);
   const [pendiente, setPendiente] = useState<BorradorPendiente<T> | null>(null);
+  const [listo, setListo] = useState(false);
 
   useEffect(() => {
     datosRef.current = datos;
@@ -37,6 +38,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
       setPendiente(existente);
       listoRef.current = !existente;
       decididoRef.current = !existente;
+      setListo(true);
     });
     return () => {
       cancelado = true;
@@ -44,7 +46,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   }, [activo, tipo, clave]);
 
   useEffect(() => {
-    if (!activo || !listoRef.current || !decididoRef.current) return undefined;
+    if (!activo || !listo || !listoRef.current || !decididoRef.current) return undefined;
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current).catch(() => undefined);
@@ -52,7 +54,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     return () => {
       if (timerRef.current != null) window.clearTimeout(timerRef.current);
     };
-  }, [activo, tipo, clave, datos, paso]);
+  }, [activo, tipo, clave, datos, paso, listo]);
 
   useEffect(() => {
     if (!activo) return undefined;
@@ -91,6 +93,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     setPendiente(null);
     listoRef.current = true;
     decididoRef.current = true;
+    setListo(true);
     return pendiente.paso;
   }
 
@@ -99,6 +102,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     setPendiente(null);
     listoRef.current = true;
     decididoRef.current = true;
+    setListo(true);
   }
 
   async function guardarAhora(): Promise<void> {
@@ -111,6 +115,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     setPendiente(null);
     listoRef.current = true;
     decididoRef.current = true;
+    setListo(true);
   }
 
   return { pendiente, continuar, descartar, guardarAhora, limpiar };
