@@ -191,7 +191,9 @@ class Database {
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
 
     try {
+      marcarEtapaSqlite('database-list');
       const listado = await this.sqlite.getDatabaseList();
+      marcarEtapaSqlite('database-list-ok');
       const nombres = (listado.values ?? [])
         .map((row) => {
           if (typeof row === 'string') return row;
@@ -216,14 +218,22 @@ class Database {
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
 
     this.activeDbName = await this.nombreBaseExistente();
+    marcarEtapaSqlite('consistency');
     const consistency = await this.sqlite.checkConnectionsConsistency();
+    marcarEtapaSqlite('consistency-ok');
+    marcarEtapaSqlite('is-connection');
     const isConn = (await this.sqlite.isConnection(this.activeDbName, false)).result;
+    marcarEtapaSqlite('is-connection-ok');
     this.db = consistency.result && isConn
       ? await this.sqlite.retrieveConnection(this.activeDbName, false)
       : await this.sqlite.createConnection(this.activeDbName, false, 'no-encryption', DB_VERSION, false);
+    marcarEtapaSqlite('connection-object-ok');
 
+    marcarEtapaSqlite('db-open');
     await this.db.open();
+    marcarEtapaSqlite('db-open-ok');
     await this.db.execute('PRAGMA foreign_keys = ON;');
+    marcarEtapaSqlite('foreign-keys-ok');
   }
 
   private async prepararEsquema(): Promise<void> {
