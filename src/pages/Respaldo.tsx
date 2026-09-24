@@ -161,8 +161,7 @@ export default function Respaldo() {
 
       <section className="tarjeta">
         <p>
-          La información de CAMELLO vive localmente en este teléfono. Los respaldos nuevos
-          llevan fecha, versión y checksum SHA-256 para detectar archivos alterados.
+          La información de CAMELLO vive localmente en este teléfono. El respaldo cifrado es la opción recomendada; un respaldo sin cifrar contiene datos personales de clientes.
         </p>
       </section>
 
@@ -170,7 +169,7 @@ export default function Respaldo() {
         <h2>Exportar</h2>
         <div className="fila-botones">
           <button className="boton-primario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>
-            {exportando ? 'Generando…' : '⬇️ Descargar respaldo'}
+            {exportando ? 'Generando…' : '⬇️ Descargar respaldo cifrado'}
           </button>
           <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
           <button className="boton-secundario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>Descargar cifrado</button>
