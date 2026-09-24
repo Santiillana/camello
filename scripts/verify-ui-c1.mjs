@@ -29,7 +29,7 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'networkidle' });
+    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor();
 
     await page.getByRole('button', { name: 'Abrir menú' }).click();
@@ -44,7 +44,7 @@ try {
     if (await page.getByRole('menu').getByRole('button', { name: /Nueva ruta/ }).count() !== 1) throw new Error('C1: falta Nueva ruta en el +.');
 
     await page.setViewportSize({ width: 1200, height: 800 });
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     const nav = page.locator('.side-nav');
     if (await nav.count() !== 1) throw new Error('C1: no existe el riel lateral en escritorio.');
     const contenido = page.locator('.pantalla');
