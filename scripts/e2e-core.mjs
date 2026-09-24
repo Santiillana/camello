@@ -25,7 +25,8 @@ async function esperarServidor(url) {
 
 async function configurarPrimeraVez(page) {
   const inicial = page.getByRole('heading', { name: 'Vamos a preparar tu espacio de trabajo' });
-  if (await inicial.count() && await inicial.isVisible()) {
+  await inicial.waitFor({ state: 'visible', timeout: 12000 }).catch(() => {});
+  if (await inicial.isVisible().catch(() => false)) {
     await page.getByLabel('Nombre del negocio').fill('Negocio E2E');
     await page.getByLabel('Nombre de quien lleva la app').fill('Usuario E2E');
     await page.getByRole('button', { name: 'Entrar a CAMELLO' }).click();
@@ -45,7 +46,7 @@ async function crearCliente(page) {
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await configurarPrimeraVez(page);
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.getByLabel('Nombre completo').waitFor();
+  await page.getByLabel('Nombre completo').waitFor({ timeout: 15000 });
 
   await page.getByLabel('Nombre completo').fill('Cliente E2E');
   await siguiente(page);
