@@ -3,9 +3,9 @@ import { webcrypto } from 'node:crypto';
 import { crearHashPin, verificarHashPin } from '../src/utils/seguridad.ts';
 import { cifrarRespaldo, descifrarRespaldo } from '../src/utils/respaldoCifrado.ts';
 
-if (!globalThis.crypto) globalThis.crypto = webcrypto;
-globalThis.btoa ??= (s) => Buffer.from(s, 'binary').toString('base64');
-globalThis.atob ??= (s) => Buffer.from(s, 'base64').toString('binary');
+if (!globalThis.crypto) Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
+if (!globalThis.btoa) Object.defineProperty(globalThis, 'btoa', { value: (s: string) => Buffer.from(s, 'binary').toString('base64'), configurable: true });
+if (!globalThis.atob) Object.defineProperty(globalThis, 'atob', { value: (s: string) => Buffer.from(s, 'base64').toString('binary'), configurable: true });
 
 const pin = await crearHashPin('123456');
 assert.ok(pin.hash && pin.salt);
