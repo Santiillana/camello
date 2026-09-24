@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import BorradorPendiente from './BorradorPendiente';
+import { useBorrador } from '../hooks/useBorrador';
 import type { Mascota } from '../types';
 import AsistenteTarjetas from './AsistenteTarjetas';
 import FotosSelector, { type FotoBorrador } from './FotosSelector';
@@ -47,6 +49,33 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
   const [fotos, setFotos] = useState<FotoBorrador[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasoInicial, setPasoInicial] = useState(0);
+
+  type DatosBorradorCliente = {
+    nombre: string;
+    telefono1: string;
+    telefono2: string;
+    cumpleDia: string;
+    cumpleMes: string;
+    observaciones: string;
+    mascotas: MascotaBorrador[];
+    lat?: number;
+    lng?: number;
+    precision?: number;
+    fuente?: 'gps' | 'whatsapp' | 'manual';
+    fotos: FotoBorrador[];
+  };
+
+  const datosBorrador: DatosBorradorCliente = {
+    nombre, telefono1, telefono2, cumpleDia, cumpleMes, observaciones,
+    mascotas, lat, lng, precision, fuente, fotos,
+  };
+  const borrador = useBorrador<DatosBorradorCliente>({
+    tipo: 'cliente-nuevo',
+    clave: 'nuevo',
+    datos: datosBorrador,
+    paso: pasoInicial,
+  });
 
   function actualizarMascota(index: number, cambios: Partial<MascotaBorrador>) {
     setMascotas((actuales) => actuales.map((m, i) => i === index ? { ...m, ...cambios } : m));
@@ -251,6 +280,7 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
           })),
         );
       }
+      await borrador.limpiar();
       onGuardado(id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -270,6 +300,31 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
 
   return (
     <div className="formulario-tarjeta">
+      {borrador.pendiente && (
+        <BorradorPendiente
+          fecha={borrador.pendiente.updated_at}
+          onDescartar={() => void borrador.descartar()}
+          onContinuar={async () => {
+            const pendiente = borrador.pendiente;
+            if (!pendiente) return;
+            const paso = await borrador.continuar();
+            const datos = pendiente.datos;
+            setNombre(datos.nombre);
+            setTelefono1(datos.telefono1);
+            setTelefono2(datos.telefono2);
+            setCumpleDia(datos.cumpleDia);
+            setCumpleMes(datos.cumpleMes);
+            setObservaciones(datos.observaciones);
+            setMascotas(datos.mascotas);
+            setLat(datos.lat);
+            setLng(datos.lng);
+            setPrecision(datos.precision);
+            setFuente(datos.fuente);
+            setFotos(datos.fotos);
+            setPasoInicial(paso);
+          }}
+        />
+      )}
       <AsistenteTarjetas
         titulo="Nuevo cliente"
         tarjetas={tarjetas}
@@ -278,6 +333,10 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
         }}
         onCancelar={() => onCancelar?.()}
         textoFinal={textoBoton}
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
       />
       {guardando && <p className="texto-vacio">Guardando cliente…</p>}
     </div>
