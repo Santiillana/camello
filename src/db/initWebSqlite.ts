@@ -33,5 +33,18 @@ export async function initWebSqlite(): Promise<void> {
   if (!jeepEl.isConnected) {
     document.body.appendChild(jeepEl);
   }
+
+  const inicio = Date.now();
+  while (Date.now() - inicio < 10000) {
+    const abierto = await jeepEl.isStoreOpen().catch(() => false);
+    if (abierto) {
+      marcarEtapa('store-open');
+      break;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+  }
+  if (!(await jeepEl.isStoreOpen().catch(() => false))) {
+    throw new Error('jeep-sqlite no abrió el WebStore a tiempo.');
+  }
   marcarEtapa('ready');
 }
