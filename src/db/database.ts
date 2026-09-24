@@ -204,7 +204,9 @@ class Database {
 
   private async prepararEsquema(): Promise<void> {
     const db = this.conn();
-    for (const stmt of SCHEMA_STATEMENTS) await db.execute(stmt);
+    for (const stmt of SCHEMA_STATEMENTS.filter((statement) => /^CREATE TABLE IF NOT EXISTS /i.test(statement.trim()))) {
+      await db.execute(stmt);
+    }
     const versionResult = await db.query('PRAGMA user_version;');
     const version = Number(versionResult.values?.[0]?.user_version ?? 0);
     if (version > DB_VERSION) throw new Error('La base de datos usa una versión de esquema más nueva (' + version + ') que esta app (' + DB_VERSION + ').');
@@ -228,6 +230,9 @@ class Database {
     // v9 es una reparación idempotente: también corre sobre bases que ya
     // tengan user_version alto si quedaron referencias a tablas temporales.
     await this.migrarVersion9();
+    for (const stmt of SCHEMA_STATEMENTS.filter((statement) => /^CREATE (INDEX|TRIGGER) IF NOT EXISTS /i.test(statement.trim()))) {
+      await db.execute(stmt);
+    }
     await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
     await this.verificarEsquemaCompleto();
   }
@@ -570,9 +575,6 @@ class Database {
       await db.execute('PRAGMA foreign_keys = ON;', false);
     }
 
-    for (const statement of SCHEMA_STATEMENTS.filter((stmt) => /^CREATE (INDEX|TRIGGER) /i.test(stmt.trim()))) {
-      await db.execute(statement, false);
-    }
     for (const objeto of objetosNoTabla) {
       const sql = normalizarSql(objeto.sql);
       if (sql) await db.execute(sql, false);
