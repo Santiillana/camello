@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { database } from '../db/database';
 import type { RutaConResumen, TipoRuta } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
+import BorradorPendiente from '../components/BorradorPendiente';
+import { useBorrador } from '../hooks/useBorrador';
 
 const TIPOS: TipoRuta[] = ['Puerta a puerta', 'Venta local móvil'];
 const ETIQUETA_ESTADO: Record<string, string> = {
@@ -108,6 +110,14 @@ function FormNuevaRuta({
   const [usarGps, setUsarGps] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasoInicial, setPasoInicial] = useState(0);
+  const datosBorrador = { nombre, tipo, paquetes, usarGps };
+  const borrador = useBorrador<typeof datosBorrador>({
+    tipo: 'ruta-nueva',
+    clave: 'nueva',
+    datos: datosBorrador,
+    paso: pasoInicial,
+  });
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -140,6 +150,7 @@ function FormNuevaRuta({
         lat_inicio: lat,
         lng_inicio: lng,
       });
+      await borrador.limpiar();
       await onCreada(id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -149,7 +160,24 @@ function FormNuevaRuta({
   }
 
   return (
-    <form className="formulario-tarjeta" onSubmit={guardar}>
+    <>
+      {borrador.pendiente && (
+        <BorradorPendiente
+          fecha={borrador.pendiente.updated_at}
+          onDescartar={() => void borrador.descartar()}
+          onContinuar={async () => {
+            const pendiente = borrador.pendiente;
+            if (!pendiente) return;
+            const paso = await borrador.continuar();
+            setNombre(pendiente.datos.nombre);
+            setTipo(pendiente.datos.tipo);
+            setPaquetes(pendiente.datos.paquetes);
+            setUsarGps(pendiente.datos.usarGps);
+            setPasoInicial(paso);
+          }}
+        />
+      )}
+      <form className="formulario-tarjeta" onSubmit={guardar}>
       <div className="separador-seccion">
         <strong>Iniciar ruta ahora</strong>
         <span className="texto-vacio">La ruta queda guardada y continúa aunque cierres la app.</span>
@@ -186,5 +214,6 @@ function FormNuevaRuta({
         </button>
       </div>
     </form>
+    </>
   );
 }
