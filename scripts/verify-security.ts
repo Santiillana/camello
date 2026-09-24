@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { webcrypto } from 'node:crypto';
 import { crearHashPin, verificarHashPin } from '../src/utils/seguridad.ts';
 import { cifrarRespaldo, descifrarRespaldo } from '../src/utils/respaldoCifrado.ts';
@@ -6,6 +7,8 @@ import { cifrarRespaldo, descifrarRespaldo } from '../src/utils/respaldoCifrado.
 if (!globalThis.crypto) Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
 if (!globalThis.btoa) Object.defineProperty(globalThis, 'btoa', { value: (s: string) => Buffer.from(s, 'binary').toString('base64'), configurable: true });
 if (!globalThis.atob) Object.defineProperty(globalThis, 'atob', { value: (s: string) => Buffer.from(s, 'base64').toString('binary'), configurable: true });
+
+execFileSync('npm', ['audit', '--audit-level=high'], { stdio: 'inherit' });
 
 const pin = await crearHashPin('123456');
 assert.ok(pin.hash && pin.salt);
