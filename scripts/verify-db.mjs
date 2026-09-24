@@ -2,7 +2,7 @@ import initSqlJs from 'sql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const REQUIRED_TABLES = [
   'clientes',
   'mascotas',
@@ -10,6 +10,7 @@ const REQUIRED_TABLES = [
   'rutas',
   'ventas',
   'configuracion_app',
+  'fotos',
 ];
 
 const SCHEMA_STATEMENTS = [
@@ -23,6 +24,9 @@ const SCHEMA_STATEMENTS = [
     fecha_registro TEXT NOT NULL,
     lat REAL,
     lng REAL,
+    ubicacion_precision_m REAL,
+    ubicacion_fuente TEXT,
+    ubicacion_fecha TEXT,
     observaciones TEXT,
     estado TEXT NOT NULL DEFAULT 'activo'
   );`,
@@ -85,6 +89,15 @@ const SCHEMA_STATEMENTS = [
     FOREIGN KEY (ruta_id) REFERENCES rutas(id),
     CHECK (monto_pagado >= 0 AND monto_pagado <= total)
   );`,
+  `CREATE TABLE IF NOT EXISTS fotos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER NOT NULL,
+    categoria TEXT NOT NULL,
+    referencia TEXT,
+    data_url TEXT NOT NULL,
+    creado_at TEXT NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );`,
   `CREATE TABLE IF NOT EXISTS configuracion_app (
     clave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
@@ -94,6 +107,7 @@ const SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);',
   'CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);',
   'CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);',
+  'CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);',
 ];
 
 function applySchema(db) {
@@ -151,6 +165,24 @@ function migrateVersion3(db) {
     db.run('PRAGMA foreign_keys = ON;');
   }
 }
+function migrateVersion4(db) {
+  const rows = db.exec('PRAGMA table_info(clientes);')[0]?.values ?? [];
+  const columns = new Set(rows.map((row) => String(row[1])));
+  if (!columns.has('ubicacion_precision_m')) db.run('ALTER TABLE clientes ADD COLUMN ubicacion_precision_m REAL;');
+  if (!columns.has('ubicacion_fuente')) db.run('ALTER TABLE clientes ADD COLUMN ubicacion_fuente TEXT;');
+  if (!columns.has('ubicacion_fecha')) db.run('ALTER TABLE clientes ADD COLUMN ubicacion_fecha TEXT;');
+  db.run(`CREATE TABLE IF NOT EXISTS fotos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER NOT NULL,
+    categoria TEXT NOT NULL,
+    referencia TEXT,
+    data_url TEXT NOT NULL,
+    creado_at TEXT NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );`);
+  db.run('CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);');
+}
+
 function initialize(db) {
   applySchema(db);
   const currentVersion = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
@@ -163,6 +195,7 @@ function initialize(db) {
   // que falten por una actualización anterior incompleta.
   migrateVersion2(db);
   migrateVersion3(db);
+  migrateVersion4(db);
   db.run(`PRAGMA user_version = ${DB_VERSION};`);
   assertRequiredTables(db, 'inicialización');
 }
