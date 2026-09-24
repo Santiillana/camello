@@ -14,6 +14,10 @@ const ETIQUETA_ESTADO: Record<string, string> = {
   CANCELADA: 'Cancelada',
 };
 
+function esTipoRuta(valor: string): TipoRuta {
+  return valor === 'Puerta a puerta' || valor === 'Programada' ? valor : 'Puerta a puerta';
+}
+
 export default function Rutas() {
   const [rutas, setRutas] = useState<RutaConResumen[]>([]);
   const [params] = useSearchParams();
@@ -142,7 +146,7 @@ function FormNuevaRuta({
     {
       id: 'tipo',
       titulo: 'Tipo de recorrido',
-      contenido: <label>Tipo de recorrido<select value={tipo} onChange={(e) => setTipo(e.target.value as TipoRuta)}>
+      contenido: <label>Tipo de recorrido<select value={tipo} onChange={(e) => setTipo(esTipoRuta(e.target.value))}>
         {TIPOS.map((item) => <option key={item}>{item}</option>)}
       </select></label>,
     },
