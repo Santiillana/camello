@@ -44,7 +44,9 @@ function cargarFiltrosGuardados(): FiltrosMapa {
   try {
     const raw = localStorage.getItem(CLAVE_FILTROS_MAPA);
     if (!raw) return FILTROS_DEFAULT;
-    const parsedUnknown: unknown = JSON.parse(raw);\n    const parsed = parsedUnknown && typeof parsedUnknown === 'object' && !Array.isArray(parsedUnknown) ? parsedUnknown : {};
+    const parsedUnknown: unknown = JSON.parse(raw);
+    if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) return FILTROS_DEFAULT;
+    const parsed = parsedUnknown as Record<string, unknown>;
     const estado = parsed.estado;
     const filtroEstado: Filtro = estado === 'ACTIVO' || estado === 'POR_CONTACTAR' || estado === 'INACTIVO' || estado === 'pendientes'
       ? estado
