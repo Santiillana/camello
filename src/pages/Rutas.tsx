@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { database } from '../db/database';
 import type { RutaConResumen, TipoRuta } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
@@ -16,7 +16,9 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 
 export default function Rutas() {
   const [rutas, setRutas] = useState<RutaConResumen[]>([]);
-  const [mostrarForm, setMostrarForm] = useState(false);
+  const [params] = useSearchParams();
+  const [mostrarForm, setMostrarForm] = useState(params.get('nuevo') === '1');
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   async function cargar() {
@@ -40,7 +42,14 @@ export default function Rutas() {
           <h1>Rutas</h1>
         </div>
         {!rutaActiva && (
-          <button className="boton-primario" onClick={() => setMostrarForm((v) => !v)}>
+          <button
+            className="boton-primario"
+            onClick={() => {
+              const siguiente = !mostrarForm;
+              setMostrarForm(siguiente);
+              navigate(siguiente ? '/rutas?nuevo=1' : '/rutas');
+            }}
+          >
             {mostrarForm ? 'Cancelar' : '+ Nueva ruta'}
           </button>
         )}
@@ -61,7 +70,10 @@ export default function Rutas() {
             await cargar();
             window.location.hash = '#/rutas/' + id;
           }}
-          onCancelar={() => setMostrarForm(false)}
+          onCancelar={() => {
+            setMostrarForm(false);
+            navigate('/rutas');
+          }}
         />
       )}
 
