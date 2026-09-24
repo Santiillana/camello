@@ -60,6 +60,13 @@ export default function Mapa() {
       attribution: '&copy; colaboradores de OpenStreetMap',
     }).addTo(mapaRef.current);
     capaMarcadoresRef.current = L.layerGroup().addTo(mapaRef.current);
+
+    return () => {
+      capaMarcadoresRef.current?.clearLayers();
+      capaMarcadoresRef.current = null;
+      mapaRef.current?.remove();
+      mapaRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -177,9 +184,37 @@ export default function Mapa() {
 
       <div ref={contenedorRef} className="contenedor-mapa" />
 
+      <div className="leyenda-mapa">
+        <span>● Activo</span>
+        <span>● Por contactar</span>
+        <span>● Inactivo</span>
+        <span>● Deuda</span>
+      </div>
+
       <p className="texto-vacio">
-        {clientesConUbicacion.length} de {clientes.length} clientes tienen ubicación guardada.
+        {clientesFiltrados.length} de {clientesConUbicacion.length} clientes con ubicación cumplen los filtros.
       </p>
+
+      <section className="tarjeta">
+        <div className="fila-titulo-boton">
+          <div>
+            <p className="texto-kicker">Pendientes de ubicación</p>
+            <h2>{clientes.length - clientesConUbicacion.length} clientes sin ubicación</h2>
+          </div>
+        </div>
+        {clientes.filter((c) => c.lat == null || c.lng == null).length === 0 ? (
+          <p className="texto-vacio">Todos los clientes activos tienen ubicación.</p>
+        ) : (
+          <ul className="lista-resumen">
+            {clientes.filter((c) => c.lat == null || c.lng == null).slice(0, 8).map((cliente) => (
+              <li key={cliente.id} className="fila-recordatorio">
+                <a href={'#/clientes/' + cliente.id}>{cliente.nombre}</a>
+                <a className="boton-chip" href={'#/clientes/' + cliente.id}>Agregar ubicación</a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
