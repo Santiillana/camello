@@ -34,7 +34,7 @@ function migrate3(db) {
   const p = columnNames(db,'productos');
   const v = columnNames(db,'ventas');
   const productosOk = p.has('precio') && p.has('costo') &&
-    (db.exec('PRAGMA table_info(productos);')[0]?.values ?? []).filter(r => ['precio','costo'].includes(String(r[1])).map(r => String(r[2]).toUpperCase()).every(t => t === 'INTEGER');
+    (db.exec('PRAGMA table_info(productos);')[0]?.values ?? []).filter(r => ['precio','costo'].includes(String(r[1]))).every(r => String(r[2]).toUpperCase() === 'INTEGER');
   const ventasOk = v.has('metodo_pago') && v.has('monto_pagado') && v.has('operacion_id') &&
     (db.exec('PRAGMA table_info(ventas);')[0]?.values ?? []).filter(r => ['precio_aplicado','costo_aplicado','total','utilidad'].includes(String(r[1]))).every(r => String(r[2]).toUpperCase() === 'INTEGER');
   if (productosOk && ventasOk) return;
