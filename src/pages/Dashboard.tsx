@@ -166,7 +166,7 @@ export default function Dashboard({ config }: Props) {
                 </Link>
                 <div className="lado-derecho-cliente">
                   <span className="etiqueta-pendiente">{formatoMoneda(item.pendiente)}</span>
-                  <Link className="boton-chip" to="/cartera">Pagar</Link>
+                  <Link className="boton-chip" to={"/cartera?cliente=" + item.cliente_id}>Pagar</Link>
                 </div>
               </li>
             ))}
