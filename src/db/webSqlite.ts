@@ -130,7 +130,7 @@ export class WebSqliteConnection {
       locateFile: (file) => this.wasmBasePath + file,
     });
     let persisted = await readStore(STORE_DB, STORE_KEY);
-    if (!persisted) {
+    if (!persisted || persisted.byteLength === 0) {
       try {
         const local = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (local) persisted = base64ToBytes(local);
@@ -138,7 +138,9 @@ export class WebSqliteConnection {
         // Si localStorage no está disponible, intentamos la compatibilidad legacy.
       }
     }
-    if (!persisted) persisted = await readStore(LEGACY_STORE_DB, this.databaseName + 'SQLite.db');
+    if (!persisted || persisted.byteLength === 0) {
+      persisted = await readStore(LEGACY_STORE_DB, this.databaseName + 'SQLite.db');
+    }
     this.db = persisted && persisted.byteLength > 0 ? new SQL.Database(persisted) : new SQL.Database();
   }
 
