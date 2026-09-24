@@ -25,3 +25,12 @@ export function descargarRespaldo(json: string, date = new Date()): void {
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+
+export async function calcularChecksum(texto: string): Promise<string> {
+  const data = new TextEncoder().encode(texto);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
