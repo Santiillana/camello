@@ -11,6 +11,35 @@ let serverLog = '';
 server.stdout.on('data', (chunk) => { serverLog += chunk.toString(); });
 server.stderr.on('data', (chunk) => { serverLog += chunk.toString(); });
 
+async function rawStoredDbSummary(page) {
+  const bytes = await page.evaluate(async () => {
+    const requestDb = indexedDB.open('jeepSqliteStore');
+    return await new Promise((resolve, reject) => {
+      requestDb.onerror = () => reject(requestDb.error ?? new Error('No se pudo abrir IndexedDB.'));
+      requestDb.onsuccess = () => {
+        const db = requestDb.result;
+        const request = db.transaction('databases', 'readonly').objectStore('databases').get('camelloSQLite.db');
+        request.onerror = () => reject(request.error ?? new Error('No se pudo leer el blob SQLite.'));
+        request.onsuccess = () => {
+          const value = request.result;
+          db.close();
+          if (value instanceof Uint8Array) return resolve(Array.from(value));
+          if (value instanceof ArrayBuffer) return resolve(Array.from(new Uint8Array(value)));
+          reject(new Error('El blob SQLite no es Uint8Array/ArrayBuffer.'));
+        };
+      };
+    });
+  });
+  const SQL = await initSqlJs({
+    locateFile: (file) => fileURLToPath(new URL('../node_modules/sql.js/dist/' + file, import.meta.url)),
+  });
+  const db = new SQL.Database(new Uint8Array(bytes));
+  const clientes = db.exec("SELECT COUNT(*) AS n FROM clientes WHERE nombre='Cliente E2E';")[0]?.values?.[0]?.[0] ?? 0;
+  const tablas = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")[0]?.values?.map((row) => row[0]) ?? [];
+  db.close();
+  return { bytes: bytes.length, clientes, tablas };
+}
+
 async function esperarServidor(url) {
   const inicio = Date.now();
   while (Date.now() - inicio < 30000) {
@@ -161,6 +190,7 @@ async function crearCliente(page) {
           return { error: String(error) };
         }
       }))
+      + ' jeep-raw=' + JSON.stringify(await rawStoredDbSummary(page))
       + ' jeep-sqlite=' + JSON.stringify(dbDiag)
       + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
     );
