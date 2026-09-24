@@ -61,9 +61,36 @@ export default function Mapa() {
         fillOpacity: 0.85,
         weight: 2,
       });
-      marcador.bindPopup(
-        `<strong>${c.nombre}</strong><br/>${c.telefono1 ?? ''}<br/>${c.ultima_compra ? 'Última compra: ' + c.ultima_compra : 'Sin compras'}`
-      );
+      const popup = document.createElement('div');
+      const nombre = document.createElement('strong');
+      nombre.textContent = c.nombre;
+      popup.appendChild(nombre);
+      const telefono = document.createElement('div');
+      telefono.textContent = c.telefono1 ?? '';
+      popup.appendChild(telefono);
+      const compra = document.createElement('div');
+      compra.textContent = c.ultima_compra ? 'Última compra: ' + c.ultima_compra : 'Sin compras';
+      popup.appendChild(compra);
+      const deuda = document.createElement('div');
+      deuda.textContent = 'Deuda: ' + c.pendiente.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+      popup.appendChild(deuda);
+      const acciones = document.createElement('div');
+      acciones.style.display = 'flex';
+      acciones.style.gap = '8px';
+      const ficha = document.createElement('a');
+      ficha.href = '#/clientes/' + c.id;
+      ficha.textContent = 'Ver cliente';
+      acciones.appendChild(ficha);
+      if (c.lat != null && c.lng != null) {
+        const llegar = document.createElement('a');
+        llegar.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(c.lat + ',' + c.lng);
+        llegar.target = '_blank';
+        llegar.rel = 'noreferrer';
+        llegar.textContent = 'Cómo llegar';
+        acciones.appendChild(llegar);
+      }
+      popup.appendChild(acciones);
+      marcador.bindPopup(popup);
       marcador.addTo(capaMarcadoresRef.current!);
     });
   }, [clientesFiltrados]);
