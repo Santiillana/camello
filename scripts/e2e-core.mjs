@@ -23,6 +23,16 @@ async function esperarServidor(url) {
   throw new Error('Vite no inició.\n' + serverLog);
 }
 
+async function configurarPrimeraVez(page) {
+  const inicial = page.getByRole('heading', { name: 'Vamos a preparar tu espacio de trabajo' });
+  if (await inicial.count() && await inicial.isVisible()) {
+    await page.getByLabel('Nombre del negocio').fill('Negocio E2E');
+    await page.getByLabel('Nombre de quien lleva la app').fill('Usuario E2E');
+    await page.getByRole('button', { name: 'Entrar a CAMELLO' }).click();
+    await page.getByRole('heading', { name: 'Inicio' }).waitFor().catch(() => {});
+  }
+}
+
 async function siguiente(page) {
   await page.getByRole('button', { name: 'Siguiente' }).click();
 }
@@ -32,6 +42,8 @@ async function omitir(page) {
 }
 
 async function crearCliente(page) {
+  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await configurarPrimeraVez(page);
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByLabel('Nombre completo').waitFor();
 
