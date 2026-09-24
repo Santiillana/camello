@@ -4,7 +4,7 @@ import {
   SQLiteConnection,
   SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
-import { DB_NAME, DB_VERSION, SCHEMA_STATEMENTS } from './schema';
+import { DB_NAME, DB_VERSION, MIGRACIONES, SCHEMA_STATEMENTS, TABLAS_ESPERADAS } from './schema';
 import type {
   Cliente,
   Mascota,
