@@ -112,6 +112,7 @@ async function crearCliente(page) {
       + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
     );
   }
+}
 
 async function expectOption(select, label) {
   await select.locator('option').filter({ hasText: label }).waitFor({ state: 'attached', timeout: 20000 });
