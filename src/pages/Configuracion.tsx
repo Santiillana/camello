@@ -15,6 +15,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [negocio, setNegocio] = useState('');
   const [usuario, setUsuario] = useState('');
   const [color, setColor] = useState('#c2642b');
+  const [mensajeRecordatorio, setMensajeRecordatorio] = useState('Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
   const [editandoProducto, setEditandoProducto] = useState<Producto | null>(null);
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setNegocio(cfg.negocio_nombre);
       setUsuario(cfg.usuario_nombre);
       setColor(cfg.color_acento);
+      setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
       setProductos(ps);
       aplicarTema(cfg.color_acento);
       setError(null);
@@ -51,6 +53,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
         negocio_nombre: negocio.trim(),
         usuario_nombre: usuario.trim(),
         color_acento: color,
+        mensaje_recordatorio: mensajeRecordatorio.trim(),
       });
       const cfg = await database.obtenerConfiguracion();
       setConfig(cfg);
@@ -147,6 +150,16 @@ export default function Configuracion({ onConfigChanged }: Props) {
               <span>{color.toUpperCase()}</span>
             </div>
           </label>
+          <label>
+            Mensaje de recompra
+            <textarea
+              rows={4}
+              value={mensajeRecordatorio}
+              onChange={(e) => setMensajeRecordatorio(e.target.value)}
+              placeholder="Usa {nombre} y {dias} para personalizar."
+            />
+          </label>
+          <p className="texto-vacio">Puedes usar {nombre} y {dias} como variables.</p>
           <p className="texto-vacio">Moneda: COP (peso colombiano).</p>
           <button className="boton-primario" type="submit" disabled={guardandoDatos}>{guardandoDatos ? 'Guardando…' : 'Guardar cambios'}</button>
         </form>
