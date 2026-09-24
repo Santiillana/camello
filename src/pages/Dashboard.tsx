@@ -43,18 +43,12 @@ export default function Dashboard({ config }: Props) {
         database.resumenPeriodo(inicioMesISO(), hoy),
         database.listarCartera(),
         database.obtenerRutaActiva(),
-        database.listarClientes({ soloActivos: true }),
+        database.listarRecordatoriosRecompra(hoy),
       ]);
       setResumenes({ hoy: rHoy, semana: rSemana, mes: rMes });
       setCartera(cuentas);
       setRutaActivaId(ruta?.id ?? null);
-      setRecordatorios(
-        clientes
-          .filter((cliente) => cliente.dias_desde_ultima_compra != null && cliente.dias_desde_ultima_compra > 20)
-          .sort((a, b) => (b.dias_desde_ultima_compra ?? 0) - (a.dias_desde_ultima_compra ?? 0))
-          .slice(0, 5)
-          .map((cliente) => ({ cliente_id: cliente.id, nombre: cliente.nombre, telefono1: cliente.telefono1 }))
-      );
+      setRecordatorios(clientes.slice(0,5));
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
