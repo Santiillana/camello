@@ -555,9 +555,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .side-nav-item.activo { background: var(--color-primario); color: #fff; }
 .side-nav-icono {
   width: 22px;
+  height: 22px;
   flex: 0 0 22px;
-  text-align: center;
-  font-size: 19px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-nav-icono svg {
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 .side-nav-texto { display: none; white-space: nowrap; }
 .side-nav.expandido .side-nav-texto { display: inline; }
@@ -741,12 +748,28 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 767px) {
-  .app-contenido { padding-top: 58px; }
-  .side-nav { width: min(86vw, 320px); }
-  .side-nav.expandido { width: min(86vw, 320px); }
+  .app-contenido { padding-top: 58px; padding-left: 64px; }
+  .side-nav {
+    left: 0;
+    right: auto;
+    width: 52px;
+    transform: translateX(0);
+    transition: width .18s ease;
+    z-index: 80;
+  }
+  .side-nav.expandido {
+    width: min(78vw, 280px);
+    box-shadow: 16px 0 34px rgba(17,17,17,.18);
+  }
+  .side-nav .side-nav-texto { display: none; }
   .side-nav.expandido .side-nav-texto { display: inline; }
-  .side-nav-toggle { display: none; }
-  .side-nav-marca { margin-right: auto; }
+  .side-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .side-nav-marca { display: inline-flex; overflow: hidden; width: 0; }
+  .side-nav.expandido .side-nav-marca { width: auto; margin-right: auto; }
+  .side-nav-cerrar { display: inline-flex; }
+  .side-nav-item { justify-content: center; }
+  .side-nav.expandido .side-nav-item { justify-content: flex-start; }
+  .side-nav-backdrop.visible { display: block; z-index: 70; }
 }
 
 /* --- C2 ubicación y fotos --- */
