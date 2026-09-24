@@ -81,6 +81,7 @@ async function crearCliente(page) {
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.locator('select').first();
+  await page.getByRole('option', { name: 'Cliente E2E', exact: true }).waitFor({ state: 'attached', timeout: 15000 });
   await clienteSelect.selectOption({ label: 'Cliente E2E' });
 
   await siguiente(page);
