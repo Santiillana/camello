@@ -126,7 +126,9 @@ function migrate14(db){
 
 
 function applySchema(db){
-  for(const statement of CURRENT_SCHEMA) db.run(statement);
+  for(const statement of CURRENT_SCHEMA.filter((statement) => /^CREATE TABLE IF NOT EXISTS /i.test(statement.trim()))) {
+    db.run(statement);
+  }
 }
 
 function initialize(db){
@@ -135,6 +137,9 @@ function initialize(db){
   if(current>DB_VERSION)throw new Error('Esquema '+current+' incompatible con '+DB_VERSION);
   const migrations=[[2,migrate2],[3,migrate3],[4,migrate4],[5,migrate5],[6,migrate6],[7,migrate7],[8,migrate8],[9,migrate9],[10,migrate10],[11,migrate11],[12,migrate12],[13,migrate13],[14,migrate14]];
   for(const [version,fn] of migrations)if(current<version)fn(db);
+  for(const statement of CURRENT_SCHEMA.filter((statement) => /^CREATE (INDEX|TRIGGER) IF NOT EXISTS /i.test(statement.trim()))) {
+    db.run(statement);
+  }
   db.run('PRAGMA user_version='+DB_VERSION+';');
   const rows=db.exec("SELECT name FROM sqlite_master WHERE type='table';")[0]?.values??[];
   const names=new Set(rows.map(r=>String(r[0]))); for(const t of REQUIRED)if(!names.has(t))throw new Error('Faltan tablas '+t);
