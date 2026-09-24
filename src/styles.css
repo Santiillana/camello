@@ -611,6 +611,59 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   flex-direction: column;
   gap: 14px;
 }
+.asistente-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  height: var(--camello-vvh, 100dvh);
+  max-height: var(--camello-vvh, 100dvh);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding:
+    calc(14px + env(safe-area-inset-top, 0px))
+    max(14px, env(safe-area-inset-right, 0px))
+    calc(18px + env(safe-area-inset-bottom, 0px))
+    max(14px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--color-fondo) 96%, #000 4%);
+}
+.asistente-overlay .asistente-encabezado {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-bottom: 8px;
+  background: color-mix(in srgb, var(--color-fondo) 96%, #000 4%);
+}
+.asistente-overlay .asistente-cerrar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  font-size: 30px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.asistente-overlay .asistente-tarjeta {
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+.asistente-overlay .asistente-acciones {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  padding-top: 10px;
+  padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to bottom, transparent, var(--color-fondo) 18px);
+}
+.asistente-overlay input,
+.asistente-overlay textarea,
+.asistente-overlay select {
+  font-size: 18px;
+}
 .asistente-encabezado {
   display: flex;
   justify-content: space-between;
