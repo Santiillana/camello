@@ -123,7 +123,7 @@ class Database {
       : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
 
     await this.db.open();
-    const currentVersion = await this.db.getVersion();
+    const { version: currentVersion = 0 } = await this.db.getVersion();
     if (currentVersion > DB_VERSION) {
       throw new Error('La base de datos tiene una versión ' + currentVersion + ' superior a la compatible (' + DB_VERSION + ').');
     }
@@ -131,10 +131,19 @@ class Database {
     await this.db.execute('PRAGMA foreign_keys = ON;');
 
     if (currentVersion < DB_VERSION) {
-      for (const stmt of SCHEMA_STATEMENTS) {
-        await this.db.execute(stmt);
+      for (let targetVersion = currentVersion + 1; targetVersion <= DB_VERSION; targetVersion += 1) {
+        const statements = MIGRACIONES[targetVersion];
+        if (!statements) {
+          throw new Error('No existe una migración para la versión ' + targetVersion + '.');
+        }
+        await this.ejecutarMigracion(targetVersion, statements);
       }
-      await this.db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
+      return true;
+    }
+
+    const faltantes = await this.tablasFaltantes();
+    if (faltantes.length > 0) {
+      await this.repararEsquemaInconsistente(faltantes);
       return true;
     }
 
@@ -150,6 +159,67 @@ class Database {
     }
 
     this.db = null;
+  }
+
+  private async ejecutarMigracion(targetVersion: number, statements: string[]): Promise<void> {
+    const db = this.conn();
+    let transaccionActiva = false;
+
+    try {
+      await db.beginTransaction();
+      transaccionActiva = true;
+
+      for (const stmt of statements) {
+        await db.execute(stmt, false);
+      }
+
+      await db.execute('PRAGMA user_version = ' + targetVersion + ';', false);
+      await db.commitTransaction();
+      transaccionActiva = false;
+    } catch (error) {
+      if (transaccionActiva) {
+        try {
+          await db.rollbackTransaction();
+        } catch (rollbackError) {
+          const original = error instanceof Error ? error.message : String(error);
+          const rollback = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          throw new Error('La migración a la versión ' + targetVersion + ' falló: ' + original + '. El rollback también falló: ' + rollback);
+        }
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error('La migración a la versión ' + targetVersion + ' falló y fue revertida: ' + message);
+    }
+  }
+
+  private async tablasFaltantes(): Promise<string[]> {
+    const db = this.conn();
+    const placeholders = TABLAS_ESPERADAS.map(() => '?').join(', ');
+    const result = await db.query(
+      'SELECT name FROM sqlite_master WHERE type = \'table\' AND name IN (' + placeholders + ');',
+      TABLAS_ESPERADAS
+    );
+    const existentes = new Set((result.values ?? []).map((row) => String(row.name)));
+    return TABLAS_ESPERADAS.filter((tabla) => !existentes.has(tabla));
+  }
+
+  private async repararEsquemaInconsistente(faltantes: string[]): Promise<void> {
+    await this.ejecutarMigracion(DB_VERSION, SCHEMA_STATEMENTS);
+    const pendientes = await this.tablasFaltantes();
+
+    if (pendientes.length > 0) {
+      throw new Error(
+        'La base de datos declara la versión ' +
+        DB_VERSION +
+        ' pero faltan tablas: ' +
+        pendientes.join(', ') +
+        '. La reparación intentó crear el esquema sin borrar datos y no pudo completarse.'
+      );
+    }
+
+    if (faltantes.length === 0) {
+      throw new Error('La base de datos es inconsistente y no se detectaron tablas faltantes.');
+    }
   }
 
   private conn(): SQLiteDBConnection {
