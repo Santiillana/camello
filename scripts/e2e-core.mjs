@@ -140,6 +140,27 @@ async function crearCliente(page) {
         clientes: document.documentElement.dataset.camelloOpenClientes || 'unset',
         dbName: document.documentElement.dataset.camelloOpenDbName || 'unset',
       })))
+      + ' jeep-direct=' + JSON.stringify(await page.evaluate(async () => {
+        try {
+          const el = document.createElement('jeep-sqlite');
+          el.wasmPath = '/assets';
+          document.body.appendChild(el);
+          await customElements.whenDefined('jeep-sqlite');
+          const start = Date.now();
+          while (!(await el.isStoreOpen().catch(() => false)) && Date.now() - start < 5000) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+          }
+          await el.createConnection({ database: 'camello', version: 14, readonly: false });
+          await el.open({ database: 'camello', readonly: false });
+          const result = await el.query({
+            database: 'camello',
+            statement: "SELECT COUNT(*) AS n FROM clientes;",
+          });
+          return { count: result.values?.[0]?.n ?? null };
+        } catch (error) {
+          return { error: String(error) };
+        }
+      }))
       + ' jeep-sqlite=' + JSON.stringify(dbDiag)
       + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
     );
