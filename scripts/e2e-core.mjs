@@ -1,57 +1,15 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
-import initSqlJs from 'sql.js';
 
 const { chromium } = await import('playwright');
 
 let serverLog = '';
-
-const build = spawn('npm', ['run', 'build'], {
+const server = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1'], {
   stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, VITE_E2E: '1' },
 });
-build.stdout.on('data', (chunk) => { serverLog += chunk.toString(); });
-build.stderr.on('data', (chunk) => { serverLog += chunk.toString(); });
-const buildCode = await new Promise((resolve) => {
-  build.on('close', resolve);
-});
-if (buildCode !== 0) throw new Error('Build de producción falló antes del E2E.\\n' + serverLog);
-
-const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173'], {
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
 server.stdout.on('data', (chunk) => { serverLog += chunk.toString(); });
 server.stderr.on('data', (chunk) => { serverLog += chunk.toString(); });
-
-async function rawStoredDbSummary(page) {
-  const bytes = await page.evaluate(async () => {
-    const requestDb = indexedDB.open('jeepSqliteStore');
-    return await new Promise((resolve, reject) => {
-      requestDb.onerror = () => reject(requestDb.error ?? new Error('No se pudo abrir IndexedDB.'));
-      requestDb.onsuccess = () => {
-        const db = requestDb.result;
-        const request = db.transaction('databases', 'readonly').objectStore('databases').get('camelloSQLite.db');
-        request.onerror = () => reject(request.error ?? new Error('No se pudo leer el blob SQLite.'));
-        request.onsuccess = () => {
-          const value = request.result;
-          db.close();
-          if (value instanceof Uint8Array) return resolve(Array.from(value));
-          if (value instanceof ArrayBuffer) return resolve(Array.from(new Uint8Array(value)));
-          reject(new Error('El blob SQLite no es Uint8Array/ArrayBuffer.'));
-        };
-      };
-    });
-  });
-  const SQL = await initSqlJs({
-    locateFile: (file) => fileURLToPath(new URL('../node_modules/sql.js/dist/' + file, import.meta.url)),
-  });
-  const db = new SQL.Database(new Uint8Array(bytes));
-  const clientes = db.exec("SELECT COUNT(*) AS n FROM clientes WHERE nombre='Cliente E2E';")[0]?.values?.[0]?.[0] ?? 0;
-  const tablas = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")[0]?.values?.map((row) => row[0]) ?? [];
-  db.close();
-  return { bytes: bytes.length, clientes, tablas };
-}
 
 async function esperarServidor(url) {
   const inicio = Date.now();
@@ -86,7 +44,7 @@ async function omitir(page) {
 }
 
 async function crearCliente(page) {
-  await page.goto('http://127.0.0.1:4173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
     undefined,
@@ -94,7 +52,7 @@ async function crearCliente(page) {
   );
   await configurarPrimeraVez(page);
   await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-  await page.goto('http://127.0.0.1:4173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   try {
     await page.getByLabel('Nombre completo').waitFor({ timeout: 70000 });
   } catch (error) {
@@ -177,35 +135,7 @@ async function crearCliente(page) {
       }
     }).catch((error) => ({ pageError: String(error) }));
     throw new Error(
-      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga)
-      + ' jeep-open=' + JSON.stringify(await page.evaluate(() => ({
-        clientes: document.documentElement.dataset.camelloOpenClientes || 'unset',
-        dbName: document.documentElement.dataset.camelloOpenDbName || 'unset',
-      })))
-      + ' jeep-direct=' + JSON.stringify(await page.evaluate(async () => {
-        try {
-          const el = document.createElement('jeep-sqlite');
-          el.wasmPath = '/assets';
-          document.body.appendChild(el);
-          await customElements.whenDefined('jeep-sqlite');
-          const start = Date.now();
-          while (!(await el.isStoreOpen().catch(() => false)) && Date.now() - start < 5000) {
-            await new Promise((resolve) => setTimeout(resolve, 25));
-          }
-          await el.createConnection({ database: 'camello', version: 14, readonly: false });
-          await el.open({ database: 'camello', readonly: false });
-          const result = await el.query({
-            database: 'camello',
-            statement: "SELECT COUNT(*) AS n FROM clientes;",
-          });
-          return { count: result.values?.[0]?.n ?? null };
-        } catch (error) {
-          return { error: String(error) };
-        }
-      }))
-      + ' jeep-raw=' + JSON.stringify(await rawStoredDbSummary(page))
-      + ' jeep-sqlite=' + JSON.stringify(dbDiag)
-      + ' IndexedDB=' + JSON.stringify(await webStoreSnapshot(page)),
+      'E2E: el cliente no sobrevivió a una recarga completa. SQLite=' + JSON.stringify(trasRecarga),
     );
   }
 }
@@ -268,7 +198,7 @@ async function sql(page, query, params = []) {
 }
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
-  await page.goto('http://127.0.0.1:4173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ });
   await page.getByLabel('Buscar cliente o mascota').waitFor({ state: 'visible', timeout: 15000 });
   await expectOption(clienteSelect, 'Cliente E2E');
@@ -297,7 +227,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
 }
 
 async function crearRuta(page) {
-  await page.goto('http://127.0.0.1:4173/#/rutas?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:5173/#/rutas?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('heading', { name: 'Nueva ruta' }).waitFor();
 
   await page.getByLabel('Nombre de la ruta').fill('Ruta E2E');
@@ -320,8 +250,8 @@ async function cerrarRuta(page, sobrantes) {
 }
 
 async function probarUbicacionWeb(page) {
-  await page.goto('http://127.0.0.1:4173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-  await page.goto('http://127.0.0.1:4173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:5173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const locationButton = page.getByRole('button', { name: /Usar mi ubicación/ });
   if (await locationButton.count()) {
     await locationButton.click();
@@ -330,7 +260,7 @@ async function probarUbicacionWeb(page) {
 }
 
 try {
-  await esperarServidor('http://127.0.0.1:4173');
+  await esperarServidor('http://127.0.0.1:5173');
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -348,10 +278,10 @@ try {
     if (clienteCreado.length !== 1 || clienteCreado[0]?.estado !== 'activo') {
       throw new Error('E2E: el cliente creado por la UI no quedó persistido: ' + JSON.stringify(clienteCreado));
     }
-    await page.goto('http://127.0.0.1:4173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
-    await page.goto('http://127.0.0.1:4173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await expectOption(page.getByLabel('Cliente'), 'Cliente E2E');
+    await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await expectOption(page.getByRole('combobox', { name: /^ClienteSelecciona un cliente/ }), 'Cliente E2E');
 
     const efectivo = await venta(page, 'EFECTIVO', 1, true);
     if (!efectivo.includes('Efectivo') && !efectivo.includes('Pagado')) throw new Error('No se generó voucher de efectivo.');
@@ -377,7 +307,7 @@ try {
     if (Number(ventasBase[0]?.n) !== 4) throw new Error('E2E: no quedaron 4 ventas activas en SQLite.');
     if (Number(ventasBase[0]?.total) <= 0) throw new Error('E2E: total vendido en SQLite inválido.');
 
-    await page.goto('http://127.0.0.1:4173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('link', { name: 'Pagar' }).first().click();
     await page.getByRole('heading', { name: /Pagar a Cliente E2E/ }).waitFor().catch(() => {});
     await page.getByRole('button', { name: 'Efectivo' }).click().catch(() => {});
@@ -388,25 +318,25 @@ try {
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
 
-    await page.goto('http://127.0.0.1:4173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
 
     await crearRuta(page);
     await venta(page, 'EFECTIVO', 1);
-    await page.goto('http://127.0.0.1:4173/#/rutas/1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:5173/#/rutas/1', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByRole('heading', { name: 'Ruta E2E' }).waitFor();
     await cerrarRuta(page, 4);
     const rutaBase = await sql(page, "SELECT estado, paquetes_llevados, paquetes_sobrantes FROM rutas WHERE id=1;");
     if (rutaBase[0]?.estado !== 'FINALIZADA') throw new Error('E2E: la ruta no quedó finalizada en SQLite.');
     if (Number(rutaBase[0]?.paquetes_llevados) - Number(rutaBase[0]?.paquetes_sobrantes) < 0) throw new Error('E2E: cuadre de ruta inválido.');
 
-    await page.goto('http://127.0.0.1:4173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:5173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const filtros = page.getByRole('button').filter({ hasText: /Filtro|Ubicación|Días|Ruta/ });
     if (await filtros.count() === 0) {
       await page.getByRole('heading', { name: 'Mapa' }).waitFor().catch(() => {});
     }
 
-    await page.goto('http://127.0.0.1:4173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: /Descargar respaldo/ }).click();
     await download;
