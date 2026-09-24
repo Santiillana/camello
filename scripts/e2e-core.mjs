@@ -183,6 +183,10 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
     await borrador.getByRole('button', { name: 'Descartar' }).click();
   }
   await page.locator('h1').filter({ hasText: 'Nueva venta' }).first().waitFor({ timeout: 20000 });
+  const borradorDialog = page.getByRole('dialog', { name: 'Borrador pendiente' });
+  if (await borradorDialog.count()) {
+    await borradorDialog.getByRole('button', { name: 'Descartar' }).click();
+  }
   const clienteSelect = page.locator('select').first();
   try {
     await page.locator('input[placeholder="Nombre o mascota…"]').waitFor({ state: 'visible', timeout: 60000 });
