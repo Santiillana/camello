@@ -1337,13 +1337,13 @@ class Database {
 
   async listarRecordatoriosRecompra(hoy = fechaLocalISO()): Promise<Array<{ cliente_id:number; nombre:string; telefono1?:string; dias_desde_ultima_compra:number; ritmo_dias:number }>> {
     const r = await this.conn().query(
-      `SELECT c.id AS cliente_id, c.nombre, c.telefono1, MAX(v.fecha) AS ultima_compra,
+      `SELECT c.id AS cliente_id, c.id, c.nombre, c.telefono1, MAX(v.fecha) AS ultima_compra,
               COALESCE(s.dias, 20) AS ritmo_dias
        FROM clientes c
        JOIN ventas v ON v.cliente_id=c.id AND COALESCE(v.estado_registro,'activa')='activa'
        LEFT JOIN seguimiento_clientes s ON s.cliente_id=c.id
        WHERE c.estado='activo'
-       GROUP BY c.id, c.nombre, c.telefono1, s.dias
+       GROUP BY c.id, c.nombre, c.telefono1, s.dias, s.recordar_hasta
        HAVING julianday(?) - julianday(MAX(v.fecha)) > COALESCE(s.dias,20)
        ORDER BY (julianday(?) - julianday(MAX(v.fecha))) DESC
        LIMIT 100;`,
@@ -1351,7 +1351,7 @@ class Database {
     );
     return (r.values ?? []).map((row) => {
       const dias = Math.max(0, Math.floor(Number(juliandayDiff(hoy, String(row.ultima_compra ?? hoy)))));
-      return { cliente_id:Number(row.cliente_id), nombre:String(row.nombre), telefono1:row.telefono1 ? String(row.telefono1) : undefined, dias_desde_ultima_compra:dias, ritmo_dias:Number(row.ritmo_dias ?? 20) };
+      return { id:Number(row.id), cliente_id:Number(row.cliente_id), nombre:String(row.nombre), telefono1:row.telefono1 ? String(row.telefono1) : undefined, dias_desde_ultima_compra:dias, ritmo_dias:Number(row.ritmo_dias ?? 20), pendiente:Number(row.pendiente ?? 0), recordar_hasta:row.recordar_hasta ? String(row.recordar_hasta) : null };
     });
   }
 
