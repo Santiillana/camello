@@ -124,7 +124,7 @@ export async function resolverUbicacionPegada(texto: string): Promise<Coordenada
   });
 
   if (!corto) throw new Error('FORMATO_NO_RECONOCIDO');
-  if (!Capacitor.isNativePlatform() && typeof window !== 'undefined' && !window.isSecureContext) {
+  if (!Capacitor.isNativePlatform()) {
     throw new Error('El navegador no puede abrir enlaces cortos. Usa la app instalada, o abre el enlace en Google Maps y pega las coordenadas');
   }
 
