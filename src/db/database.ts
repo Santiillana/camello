@@ -840,12 +840,11 @@ class Database {
 
     const ahora = new Date();
     const res = await this.conn().run(
-      `INSERT INTO rutas (nombre, tipo, estado, fecha, fecha_planificada, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, notas)
-       VALUES (?, ?, 'EN_CURSO', ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO rutas (nombre, tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, paquetes_sobrantes, notas)
+       VALUES (?, ?, 'EN_CURSO', ?, ?, ?, ?, ?, 0, ?);`,
       [
         r.nombre?.trim() || r.tipo,
         r.tipo,
-        fechaLocalISO(ahora),
         fechaLocalISO(ahora),
         horaLocalHHMM(ahora),
         r.lat_inicio ?? null,
@@ -858,19 +857,34 @@ class Database {
     return Number(res.changes?.lastId ?? 0);
   }
 
-  async finalizarRuta(id: number, fin?: { lat_fin?: number; lng_fin?: number }): Promise<void> {
+  async finalizarRuta(
+    id: number,
+    fin?: { lat_fin?: number; lng_fin?: number; paquetes_sobrantes?: number },
+  ): Promise<void> {
     if (!coordenadaValida(fin?.lat_fin, -90, 90) || !coordenadaValida(fin?.lng_fin, -180, 180)) {
       throw new Error('La ubicación de cierre no es válida.');
     }
-
-    const actual = await this.conn().query('SELECT estado FROM rutas WHERE id = ?;', [id]);
-    if (!actual.values?.length) throw new Error('La ruta no existe.');
-    if (actual.values[0].estado !== 'EN_CURSO') throw new Error('Solo se puede finalizar una ruta que está en curso.');
+    const sobrantes = Math.max(0, Math.floor(Number(fin?.paquetes_sobrantes ?? 0)));
+    const actual = await this.conn().query(
+      'SELECT estado, paquetes_llevados, COALESCE((SELECT SUM(cantidad) FROM ventas WHERE ruta_id = rutas.id),0) as vendidos FROM rutas WHERE id = ?;',
+      [id],
+    );
+    const row = actual.values?.[0];
+    if (!row) throw new Error('La ruta no existe.');
+    if (row.estado !== 'EN_CURSO') throw new Error('Solo se puede finalizar una ruta que está en curso.');
+    const llevados = Number(row.paquetes_llevados ?? 0);
+    const vendidos = Number(row.vendidos ?? 0);
+    if (sobrantes > llevados - vendidos) throw new Error('Los sobrantes no pueden superar los paquetes disponibles.');
+    if (llevados - vendidos - sobrantes !== 0) {
+      throw new Error('El cuadre no cierra: llevados - vendidos - sobrantes debe ser 0.');
+    }
 
     const ahora = new Date();
     await this.conn().run(
-      `UPDATE rutas SET estado = 'FINALIZADA', hora_fin = ?, lat_fin = ?, lng_fin = ? WHERE id = ? AND estado = 'EN_CURSO';`,
-      [horaLocalHHMM(ahora), fin?.lat_fin ?? null, fin?.lng_fin ?? null, id]
+      `UPDATE rutas
+       SET estado = 'FINALIZADA', paquetes_sobrantes = ?, hora_fin = ?, lat_fin = ?, lng_fin = ?
+       WHERE id = ? AND estado = 'EN_CURSO';`,
+      [sobrantes, horaLocalHHMM(ahora), fin?.lat_fin ?? null, fin?.lng_fin ?? null, id],
     );
     await this.persist();
   }
@@ -897,10 +911,12 @@ class Database {
               COALESCE(SUM(v.total),0) as total_vendido,
               COALESCE(SUM(v.costo_aplicado * v.cantidad),0) as costos,
               COALESCE(SUM(v.utilidad),0) as utilidad,
-              COALESCE(SUM(CASE WHEN v.estado_pago='PENDIENTE' THEN v.total ELSE 0 END),0) as total_pendiente,
+              COALESCE(SUM(CASE WHEN v.total > COALESCE(v.monto_pagado,0) THEN v.total - COALESCE(v.monto_pagado,0) ELSE 0 END),0) as total_pendiente,
+              COALESCE(SUM(v.monto_pagado),0) as cobrado,
               COUNT(v.id) as numero_ventas,
               COUNT(DISTINCT v.cliente_id) as clientes,
-              COUNT(DISTINCT CASE WHEN c.fecha_registro = r.fecha THEN c.id END) as clientes_nuevos
+              COUNT(DISTINCT CASE WHEN c.fecha_registro = r.fecha THEN c.id END) as clientes_nuevos,
+              COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM ventas v2 WHERE v2.cliente_id = v.cliente_id AND v2.fecha < r.fecha) THEN v.cliente_id END) as clientes_recompran
        FROM ventas v
        JOIN clientes c ON c.id = v.cliente_id
        JOIN rutas r ON r.id = v.ruta_id
@@ -923,6 +939,13 @@ class Database {
       numero_ventas: Number(row.numero_ventas ?? 0),
       clientes_atendidos: Number(row.clientes ?? 0),
       clientes_nuevos: Number(row.clientes_nuevos ?? 0),
+      clientes_recompran: Number(row.clientes_recompran ?? 0),
+      cobrado: Number(row.cobrado ?? 0),
+      fiado: Number(row.total_pendiente ?? 0),
+      ticket_promedio: Number(row.numero_ventas ?? 0) > 0 ? Number(row.total_vendido ?? 0) / Number(row.numero_ventas ?? 0) : 0,
+      ventas_por_hora: minutosEntre(ruta.hora_inicio, ruta.hora_fin) && minutosEntre(ruta.hora_inicio, ruta.hora_fin)! > 0
+        ? Number(row.numero_ventas ?? 0) / (minutosEntre(ruta.hora_inicio, ruta.hora_fin)! / 60)
+        : 0,
       duracion_minutos: minutosEntre(ruta.hora_inicio, ruta.hora_fin),
     };
   }
