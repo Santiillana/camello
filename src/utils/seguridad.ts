@@ -14,7 +14,8 @@ function fromBase64(value: string): Uint8Array {
 }
 async function derive(pin: string, salt: Uint8Array): Promise<Uint8Array> {
   const base = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: ITERACIONES, hash: 'SHA-256' }, base, 256);
+  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBuffer, iterations: ITERACIONES, hash: 'SHA-256' }, base, 256);
   return new Uint8Array(bits);
 }
 export async function crearHashPin(pin: string): Promise<{ hash: string; salt: string }> {
