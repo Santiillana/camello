@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { database } from '../db/database';
 import { calcularChecksum, descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
 import { listarRespaldosAutomaticos, type BackupItem } from '../utils/respaldoAutomatico';
+import { cifrarRespaldo, descifrarRespaldo } from '../utils/respaldoCifrado';
 
 type MetaRespaldo = {
   exported_at: string;
@@ -65,6 +66,7 @@ export default function Respaldo() {
     }
   }
 
+  async function exportarCifrado(){const password=window.prompt('Contraseña para el respaldo cifrado (mínimo 10 caracteres)');if(!password)return;setExportando(true);try{const json=await database.exportarRespaldo();const cifrado=await cifrarRespaldo(json,password);respaldoRef.current=cifrado;descargarRespaldo(cifrado);setMensaje('Respaldo cifrado descargado.');}catch(e:unknown){setError(e instanceof Error?e.message:String(e));}finally{setExportando(false);}}
   async function compartir() {
     if (!respaldoRef.current) {
       await exportar();
@@ -106,9 +108,12 @@ export default function Respaldo() {
     setError(null);
     try {
       const texto = await file.text();
-      const ver = await database.validarRespaldo(texto);
-      await database.importarRespaldo(texto);
-      respaldoRef.current = texto;
+      let plano=texto;
+      const parsed=JSON.parse(texto) as Record<string,unknown>;
+      if(parsed.camello_encrypted_backup_version===1){const password=window.prompt('Contraseña del respaldo cifrado');if(!password)throw new Error('Restauración cancelada.');plano=await descifrarRespaldo(texto,password);}
+      const ver = await database.validarRespaldo(plano);
+      await database.importarRespaldo(plano);
+      respaldoRef.current = plano;
       setMeta({
         exported_at: new Date().toISOString(),
         schema_version: ver.version,
@@ -167,9 +172,8 @@ export default function Respaldo() {
           <button className="boton-primario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>
             {exportando ? 'Generando…' : '⬇️ Descargar respaldo'}
           </button>
-          <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>
-            Compartir
-          </button>
+          <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
+          <button className="boton-secundario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>Descargar cifrado</button>
         </div>
         {ultimo && (
           <div className="lista-resumen">

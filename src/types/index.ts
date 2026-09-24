@@ -31,6 +31,8 @@ export interface ConfiguracionApp {
   color_acento: string;
   moneda: 'COP';
   mensaje_recordatorio?: string;
+  pin_habilitado?: boolean;
+  pin_lock_minutos?: number;
 }
 
 export interface CarteraItem {

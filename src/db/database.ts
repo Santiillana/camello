@@ -1844,6 +1844,17 @@ class Database {
     }));
   }
 
+  async obtenerSeguridadPin(): Promise<{habilitado:boolean;hash:string|null;salt:string|null;lock_minutos:number}> {
+    const r=await this.conn().query("SELECT clave,valor FROM configuracion_app WHERE clave IN ('pin_habilitado','pin_hash','pin_salt','pin_lock_minutos');");
+    const m=new Map((r.values??[]).map(row=>[String(row.clave),String(row.valor)]));
+    return {habilitado:m.get('pin_habilitado')==='1',hash:m.get('pin_hash')||null,salt:m.get('pin_salt')||null,lock_minutos:Math.max(1,Number(m.get('pin_lock_minutos')??5)||5)};
+  }
+  async guardarSeguridadPin(data:{habilitado:boolean;hash?:string|null;salt?:string|null;lock_minutos:number}):Promise<void>{
+    const pares:Record<string,string>={pin_habilitado:data.habilitado?'1':'0',pin_lock_minutos:String(Math.max(1,Math.floor(data.lock_minutos)))};
+    if(data.hash!==undefined)pares.pin_hash=data.hash??''; if(data.salt!==undefined)pares.pin_salt=data.salt??'';
+    for(const [clave,valor] of Object.entries(pares)) await this.conn().run('INSERT INTO configuracion_app (clave,valor) VALUES (?,?) ON CONFLICT(clave) DO UPDATE SET valor=excluded.valor;',[clave,valor]);
+    await this.persist();
+  }
   async obtenerConfiguracion(): Promise<ConfiguracionApp> {
     const r = await this.conn().query('SELECT clave, valor FROM configuracion_app;');
     const valores = new Map((r.values ?? []).map((row) => [String(row.clave), String(row.valor)]));

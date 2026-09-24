@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Ruta } from './types';
+import PinLock from './components/PinLock';
 import { Link } from 'react-router-dom';
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { database } from './db/database';
@@ -53,6 +54,11 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
   useEffect(() => {
     localStorage.setItem('camello.menuExpandido', menuExpandido ? '1' : '0');
   }, [menuExpandido]);
+  useEffect(() => {
+    let ocultoDesde=0;
+    const onVis=()=>{if(document.visibilityState==='hidden') ocultoDesde=Date.now(); else if(ocultoDesde&&seguridadPin.habilitado&&Date.now()-ocultoDesde>=seguridadPin.lock_minutos*60000){setBloqueadoPorInactividad(true);setDesbloqueado(false);}};
+    document.addEventListener('visibilitychange',onVis); return()=>document.removeEventListener('visibilitychange',onVis);
+  },[seguridadPin]);
   const location = useLocation();
   const navigate = useNavigate();
   const esInicio = location.pathname === '/';
@@ -153,6 +159,9 @@ export default function App() {
   const [listo, setListo] = useState(false);
   const [config, setConfig] = useState<ConfiguracionApp | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [desbloqueado,setDesbloqueado]=useState(false);
+  const [seguridadPin,setSeguridadPin]=useState({habilitado:false,lock_minutos:5});
+  const [bloqueadoPorInactividad,setBloqueadoPorInactividad]=useState(false);
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
@@ -188,6 +197,8 @@ export default function App() {
 
     inicializarBaseDeDatosConTimeout()
       .then(async () => {
+        const seguridad = await database.obtenerSeguridadPin();
+        if (activo) { setSeguridadPin({habilitado:seguridad.habilitado,lock_minutos:seguridad.lock_minutos}); setDesbloqueado(!seguridad.habilitado); }
         const resultado = await database.obtenerConfiguracion();
         if (import.meta.env.VITE_E2E === '1' && !resultado.negocio_nombre) {
           await database.guardarConfiguracionInicial(
@@ -249,6 +260,7 @@ export default function App() {
     );
   }
 
+  if(seguridadPin.habilitado&&(!desbloqueado||bloqueadoPorInactividad)) return <PinLock onDesbloqueado={()=>{setDesbloqueado(true);setBloqueadoPorInactividad(false);}} />;
   return (
     <HashRouter>
       <NavegacionShell

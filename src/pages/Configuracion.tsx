@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { crearHashPin } from '../utils/seguridad';
 import { database } from '../db/database';
 import { aplicarTema } from '../utils/theme';
 import { formatoMoneda } from '../utils/format';
@@ -23,6 +24,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [pinActual,setPinActual]=useState(''); const [pinConfirmacion,setPinConfirmacion]=useState(''); const [pinMinutos,setPinMinutos]=useState(5);
   const [categoriasGasto, setCategoriasGasto] = useState<Awaited<ReturnType<typeof database.listarCategoriasGasto>>>([]);
   const [recurrentes, setRecurrentes] = useState<Awaited<ReturnType<typeof database.listarGastosRecurrentes>>>([]);
   const [nuevoGastoCat, setNuevoGastoCat] = useState({nombre:'',tipo:'variable' as 'fijo'|'variable',naturaleza:'operativo' as 'operativo'|'compra_insumos'|'retiro_dueno',presupuesto:''});
@@ -41,6 +43,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setUsuario(cfg.usuario_nombre);
       setColor(cfg.color_acento);
       setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
+      const seg=await database.obtenerSeguridadPin(); setPinMinutos(seg.lock_minutos);
       setProductos(ps);
       setCategoriasGasto(categoriasGasto);
       setRecurrentes(recurrentes);
@@ -262,6 +265,13 @@ export default function Configuracion({ onConfigChanged }: Props) {
         </div>
         <button className="boton-primario" onClick={async()=>{await database.crearGastoRecurrente({categoria_id:Number(nuevoFijo.categoria),nombre:nuevoFijo.nombre,monto_estimado:Number(nuevoFijo.monto),dia_vencimiento:Number(nuevoFijo.dia)});setNuevoFijo({categoria:'',nombre:'',monto:'',dia:'1'});await cargar();}}>Agregar gasto fijo</button>
         <ul className="lista-resumen">{recurrentes.map(r=><li key={r.id}><span>{r.nombre} · {formatoMoneda(r.monto_estimado)} · día {r.dia_vencimiento}</span><button className="boton-texto peligro-texto" disabled={!r.activo} onClick={()=>void database.archivarGastoRecurrente(r.id).then(cargar)}>Archivar</button></li>)}</ul>
+      </section>
+      <section className="tarjeta">
+        <h2>Privacidad y datos</h2>
+        <p className="texto-vacio">PIN local PBKDF2; olvidar el PIN requiere restaurar un respaldo.</p>
+        <div className="grid-dos-columnas"><label>PIN nuevo<input inputMode="numeric" type="password" maxLength={6} value={pinActual} onChange={e=>setPinActual(e.target.value.replace(/\D/g,''))}/></label><label>Repetir PIN<input inputMode="numeric" type="password" maxLength={6} value={pinConfirmacion} onChange={e=>setPinConfirmacion(e.target.value.replace(/\D/g,''))}/></label></div>
+        <label>Bloquear después de (minutos)<input type="number" min={1} max={120} value={pinMinutos} onChange={e=>setPinMinutos(Number(e.target.value))}/></label>
+        <div className="fila-botones"><button className="boton-primario" onClick={async()=>{if(pinActual!==pinConfirmacion)throw new Error('Los PIN no coinciden.');const h=await crearHashPin(pinActual);await database.guardarSeguridadPin({habilitado:true,hash:h.hash,salt:h.salt,lock_minutos:pinMinutos});setPinActual('');setPinConfirmacion('');setMensaje('PIN activado.');}}>Activar / cambiar PIN</button><button className="boton-secundario" onClick={async()=>{await database.guardarSeguridadPin({habilitado:false,hash:null,salt:null,lock_minutos:pinMinutos});setMensaje('PIN desactivado.');}}>Desactivar PIN</button></div>
       </section>
       <section className="tarjeta">
         <h2>Respaldo</h2>
