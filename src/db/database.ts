@@ -96,6 +96,7 @@ function coordenadaValida(valor: number | undefined, minimo: number, maximo: num
 class Database {
   private sqlite: SQLiteConnection | null = null;
   private db: SQLiteDBConnection | null = null;
+  private activeDbName = DB_NAME;
   private ready: Promise<void> | null = null;
 
   init(): Promise<void> {
@@ -117,29 +118,119 @@ class Database {
     await this.persist();
   }
 
+  private async nombreBaseExistente(): Promise<string> {
+    if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
+
+    try {
+      const listado = await this.sqlite.getDatabaseList();
+      const nombres = (listado.values ?? [])
+        .map((row) => {
+          if (typeof row === 'string') return row;
+          if (row && typeof row === 'object') {
+            const value = row as Record<string, unknown>;
+            return String(value.database ?? value.name ?? value[0] ?? '');
+          }
+          return '';
+        })
+        .filter((name) => name && name !== 'database');
+
+      if (nombres.includes(DB_NAME)) return DB_NAME;
+      if (nombres.includes(DB_NAME + '.db')) return DB_NAME + '.db';
+    } catch {
+      // Algunas plataformas pueden no exponer la lista en este momento.
+    }
+
+    return DB_NAME;
+  }
+
   private async abrirConexion(): Promise<void> {
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
 
+    this.activeDbName = await this.nombreBaseExistente();
     const consistency = await this.sqlite.checkConnectionsConsistency();
-    const isConn = (await this.sqlite.isConnection(DB_NAME, false)).result;
+    const isConn = (await this.sqlite.isConnection(this.activeDbName, false)).result;
     this.db = consistency.result && isConn
-      ? await this.sqlite.retrieveConnection(DB_NAME, false)
-      : await this.sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
+      ? await this.sqlite.retrieveConnection(this.activeDbName, false)
+      : await this.sqlite.createConnection(this.activeDbName, false, 'no-encryption', DB_VERSION, false);
 
     await this.db.open();
     await this.db.execute('PRAGMA foreign_keys = ON;');
-
-    for (const stmt of SCHEMA_STATEMENTS) {
-      await this.db.execute(stmt);
-    }
   }
 
   private async prepararEsquema(): Promise<void> {
-    const columnas = await this.conn().query('PRAGMA table_info(rutas);');
+    const db = this.conn();
+
+    // La creación del esquema es idempotente y se ejecuta antes de cualquier
+    // consulta funcional. También repara tablas que falten aunque user_version
+    // ya esté adelantado.
+    for (const stmt of SCHEMA_STATEMENTS) {
+      await db.execute(stmt);
+    }
+
+    const versionResult = await db.query('PRAGMA user_version;');
+    const version = Number(versionResult.values?.[0]?.user_version ?? 0);
+
+    if (version > DB_VERSION) {
+      throw new Error(
+        'La base de datos usa una versión de esquema más nueva (' +
+        version +
+        ') que esta app (' +
+        DB_VERSION +
+        ').',
+      );
+    }
+
+    const migraciones = [
+      { version: 2, ejecutar: () => this.migrarVersion2() },
+    ];
+
+    for (const migracion of migraciones) {
+      if (version < migracion.version || version === migracion.version) {
+        await migracion.ejecutar();
+      }
+    }
+
+    await db.execute('PRAGMA user_version = ' + DB_VERSION + ';');
+    await this.verificarEsquemaCompleto();
+  }
+
+  private async migrarVersion2(): Promise<void> {
+    const db = this.conn();
+    const columnas = await db.query('PRAGMA table_info(rutas);');
     const nombres = new Set((columnas.values ?? []).map((row) => String(row.name)));
-    if (!nombres.has('nombre')) await this.conn().execute("ALTER TABLE rutas ADD COLUMN nombre TEXT NOT NULL DEFAULT '';");
-    if (!nombres.has('fecha_planificada')) await this.conn().execute('ALTER TABLE rutas ADD COLUMN fecha_planificada TEXT;');
-    if (!nombres.has('hora_planificada')) await this.conn().execute('ALTER TABLE rutas ADD COLUMN hora_planificada TEXT;');
+
+    if (!nombres.has('nombre')) {
+      await db.execute("ALTER TABLE rutas ADD COLUMN nombre TEXT NOT NULL DEFAULT '';");
+    }
+    if (!nombres.has('fecha_planificada')) {
+      await db.execute('ALTER TABLE rutas ADD COLUMN fecha_planificada TEXT;');
+    }
+    if (!nombres.has('hora_planificada')) {
+      await db.execute('ALTER TABLE rutas ADD COLUMN hora_planificada TEXT;');
+    }
+  }
+
+  private async verificarEsquemaCompleto(): Promise<void> {
+    const tablasRequeridas = [
+      'clientes',
+      'mascotas',
+      'productos',
+      'rutas',
+      'ventas',
+      'configuracion_app',
+    ];
+    const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
+    const resultado = await this.conn().query(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');',
+    );
+    const existentes = new Set((resultado.values ?? []).map((row) => String(row.name)));
+    const faltantes = tablasRequeridas.filter((nombre) => !existentes.has(nombre));
+
+    if (faltantes.length) {
+      throw new Error(
+        'La base de datos no quedó lista: faltan tablas (' + faltantes.join(', ') + ').',
+      );
+    }
   }
 
   private async cerrarConexion(): Promise<void> {
@@ -154,12 +245,13 @@ class Database {
     }
 
     try {
-      await this.sqlite.closeConnection(DB_NAME, false);
+      await this.sqlite.closeConnection(this.activeDbName, false);
     } catch {
       // La conexión puede no existir después de una restauración fallida.
     }
 
     this.db = null;
+    this.activeDbName = DB_NAME;
   }
 
   private conn(): SQLiteDBConnection {
@@ -169,7 +261,7 @@ class Database {
 
   private async persist(): Promise<void> {
     if (Capacitor.getPlatform() === 'web' && this.sqlite) {
-      await this.sqlite.saveToStore(DB_NAME);
+      await this.sqlite.saveToStore(this.activeDbName);
     }
   }
 
