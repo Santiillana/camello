@@ -33,13 +33,5 @@ export async function initWebSqlite(): Promise<void> {
   if (!jeepEl.isConnected) {
     document.body.appendChild(jeepEl);
   }
-  const listo = jeepEl as HTMLElement & {
-    wasmPath?: string;
-    componentOnReady?: () => Promise<unknown>;
-  };
-  if (listo.componentOnReady) {
-    marcarEtapa('component-ready');
-    await listo.componentOnReady();
-  }
   marcarEtapa('ready');
 }
