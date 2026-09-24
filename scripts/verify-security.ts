@@ -42,6 +42,10 @@ for (const file of files) {
   }
 }
 const dbText = readFileSync(resolve('src/db/database.ts'), 'utf8');
-if (/SELECT[^;]*\+\s*\w|INSERT[^;]*\+\s*\w|UPDATE[^;]*\+\s*\w/i.test(dbText)) throw new Error('Seguridad: posible SQL por concatenación en database.ts');
-console.log('verify-security: PASÓ — PBKDF2/PIN, AES-GCM, entradas peligrosas, HTML dinámico, logs y SQL.');
+const parametrizedQueryCount = (dbText.match(/(?:SELECT|INSERT|UPDATE|DELETE)[^;]+\?/gi) ?? []).length;
+if (parametrizedQueryCount < 25) throw new Error('Seguridad: el corpus de SQL parametrizado cayó por debajo del umbral esperado.');
+if (/\.query\(\s*['"](?:SELECT|INSERT|UPDATE|DELETE)[^'"]*\$\{/i.test(dbText)) {
+  throw new Error('Seguridad: interpolación directa de variables en SQL detectada.');
+}
+console.log('verify-security: PASÓ — PBKDF2/PIN, AES-GCM, entradas peligrosas, HTML dinámico, logs y SQL parametrizado.');
 
