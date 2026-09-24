@@ -1138,8 +1138,6 @@ class Database {
       migracion: async (version: number, trabajo: () => Promise<void>): Promise<void> => {
         const previa = await this.conn().query('SELECT 1 FROM modulos_migraciones WHERE modulo_id=? AND version=?;', [moduloId, version]);
         if (previa.values?.length) return;
-        const snapshot = await this.conn().exportToJson('full');
-        if (!snapshot.export) throw new Error('No se pudo crear snapshot del módulo.');
         await this.conn().beginTransaction();
         try {
           await trabajo();
@@ -2359,7 +2357,7 @@ class Database {
     } else {
       const json = await (this.conn() as SQLiteDBConnection).exportToJson('full');
       if (!json.export) throw new Error('SQLite no devolvió un respaldo válido.');
-      exportData = json.export as SqliteExportData;
+      exportData = json.export as unknown as SqliteExportData;
     }
 
     const modulos = await crearContexto(this).exportarTodo();
