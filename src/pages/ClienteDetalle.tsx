@@ -14,6 +14,9 @@ import type {
 import { formatoFecha, formatoMoneda } from '../utils/format';
 import UbicacionMiniMapa from '../components/UbicacionMiniMapa';
 import UbicacionSelector from '../components/UbicacionSelector';
+import AsistenteTarjetas from '../components/AsistenteTarjetas';
+import BorradorPendiente from '../components/BorradorPendiente';
+import { useBorrador } from '../hooks/useBorrador';
 import { comprimirArchivo } from '../components/FotosSelector';
 
 export default function ClienteDetalle() {
@@ -438,6 +441,7 @@ function EditarCliente({
   onGuardado: () => Promise<void>;
   onCancelar: () => void;
 }) {
+  type Datos = { nombre: string; telefono1: string; telefono2: string; cumpleDia: string; cumpleMes: string; observaciones: string };
   const [nombre, setNombre] = useState(cliente.nombre);
   const [telefono1, setTelefono1] = useState(cliente.telefono1 ?? '');
   const [telefono2, setTelefono2] = useState(cliente.telefono2 ?? '');
@@ -445,12 +449,20 @@ function EditarCliente({
   const [cumpleMes, setCumpleMes] = useState(cliente.cumple_mes ? String(cliente.cumple_mes) : '');
   const [observaciones, setObservaciones] = useState(cliente.observaciones ?? '');
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [pasoInicial, setPasoInicial] = useState(0);
+  const datos: Datos = { nombre, telefono1, telefono2, cumpleDia, cumpleMes, observaciones };
+  const borrador = useBorrador<Datos>({ tipo: 'cliente-edicion', clave: String(cliente.id), datos, paso: pasoInicial });
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
+  const tarjetas = [
+    { id: 'nombre', titulo: 'Nombre completo', contenido: <label>Nombre completo<input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} /></label>, validar: () => nombre.trim() ? null : 'El nombre es obligatorio.' },
+    { id: 'telefono1', titulo: 'Teléfono 1', contenido: <label>Teléfono 1<input value={telefono1} onChange={(e) => setTelefono1(e.target.value)} inputMode="tel" /></label> },
+    { id: 'telefono2', titulo: 'Teléfono 2', opcional: true, contenido: <label>Teléfono 2<input value={telefono2} onChange={(e) => setTelefono2(e.target.value)} inputMode="tel" /></label> },
+    { id: 'cumpleanos', titulo: 'Cumpleaños', opcional: true, contenido: <div className="grid-dos-columnas"><label>Día<input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} /></label><label>Mes<input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} /></label></div> },
+    { id: 'observaciones', titulo: 'Observaciones', opcional: true, contenido: <label>Observaciones<textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={4} /></label> },
+  ];
+
+  async function guardar() {
     setGuardando(true);
-    setError(null);
     try {
       await database.actualizarCliente(cliente.id, {
         nombre: nombre.trim(),
@@ -460,34 +472,38 @@ function EditarCliente({
         cumple_mes: cumpleMes ? Number(cumpleMes) : undefined,
         observaciones: observaciones.trim() || undefined,
       });
+      await borrador.limpiar();
       await onGuardado();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setGuardando(false);
     }
   }
 
   return (
-    <form className="formulario-tarjeta" onSubmit={guardar}>
-      <label>Nombre completo<input value={nombre} onChange={(e) => setNombre(e.target.value)} required /></label>
-      <div className="grid-dos-columnas">
-        <label>Teléfono 1<input value={telefono1} onChange={(e) => setTelefono1(e.target.value)} inputMode="tel" /></label>
-        <label>Teléfono 2<input value={telefono2} onChange={(e) => setTelefono2(e.target.value)} inputMode="tel" /></label>
-      </div>
-      <div className="grid-dos-columnas">
-        <label>Día<input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} /></label>
-        <label>Mes<input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} /></label>
-      </div>
-      <label>Observaciones<textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={3} /></label>
-      {error && <p className="texto-error">{error}</p>}
-      <div className="fila-botones">
-        <button type="button" className="boton-secundario" onClick={onCancelar}>Cancelar</button>
-        <button type="submit" className="boton-primario" disabled={guardando}>
-          {guardando ? 'Guardando…' : 'Guardar cambios'}
-        </button>
-      </div>
-    </form>
+    <section className="formulario-tarjeta">
+      {borrador.pendiente && <BorradorPendiente fecha={borrador.pendiente.updated_at}
+        onDescartar={() => void borrador.descartar()}
+        onContinuar={async () => {
+          const p = borrador.pendiente;
+          if (!p) return;
+          const paso = await borrador.continuar();
+          setNombre(p.datos.nombre); setTelefono1(p.datos.telefono1); setTelefono2(p.datos.telefono2);
+          setCumpleDia(p.datos.cumpleDia); setCumpleMes(p.datos.cumpleMes); setObservaciones(p.datos.observaciones);
+          setPasoInicial(paso);
+        }}
+      />}
+      <AsistenteTarjetas
+        titulo="Editar cliente"
+        tarjetas={tarjetas}
+        onCompletar={guardar}
+        onCancelar={onCancelar}
+        textoFinal={guardando ? 'Guardando…' : 'Guardar cambios'}
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
+      />
+    </section>
   );
 }
 
@@ -502,6 +518,7 @@ function FormMascota({
   onGuardada: () => Promise<void>;
   onCancelar: () => void;
 }) {
+  type Datos = { nombre: string; cumpleDia: string; cumpleMes: string; sexo: SexoMascota; raza: string; tamano: TamanoMascota; preferencias: string; observaciones: string };
   const [nombre, setNombre] = useState(inicial?.nombre ?? '');
   const [cumpleDia, setCumpleDia] = useState(inicial?.cumple_dia ? String(inicial.cumple_dia) : '');
   const [cumpleMes, setCumpleMes] = useState(inicial?.cumple_mes ? String(inicial.cumple_mes) : '');
@@ -511,14 +528,23 @@ function FormMascota({
   const [preferencias, setPreferencias] = useState(inicial?.preferencias ?? '');
   const [observaciones, setObservaciones] = useState(inicial?.observaciones ?? '');
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [pasoInicial, setPasoInicial] = useState(0);
+  const datos: Datos = { nombre, cumpleDia, cumpleMes, sexo, raza, tamano, preferencias, observaciones };
+  const borrador = useBorrador<Datos>({ tipo: 'mascota-form', clave: inicial ? 'editar-' + inicial.id : 'nuevo-' + clienteId, datos, paso: pasoInicial });
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
+  const tarjetas = [
+    { id: 'nombre', titulo: 'Nombre', contenido: <label>Nombre<input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} /></label>, validar: () => nombre.trim() ? null : 'El nombre es obligatorio.' },
+    { id: 'cumpleanos', titulo: 'Cumpleaños', opcional: true, contenido: <div className="grid-dos-columnas"><label>Día<input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} /></label><label>Mes<input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} /></label></div> },
+    { id: 'sexo-tamano', titulo: 'Sexo y tamaño', contenido: <div className="grid-dos-columnas"><label>Sexo<select value={sexo} onChange={(e) => setSexo(e.target.value as SexoMascota)}><option value="Desconocido">No especificado</option><option value="M">Macho</option><option value="H">Hembra</option></select></label><label>Tamaño<select value={tamano} onChange={(e) => setTamano(e.target.value as TamanoMascota)}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label></div> },
+    { id: 'raza', titulo: 'Raza', opcional: true, contenido: <label>Raza<input value={raza} onChange={(e) => setRaza(e.target.value)} /></label> },
+    { id: 'preferencias', titulo: 'Preferencias', opcional: true, contenido: <label>Preferencias<input value={preferencias} onChange={(e) => setPreferencias(e.target.value)} /></label> },
+    { id: 'observaciones', titulo: 'Observaciones', opcional: true, contenido: <label>Observaciones<textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={3} /></label> },
+  ];
+
+  async function guardar() {
     setGuardando(true);
-    setError(null);
     try {
-      const datos = {
+      const datosGuardar = {
         nombre: nombre.trim(),
         cumple_dia: cumpleDia ? Number(cumpleDia) : undefined,
         cumple_mes: cumpleMes ? Number(cumpleMes) : undefined,
@@ -528,42 +554,40 @@ function FormMascota({
         preferencias: preferencias.trim() || undefined,
         observaciones: observaciones.trim() || undefined,
       };
-
-      if (inicial) {
-        await database.actualizarMascota(inicial.id, datos);
-      } else {
-        await database.crearMascota({ cliente_id: clienteId, ...datos });
-      }
+      if (inicial) await database.actualizarMascota(inicial.id, datosGuardar);
+      else await database.crearMascota({ cliente_id: clienteId, ...datosGuardar });
+      await borrador.limpiar();
       await onGuardada();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setGuardando(false);
     }
   }
 
   return (
-    <form className="formulario-tarjeta" onSubmit={guardar}>
-      <label>Nombre<input value={nombre} onChange={(e) => setNombre(e.target.value)} required autoFocus /></label>
-      <div className="grid-dos-columnas">
-        <label>Día<input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} /></label>
-        <label>Mes<input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} /></label>
-      </div>
-      <div className="grid-dos-columnas">
-        <label>Sexo<select value={sexo} onChange={(e) => setSexo(e.target.value as SexoMascota)}><option value="Desconocido">No especificado</option><option value="M">Macho</option><option value="H">Hembra</option></select></label>
-        <label>Tamaño<select value={tamano} onChange={(e) => setTamano(e.target.value as TamanoMascota)}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
-      </div>
-      <label>Raza<input value={raza} onChange={(e) => setRaza(e.target.value)} /></label>
-      <label>Preferencias<input value={preferencias} onChange={(e) => setPreferencias(e.target.value)} /></label>
-      <label>Observaciones<textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} /></label>
-      {error && <p className="texto-error">{error}</p>}
-      <div className="fila-botones">
-        <button type="button" className="boton-secundario" onClick={onCancelar}>Cancelar</button>
-        <button type="submit" className="boton-primario" disabled={guardando}>
-          {guardando ? 'Guardando…' : inicial ? 'Guardar mascota' : 'Agregar mascota'}
-        </button>
-      </div>
-    </form>
+    <section className="formulario-tarjeta">
+      {borrador.pendiente && <BorradorPendiente fecha={borrador.pendiente.updated_at}
+        onDescartar={() => void borrador.descartar()}
+        onContinuar={async () => {
+          const p = borrador.pendiente;
+          if (!p) return;
+          const paso = await borrador.continuar();
+          setNombre(p.datos.nombre); setCumpleDia(p.datos.cumpleDia); setCumpleMes(p.datos.cumpleMes);
+          setSexo(p.datos.sexo); setRaza(p.datos.raza); setTamano(p.datos.tamano);
+          setPreferencias(p.datos.preferencias); setObservaciones(p.datos.observaciones); setPasoInicial(paso);
+        }}
+      />}
+      <AsistenteTarjetas
+        titulo={inicial ? 'Editar mascota' : 'Nueva mascota'}
+        tarjetas={tarjetas}
+        onCompletar={guardar}
+        onCancelar={onCancelar}
+        textoFinal={guardando ? 'Guardando…' : inicial ? 'Guardar mascota' : 'Agregar mascota'}
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
+      />
+    </section>
   );
 }
 
@@ -641,9 +665,90 @@ function RitmoCompra({
 
 function FormUbicacion({
   clienteId,
+  inicial,
   onGuardado,
   onCancelar,
 }: {
+  clienteId: number;
+  inicial: Cliente;
+  onGuardado: () => Promise<void>;
+  onCancelar: () => void;
+}) {
+  type Datos = { lat?: number; lng?: number; precision?: number; fuente?: 'gps' | 'whatsapp' | 'manual'; fecha?: string };
+  const [lat, setLat] = useState<number | undefined>(inicial.lat);
+  const [lng, setLng] = useState<number | undefined>(inicial.lng);
+  const [precision, setPrecision] = useState<number | undefined>(inicial.ubicacion_precision_m ?? undefined);
+  const [fuente, setFuente] = useState<'gps' | 'whatsapp' | 'manual' | undefined>(inicial.ubicacion_fuente as Datos['fuente']);
+  const [fecha, setFecha] = useState<string | undefined>(inicial.ubicacion_fecha ?? undefined);
+  const [pasoInicial, setPasoInicial] = useState(0);
+  const datos: Datos = { lat, lng, precision, fuente, fecha };
+  const borrador = useBorrador<Datos>({ tipo: 'ubicacion-cliente', clave: String(clienteId), datos, paso: pasoInicial });
+
+  const tarjetas = [{
+    id: 'ubicacion',
+    titulo: 'Ubicación del cliente',
+    contenido: (
+      <UbicacionSelector
+        lat={lat}
+        lng={lng}
+        precision_m={precision}
+        fuente={fuente}
+        fecha={fecha}
+        onChange={(value) => {
+          setLat(value.lat);
+          setLng(value.lng);
+          setPrecision(value.precision_m);
+          setFuente(value.fuente);
+          setFecha(value.fecha);
+        }}
+      />
+    ),
+  }];
+
+  async function guardar() {
+    if (lat == null || lng == null) throw new Error('Define una ubicación antes de guardar.');
+    await database.actualizarCliente(clienteId, {
+      lat, lng,
+      ubicacion_precision_m: precision,
+      ubicacion_fuente: fuente,
+      ubicacion_fecha: fecha ?? new Date().toISOString(),
+    });
+    await borrador.limpiar();
+    await onGuardado();
+  }
+
+  return (
+    <section className="formulario-tarjeta">
+      {borrador.pendiente && <BorradorPendiente fecha={borrador.pendiente.updated_at}
+        onDescartar={() => void borrador.descartar()}
+        onContinuar={async () => {
+          const p = borrador.pendiente;
+          if (!p) return;
+          const paso = await borrador.continuar();
+          setLat(p.datos.lat);
+          setLng(p.datos.lng);
+          setPrecision(p.datos.precision);
+          setFuente(p.datos.fuente);
+          setFecha(p.datos.fecha);
+          setPasoInicial(paso);
+        }}
+      />}
+      <AsistenteTarjetas
+        titulo="Ubicación"
+        tarjetas={tarjetas}
+        onCompletar={guardar}
+        onCancelar={onCancelar}
+        textoFinal="Guardar ubicación"
+        pasoInicial={pasoInicial}
+        onPasoChange={setPasoInicial}
+        onGuardarBorrador={borrador.guardarAhora}
+        onDescartarBorrador={borrador.descartar}
+      />
+    </section>
+  );
+}
+
+: {
   clienteId: number;
   onGuardado: () => Promise<void>;
   onCancelar: () => void;
