@@ -1,14 +1,16 @@
-import { useState } from 'react';
-import { database } from '../db/database';
-import type { Mascota, SexoMascota, TamanoMascota } from '../types';
+import { useMemo, useState } from 'react';
+import type { Mascota } from '../types';
+import AsistenteTarjetas from './AsistenteTarjetas';
+import FotosSelector, { type FotoBorrador } from './FotosSelector';
+import UbicacionSelector from './UbicacionSelector';
 
 type MascotaBorrador = {
   nombre: string;
   cumple_dia: string;
   cumple_mes: string;
-  sexo: SexoMascota;
+  sexo: 'M' | 'H' | 'Desconocido';
   raza: string;
-  tamano: TamanoMascota;
+  tamano: 'Pequeño' | 'Mediano' | 'Grande';
   preferencias: string;
   observaciones: string;
 };
@@ -38,23 +40,177 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
   const [cumpleMes, setCumpleMes] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [mascotas, setMascotas] = useState<MascotaBorrador[]>([]);
+  const [lat, setLat] = useState<number | undefined>();
+  const [lng, setLng] = useState<number | undefined>();
+  const [precision, setPrecision] = useState<number | undefined>();
+  const [fuente, setFuente] = useState<'gps' | 'whatsapp' | 'manual' | undefined>();
+  const [fotos, setFotos] = useState<FotoBorrador[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  function agregarMascota() {
-    setMascotas((actuales) => [...actuales, mascotaVacia()]);
-  }
 
   function actualizarMascota(index: number, cambios: Partial<MascotaBorrador>) {
     setMascotas((actuales) => actuales.map((m, i) => i === index ? { ...m, ...cambios } : m));
   }
 
-  function quitarMascota(index: number) {
-    setMascotas((actuales) => actuales.filter((_, i) => i !== index));
-  }
+  const tarjetas = useMemo(() => [
+    {
+      id: 'nombre',
+      titulo: 'Nombre completo',
+      contenido: (
+        <label>
+          Nombre completo
+          <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        </label>
+      ),
+      validar: () => nombre.trim() ? null : 'Escribe el nombre completo.',
+    },
+    {
+      id: 'telefono1',
+      titulo: 'Teléfono 1',
+      contenido: (
+        <label>
+          Teléfono 1
+          <input value={telefono1} onChange={(e) => setTelefono1(e.target.value)} inputMode="tel" />
+        </label>
+      ),
+      validar: () => telefono1.trim() ? null : 'Escribe al menos un teléfono.',
+    },
+    {
+      id: 'telefono2',
+      titulo: 'Teléfono 2',
+      opcional: true,
+      contenido: (
+        <label>
+          Teléfono 2
+          <input value={telefono2} onChange={(e) => setTelefono2(e.target.value)} inputMode="tel" />
+        </label>
+      ),
+    },
+    {
+      id: 'cumpleanos',
+      titulo: 'Cumpleaños',
+      opcional: true,
+      contenido: (
+        <div className="grid-dos-columnas">
+          <label>
+            Día
+            <input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} />
+          </label>
+          <label>
+            Mes
+            <input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} />
+          </label>
+        </div>
+      ),
+      validar: () => {
+        const vacio = !cumpleDia && !cumpleMes;
+        if (vacio) return null;
+        return cumpleDia && cumpleMes ? null : 'Indica día y mes, o deja ambos vacíos.';
+      },
+    },
+    {
+      id: 'observaciones',
+      titulo: 'Observaciones',
+      opcional: true,
+      contenido: (
+        <label>
+          Observaciones
+          <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={5} />
+        </label>
+      ),
+    },
+    {
+      id: 'mascotas',
+      titulo: 'Mascotas',
+      opcional: true,
+      contenido: (
+        <div className="asistente-lista-mascotas">
+          {mascotas.map((mascota, index) => (
+            <article className="tarjeta-mascota formulario" key={index}>
+              <div className="fila-titulo-boton">
+                <strong>Mascota {index + 1}</strong>
+                <button
+                  type="button"
+                  className="boton-texto peligro-texto"
+                  onClick={() => setMascotas((actuales) => actuales.filter((_, i) => i !== index))}
+                >
+                  Quitar
+                </button>
+              </div>
+              <label>Nombre<input value={mascota.nombre} onChange={(e) => actualizarMascota(index, { nombre: e.target.value })} /></label>
+              <div className="grid-dos-columnas">
+                <label>Día<input type="number" min={1} max={31} value={mascota.cumple_dia} onChange={(e) => actualizarMascota(index, { cumple_dia: e.target.value })} /></label>
+                <label>Mes<input type="number" min={1} max={12} value={mascota.cumple_mes} onChange={(e) => actualizarMascota(index, { cumple_mes: e.target.value })} /></label>
+              </div>
+              <div className="grid-dos-columnas">
+                <label>
+                  Sexo
+                  <select value={mascota.sexo} onChange={(e) => actualizarMascota(index, { sexo: e.target.value as MascotaBorrador['sexo'] })}>
+                    <option value="Desconocido">No especificado</option>
+                    <option value="M">Macho</option>
+                    <option value="H">Hembra</option>
+                  </select>
+                </label>
+                <label>
+                  Tamaño
+                  <select value={mascota.tamano} onChange={(e) => actualizarMascota(index, { tamano: e.target.value as MascotaBorrador['tamano'] })}>
+                    <option>Pequeño</option>
+                    <option>Mediano</option>
+                    <option>Grande</option>
+                  </select>
+                </label>
+              </div>
+              <label>Raza<input value={mascota.raza} onChange={(e) => actualizarMascota(index, { raza: e.target.value })} /></label>
+              <label>Preferencias<input value={mascota.preferencias} onChange={(e) => actualizarMascota(index, { preferencias: e.target.value })} /></label>
+              <label>Observaciones<textarea rows={2} value={mascota.observaciones} onChange={(e) => actualizarMascota(index, { observaciones: e.target.value })} /></label>
+            </article>
+          ))}
+          <button type="button" className="boton-secundario" onClick={() => setMascotas((actuales) => [...actuales, mascotaVacia()])}>
+            + Agregar otra mascota
+          </button>
+        </div>
+      ),
+      validar: () => {
+        if (mascotas.some((m) => !m.nombre.trim())) return 'Completa el nombre de cada mascota o quítala.';
+        return null;
+      },
+    },
+    {
+      id: 'ubicacion',
+      titulo: 'Ubicación',
+      opcional: true,
+      contenido: (
+        <UbicacionSelector
+          lat={lat}
+          lng={lng}
+          precision_m={precision}
+          fuente={fuente}
+          onChange={(value) => {
+            setLat(value.lat);
+            setLng(value.lng);
+            setPrecision(value.precision_m);
+            setFuente(value.fuente);
+          }}
+          onOmitir={() => {
+            setLat(undefined);
+            setLng(undefined);
+            setPrecision(undefined);
+            setFuente(undefined);
+          }}
+        />
+      ),
+    },
+    {
+      id: 'fotos',
+      titulo: 'Fotos',
+      opcional: true,
+      contenido: (
+        <FotosSelector fotos={fotos} onChange={setFotos} onOmitir={() => setFotos([])} />
+      ),
+    },
+  ], [nombre, telefono1, telefono2, cumpleDia, cumpleMes, observaciones, mascotas, lat, lng, precision, fuente, fotos]);
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
+  async function guardar() {
     setGuardando(true);
     setError(null);
     try {
@@ -66,6 +222,11 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
           cumple_dia: cumpleDia ? Number(cumpleDia) : undefined,
           cumple_mes: cumpleMes ? Number(cumpleMes) : undefined,
           observaciones: observaciones.trim() || undefined,
+          lat,
+          lng,
+          ubicacion_precision_m: precision,
+          ubicacion_fuente: fuente,
+          ubicacion_fecha: lat != null && lng != null ? new Date().toISOString() : undefined,
         },
         mascotas.map((m): Omit<Mascota, 'id' | 'estado'> => ({
           cliente_id: 0,
@@ -79,6 +240,17 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
           observaciones: m.observaciones.trim() || undefined,
         })),
       );
+
+      if (fotos.length) {
+        await database.guardarFotosCliente(
+          id,
+          fotos.map((foto) => ({
+            categoria: foto.categoria,
+            referencia: foto.referencia,
+            data_url: foto.data_url,
+          })),
+        );
+      }
       onGuardado(id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -87,120 +259,27 @@ export default function ClienteForm({ onGuardado, onCancelar, textoBoton = 'Guar
     }
   }
 
+  if (error) {
+    return (
+      <div className="formulario-tarjeta">
+        <p className="texto-error">{error}</p>
+        <button type="button" className="boton-secundario" onClick={() => setError(null)}>Volver al asistente</button>
+      </div>
+    );
+  }
+
   return (
-    <form className="formulario-tarjeta" onSubmit={guardar}>
-      <div className="separador-seccion">
-        <strong>Datos del cliente</strong>
-        <span className="texto-vacio">Los campos esenciales son nombre y, cuando sea posible, teléfono.</span>
-      </div>
-
-      <label>
-        Nombre completo
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus required />
-      </label>
-
-      <div className="grid-dos-columnas">
-        <label>
-          Teléfono 1
-          <input value={telefono1} onChange={(e) => setTelefono1(e.target.value)} inputMode="tel" />
-        </label>
-        <label>
-          Teléfono 2
-          <input value={telefono2} onChange={(e) => setTelefono2(e.target.value)} inputMode="tel" />
-        </label>
-      </div>
-
-      <div className="grid-dos-columnas">
-        <label>
-          Día de cumpleaños
-          <input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} />
-        </label>
-        <label>
-          Mes de cumpleaños
-          <input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} />
-        </label>
-      </div>
-
-      <label>
-        Observaciones
-        <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={3} />
-      </label>
-
-      <div className="separador-seccion fila-titulo-boton">
-        <div>
-          <strong>Mascotas</strong>
-          <span className="texto-vacio">Puedes agregar una o varias ahora y seguir después.</span>
-        </div>
-        <button type="button" className="boton-secundario" onClick={agregarMascota}>+ Mascota</button>
-      </div>
-
-      {mascotas.map((mascota, index) => (
-        <div className="tarjeta-mascota formulario" key={index}>
-          <div className="fila-titulo-boton">
-            <strong>Mascota {index + 1}</strong>
-            <button type="button" className="boton-texto peligro-texto" onClick={() => quitarMascota(index)}>Quitar</button>
-          </div>
-
-          <label>
-            Nombre
-            <input value={mascota.nombre} onChange={(e) => actualizarMascota(index, { nombre: e.target.value })} required />
-          </label>
-
-          <div className="grid-dos-columnas">
-            <label>
-              Día
-              <input type="number" min={1} max={31} value={mascota.cumple_dia} onChange={(e) => actualizarMascota(index, { cumple_dia: e.target.value })} />
-            </label>
-            <label>
-              Mes
-              <input type="number" min={1} max={12} value={mascota.cumple_mes} onChange={(e) => actualizarMascota(index, { cumple_mes: e.target.value })} />
-            </label>
-          </div>
-
-          <div className="grid-dos-columnas">
-            <label>
-              Sexo
-              <select value={mascota.sexo} onChange={(e) => actualizarMascota(index, { sexo: e.target.value as SexoMascota })}>
-                <option value="Desconocido">No especificado</option>
-                <option value="M">Macho</option>
-                <option value="H">Hembra</option>
-              </select>
-            </label>
-            <label>
-              Tamaño
-              <select value={mascota.tamano} onChange={(e) => actualizarMascota(index, { tamano: e.target.value as TamanoMascota })}>
-                <option>Pequeño</option>
-                <option>Mediano</option>
-                <option>Grande</option>
-              </select>
-            </label>
-          </div>
-
-          <label>
-            Raza
-            <input value={mascota.raza} onChange={(e) => actualizarMascota(index, { raza: e.target.value })} />
-          </label>
-
-          <label>
-            Preferencias
-            <input value={mascota.preferencias} onChange={(e) => actualizarMascota(index, { preferencias: e.target.value })} placeholder="Sabor, hábitos, observaciones útiles…" />
-          </label>
-
-          <label>
-            Observaciones
-            <textarea value={mascota.observaciones} onChange={(e) => actualizarMascota(index, { observaciones: e.target.value })} rows={2} />
-          </label>
-        </div>
-      ))}
-
-      {error && <p className="texto-error">{error}</p>}
-
-      <div className="fila-botones">
-        {onCancelar && <button type="button" className="boton-secundario" onClick={onCancelar}>Cancelar</button>}
-        <button type="submit" className="boton-primario" disabled={guardando || !nombre.trim()}>
-          {guardando ? 'Guardando…' : textoBoton}
-        </button>
-      </div>
-    </form>
+    <div className="formulario-tarjeta">
+      <AsistenteTarjetas
+        titulo="Nuevo cliente"
+        tarjetas={tarjetas}
+        onCompletar={async () => {
+          await guardar();
+        }}
+        onCancelar={() => onCancelar?.()}
+        textoFinal={textoBoton}
+      />
+      {guardando && <p className="texto-vacio">Guardando cliente…</p>}
+    </div>
   );
 }
