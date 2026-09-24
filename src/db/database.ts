@@ -1361,10 +1361,12 @@ class Database {
     return c ? this.enriquecerCliente(c) : null;
   }
 
-  async listarRecordatoriosRecompra(hoy = fechaLocalISO()): Promise<Array<{ cliente_id:number; nombre:string; telefono1?:string; dias_desde_ultima_compra:number; ritmo_dias:number }>> {
+  async listarRecordatoriosRecompra(hoy = fechaLocalISO()): Promise<Array<{ id:number; cliente_id:number; nombre:string; telefono1?:string; dias_desde_ultima_compra:number; ritmo_dias:number; pendiente:number; recordar_hasta:string|null }>> {
     const r = await this.conn().query(
       `SELECT c.id AS cliente_id, c.id, c.nombre, c.telefono1, MAX(v.fecha) AS ultima_compra,
-              COALESCE(s.dias, 20) AS ritmo_dias
+              COALESCE(s.dias, 20) AS ritmo_dias,
+              COALESCE(SUM(CASE WHEN v.total > COALESCE(v.monto_pagado,0) THEN v.total - COALESCE(v.monto_pagado,0) ELSE 0 END),0) AS pendiente,
+              MAX(s.recordar_hasta) AS recordar_hasta
        FROM clientes c
        JOIN ventas v ON v.cliente_id=c.id AND COALESCE(v.estado_registro,'activa')='activa'
        LEFT JOIN seguimiento_clientes s ON s.cliente_id=c.id
