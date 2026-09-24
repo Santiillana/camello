@@ -43,8 +43,9 @@ async function omitir(page) {
 }
 
 async function crearCliente(page) {
-  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await configurarPrimeraVez(page);
+  await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   try {
     await page.getByLabel('Nombre completo').waitFor({ timeout: 15000 });
