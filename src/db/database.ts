@@ -117,6 +117,12 @@ function coordenadaValida(valor: number | undefined, minimo: number, maximo: num
   return valor == null || (Number.isFinite(valor) && valor >= minimo && valor <= maximo);
 }
 
+function juliandayDiff(desde: string, hasta: string): number {
+  const a = new Date(desde + 'T00:00:00Z').getTime();
+  const b = new Date(hasta + 'T00:00:00Z').getTime();
+  return (a - b) / 86400000;
+}
+
 class Database {
   private sqlite: SQLiteConnection | null = null;
   private db: SQLiteDBConnection | null = null;
@@ -1350,12 +1356,6 @@ class Database {
       return { id:Number(row.id), cliente_id:Number(row.cliente_id), nombre:String(row.nombre), telefono1:row.telefono1 ? String(row.telefono1) : undefined, dias_desde_ultima_compra:dias, ritmo_dias:Number(row.ritmo_dias ?? 20), pendiente:Number(row.pendiente ?? 0), recordar_hasta:row.recordar_hasta ? String(row.recordar_hasta) : null };
     });
   }
-
-function juliandayDiff(desde: string, hasta: string): number {
-  const a = new Date(desde + 'T00:00:00Z').getTime();
-  const b = new Date(hasta + 'T00:00:00Z').getTime();
-  return (a - b) / 86400000;
-}
 
   private async calcularRitmoAutomatico(clienteId: number): Promise<number> {
     const r = await this.conn().query(
