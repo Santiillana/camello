@@ -199,31 +199,31 @@ class Database {
     const db = this.conn();
     await db.execute('PRAGMA foreign_keys = OFF;');
     try {
-      await db.execute('BEGIN TRANSACTION;');
+      await db.beginTransaction();
       if (!productosListos) {
-        await db.execute('ALTER TABLE productos RENAME TO productos_migracion_v3;');
-        await db.execute('CREATE TABLE productos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, precio INTEGER NOT NULL, costo INTEGER NOT NULL, activo INTEGER NOT NULL DEFAULT 1);');
-        await db.execute('INSERT INTO productos (id, nombre, precio, costo, activo) SELECT id, nombre, CAST(ROUND(precio) AS INTEGER), CAST(ROUND(costo) AS INTEGER), activo FROM productos_migracion_v3;');
-        await db.execute('DROP TABLE productos_migracion_v3;');
+        await db.execute('ALTER TABLE productos RENAME TO productos_migracion_v3;', false);
+        await db.execute('CREATE TABLE productos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, precio INTEGER NOT NULL, costo INTEGER NOT NULL, activo INTEGER NOT NULL DEFAULT 1);', false);
+        await db.execute('INSERT INTO productos (id, nombre, precio, costo, activo) SELECT id, nombre, CAST(ROUND(precio) AS INTEGER), CAST(ROUND(costo) AS INTEGER), activo FROM productos_migracion_v3;', false);
+        await db.execute('DROP TABLE productos_migracion_v3;', false);
       }
       if (!ventasListas) {
-        await db.execute('DROP INDEX IF EXISTS idx_ventas_cliente;');
-        await db.execute('DROP INDEX IF EXISTS idx_ventas_ruta;');
-        await db.execute('DROP INDEX IF EXISTS idx_ventas_fecha;');
+        await db.execute('DROP INDEX IF EXISTS idx_ventas_cliente;', false);
+        await db.execute('DROP INDEX IF EXISTS idx_ventas_ruta;', false);
+        await db.execute('DROP INDEX IF EXISTS idx_ventas_fecha;', false);
         const metodo = ventas.has('metodo_pago') ? "COALESCE(metodo_pago, CASE WHEN estado_pago = 'PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END)" : "CASE WHEN estado_pago = 'PAGADA' THEN 'EFECTIVO' ELSE 'FIADO' END";
         const monto = ventas.has('monto_pagado') ? "MIN(MAX(CAST(ROUND(COALESCE(monto_pagado, 0)) AS INTEGER), 0), CAST(ROUND(total) AS INTEGER))" : "CASE WHEN estado_pago = 'PAGADA' THEN CAST(ROUND(total) AS INTEGER) ELSE 0 END";
         const operacion = ventas.has('operacion_id') ? 'operacion_id' : 'NULL';
-        await db.execute('ALTER TABLE ventas RENAME TO ventas_migracion_v3;');
-        await db.execute("CREATE TABLE ventas (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, ruta_id INTEGER, producto_nombre TEXT NOT NULL, cantidad INTEGER NOT NULL DEFAULT 1, precio_aplicado INTEGER NOT NULL, costo_aplicado INTEGER NOT NULL, total INTEGER NOT NULL, utilidad INTEGER NOT NULL, fecha TEXT NOT NULL, hora TEXT NOT NULL, estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE', fecha_pago TEXT, metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO', monto_pagado INTEGER NOT NULL DEFAULT 0, operacion_id TEXT UNIQUE, FOREIGN KEY (cliente_id) REFERENCES clientes(id), FOREIGN KEY (ruta_id) REFERENCES rutas(id), CHECK (monto_pagado >= 0 AND monto_pagado <= total));");
-        await db.execute('INSERT INTO ventas (id, cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) SELECT id, cliente_id, ruta_id, producto_nombre, cantidad, CAST(ROUND(precio_aplicado) AS INTEGER), CAST(ROUND(costo_aplicado) AS INTEGER), CAST(ROUND(total) AS INTEGER), CAST(ROUND(utilidad) AS INTEGER), fecha, hora, estado_pago, fecha_pago, ' + metodo + ', ' + monto + ', ' + operacion + ' FROM ventas_migracion_v3;');
-        await db.execute('DROP TABLE ventas_migracion_v3;');
+        await db.execute('ALTER TABLE ventas RENAME TO ventas_migracion_v3;', false);
+        await db.execute("CREATE TABLE ventas (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, ruta_id INTEGER, producto_nombre TEXT NOT NULL, cantidad INTEGER NOT NULL DEFAULT 1, precio_aplicado INTEGER NOT NULL, costo_aplicado INTEGER NOT NULL, total INTEGER NOT NULL, utilidad INTEGER NOT NULL, fecha TEXT NOT NULL, hora TEXT NOT NULL, estado_pago TEXT NOT NULL DEFAULT 'PENDIENTE', fecha_pago TEXT, metodo_pago TEXT NOT NULL DEFAULT 'EFECTIVO', monto_pagado INTEGER NOT NULL DEFAULT 0, operacion_id TEXT UNIQUE, FOREIGN KEY (cliente_id) REFERENCES clientes(id), FOREIGN KEY (ruta_id) REFERENCES rutas(id), CHECK (monto_pagado >= 0 AND monto_pagado <= total));", false);
+        await db.execute('INSERT INTO ventas (id, cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) SELECT id, cliente_id, ruta_id, producto_nombre, cantidad, CAST(ROUND(precio_aplicado) AS INTEGER), CAST(ROUND(costo_aplicado) AS INTEGER), CAST(ROUND(total) AS INTEGER), CAST(ROUND(utilidad) AS INTEGER), fecha, hora, estado_pago, fecha_pago, ' + metodo + ', ' + monto + ', ' + operacion + ' FROM ventas_migracion_v3;', false);
+        await db.execute('DROP TABLE ventas_migracion_v3;', false);
       }
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);');
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);');
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);');
-      await db.execute('COMMIT;');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);', false);
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);', false);
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);', false);
+      await db.commitTransaction();
     } catch (error) {
-      try { await db.execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      try { await db.rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       throw error;
     } finally {
       await db.execute('PRAGMA foreign_keys = ON;');
@@ -347,24 +347,26 @@ class Database {
       validarMesDia(mascota.cumple_mes, mascota.cumple_dia, 'Cumpleaños de la mascota');
     }
 
-    await this.conn().execute('BEGIN TRANSACTION;');
+    await this.conn().beginTransaction();
     try {
       const res = await this.conn().run(
         "INSERT INTO clientes (nombre, telefono1, telefono2, cumple_dia, cumple_mes, fecha_registro, lat, lng, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
-        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones?.trim() || null]
+        [nombre, c.telefono1?.trim() || null, c.telefono2?.trim() || null, c.cumple_dia ?? null, c.cumple_mes ?? null, fecha, c.lat ?? null, c.lng ?? null, c.observaciones?.trim() || null],
+        false
       );
       const clienteId = Number(res.changes?.lastId ?? 0);
       for (const mascota of mascotas) {
         await this.conn().run(
           "INSERT INTO mascotas (cliente_id, nombre, cumple_dia, cumple_mes, sexo, raza, tamano, preferencias, observaciones, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo');",
-          [clienteId, mascota.nombre.trim(), mascota.cumple_dia ?? null, mascota.cumple_mes ?? null, mascota.sexo ?? null, mascota.raza?.trim() || null, mascota.tamano ?? null, mascota.preferencias?.trim() || null, mascota.observaciones?.trim() || null]
+          [clienteId, mascota.nombre.trim(), mascota.cumple_dia ?? null, mascota.cumple_mes ?? null, mascota.sexo ?? null, mascota.raza?.trim() || null, mascota.tamano ?? null, mascota.preferencias?.trim() || null, mascota.observaciones?.trim() || null],
+          false
         );
       }
-      await this.conn().execute('COMMIT;');
+      await this.conn().commitTransaction();
       await this.persist();
       return clienteId;
     } catch (error) {
-      try { await this.conn().execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      try { await this.conn().rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       throw error;
     }
   }
@@ -744,14 +746,14 @@ class Database {
       if (yaVendidos + cantidad > llevados) throw new Error('No hay suficientes paquetes disponibles en la ruta. Disponibles: ' + Math.max(llevados - yaVendidos, 0) + '.');
     }
     const ahora = new Date();
-    await this.conn().execute('BEGIN TRANSACTION;');
+    await this.conn().beginTransaction();
     try {
-      const res = await this.conn().run(`INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [v.cliente_id, v.ruta_id ?? null, productoNombre, cantidad, precio, costo, total, utilidad, fechaLocalISO(ahora), horaLocalHHMM(ahora), estado, estado === 'PAGADA' ? fechaLocalISO(ahora) : null, metodo, montoPagado, operacionId]);
-      await this.conn().execute('COMMIT;');
+      const res = await this.conn().run(`INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [v.cliente_id, v.ruta_id ?? null, productoNombre, cantidad, precio, costo, total, utilidad, fechaLocalISO(ahora), horaLocalHHMM(ahora), estado, estado === 'PAGADA' ? fechaLocalISO(ahora) : null, metodo, montoPagado, operacionId], false);
+      await this.conn().commitTransaction();
       await this.persist();
       return Number(res.changes?.lastId ?? 0);
     } catch (error) {
-      try { await this.conn().execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      try { await this.conn().rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       if (operacionId) {
         const existente = await this.conn().query('SELECT id FROM ventas WHERE operacion_id = ?;', [operacionId]);
         if (existente.values?.[0]?.id != null) return Number(existente.values[0].id);
@@ -761,13 +763,13 @@ class Database {
   }
 
   async marcarVentaPagada(id: number): Promise<void> {
-    await this.conn().execute('BEGIN TRANSACTION;');
+    await this.conn().beginTransaction();
     try {
-      await this.conn().run('UPDATE ventas SET estado_pago = \'PAGADA\', fecha_pago = ?, monto_pagado = total WHERE id = ? AND estado_pago = \'PENDIENTE\';', [fechaLocalISO(), id]);
-      await this.conn().execute('COMMIT;');
+      await this.conn().run('UPDATE ventas SET estado_pago = \'PAGADA\', fecha_pago = ?, monto_pagado = total WHERE id = ? AND estado_pago = \'PENDIENTE\';', [fechaLocalISO(), id], false);
+      await this.conn().commitTransaction();
       await this.persist();
     } catch (error) {
-      try { await this.conn().execute('ROLLBACK;'); } catch { /* La transacción ya puede haberse revertido. */ }
+      try { await this.conn().rollbackTransaction(); } catch { /* La transacción ya puede haberse revertido. */ }
       throw error;
     }
   }
