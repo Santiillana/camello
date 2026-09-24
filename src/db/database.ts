@@ -18,11 +18,12 @@ import type {
   RutaConResumen,
   ResumenPeriodo,
   EstadoSeguimiento,
+  ModoRitmo,
   CategoriaFoto,
   Foto,
   FuenteUbicacion,
 } from '../types';
-import { diasDesdeISO, fechaLocalISO, horaLocalHHMM } from '../utils/format';
+import { diasDesdeISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
 
 const DEFAULT_CONFIG: ConfiguracionApp = {
@@ -544,8 +545,51 @@ class Database {
     return c ? this.enriquecerCliente(c) : null;
   }
 
+  private async calcularRitmoAutomatico(clienteId: number): Promise<number> {
+    const r = await this.conn().query(
+      'SELECT fecha FROM ventas WHERE cliente_id = ? ORDER BY fecha DESC, hora DESC, id DESC LIMIT 6;',
+      [clienteId],
+    );
+    const fechas = (r.values ?? []).map((row) => String(row.fecha)).filter(Boolean);
+    if (fechas.length < 2) return 20;
+
+    let totalGap = 0;
+    let gaps = 0;
+    for (let i = 0; i < fechas.length - 1; i += 1) {
+      const dias = Math.abs(diasDesdeISO(fechas[i + 1], new Date(fechas[i])));
+      if (Number.isFinite(dias) && dias > 0) {
+        totalGap += dias;
+        gaps += 1;
+      }
+    }
+    return gaps > 0 ? Math.max(1, Math.round(totalGap / gaps)) : 20;
+  }
+
+  private async obtenerSeguimientoCliente(clienteId: number): Promise<{
+    modo: ModoRitmo;
+    dias: number;
+    contactado_fecha: string | null;
+    recordar_hasta: string | null;
+  }> {
+    const r = await this.conn().query(
+      'SELECT modo, dias, contactado_fecha, recordar_hasta FROM seguimiento_clientes WHERE cliente_id = ?;',
+      [clienteId],
+    );
+    const row = r.values?.[0];
+    const modo: ModoRitmo = row?.modo === 'manual' ? 'manual' : 'automatico';
+    const dias = modo === 'manual' && Number.isInteger(Number(row?.dias))
+      ? Math.max(1, Number(row.dias))
+      : await this.calcularRitmoAutomatico(clienteId);
+    return {
+      modo,
+      dias,
+      contactado_fecha: row?.contactado_fecha ? String(row.contactado_fecha) : null,
+      recordar_hasta: row?.recordar_hasta ? String(row.recordar_hasta) : null,
+    };
+  }
+
   private async enriquecerCliente(c: Cliente): Promise<ClienteConResumen> {
-    const [mascotas, r] = await Promise.all([
+    const [mascotas, r, seguimiento] = await Promise.all([
       this.listarMascotasPorCliente(c.id),
       this.conn().query(
         `SELECT MIN(fecha) as primera,
@@ -559,6 +603,7 @@ class Database {
          FROM ventas WHERE cliente_id = ?;`,
         [c.id]
       ),
+      this.obtenerSeguimientoCliente(c.id),
     ]);
 
     const row = r.values?.[0] ?? {};
@@ -581,10 +626,53 @@ class Database {
       ventas_pendientes: Number(row.ventas_pendientes ?? 0),
       ticket_promedio: numero_compras > 0 ? total_comprado / numero_compras : 0,
       seguimiento: this.calcularSeguimiento(ultima_compra),
+      ritmo_modo: seguimiento.modo,
+      ritmo_dias: seguimiento.dias,
+      contactado_fecha: seguimiento.contactado_fecha,
+      recordar_hasta: seguimiento.recordar_hasta,
     };
   }
 
-  private calcularSeguimiento(ultimaCompraISO: string | null): EstadoSeguimiento {
+  async guardarRitmoCliente(
+    clienteId: number,
+    config: { modo: ModoRitmo; dias?: number | null },
+  ): Promise<void> {
+    if (!Number.isInteger(clienteId) || clienteId <= 0) throw new Error('Cliente inválido.');
+    const dias = config.modo === 'manual' ? Math.max(1, Math.floor(Number(config.dias ?? 20))) : null;
+    await this.conn().run(
+      `INSERT INTO seguimiento_clientes (cliente_id, modo, dias)
+       VALUES (?, ?, ?)
+       ON CONFLICT(cliente_id) DO UPDATE SET modo = excluded.modo, dias = excluded.dias;`,
+      [clienteId, config.modo, dias],
+    );
+    await this.persist();
+  }
+
+  async registrarContactoCliente(clienteId: number): Promise<void> {
+    const hoy = fechaLocalISO();
+    await this.conn().run(
+      `INSERT INTO seguimiento_clientes (cliente_id, modo, dias, contactado_fecha, recordar_hasta)
+       VALUES (?, 'automatico', NULL, ?, NULL)
+       ON CONFLICT(cliente_id) DO UPDATE SET contactado_fecha = excluded.contactado_fecha;`,
+      [clienteId, hoy],
+    );
+    await this.persist();
+  }
+
+  async recordarClienteEn(clienteId: number, dias: number): Promise<void> {
+    const diasValidos = Math.max(1, Math.floor(Number(dias)));
+    const recordarHasta = sumarDiasISO(fechaLocalISO(), diasValidos);
+    await this.conn().run(
+      `INSERT INTO seguimiento_clientes (cliente_id, modo, dias, recordar_hasta)
+       VALUES (?, 'automatico', NULL, ?)
+       ON CONFLICT(cliente_id) DO UPDATE SET recordar_hasta = excluded.recordar_hasta;`,
+      [clienteId, recordarHasta],
+    );
+    await this.persist();
+  }
+
+  private   calcularSeguimiento 
+(ultimaCompraISO: string | null): EstadoSeguimiento {
     if (!ultimaCompraISO) return 'POR_CONTACTAR';
     const dias = diasDesdeISO(ultimaCompraISO);
     if (dias <= UMBRAL_POR_CONTACTAR_DIAS) return 'ACTIVO';
