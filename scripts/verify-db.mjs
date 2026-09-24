@@ -461,7 +461,6 @@ if (pagosDespuesPrimera !== pagosAntesDobleToque + 6000) throw new Error('cobro:
 const yaRegistrado = Number(fresh.exec("SELECT COALESCE(SUM(monto),0) FROM pagos WHERE operacion_id LIKE 'cobro-doble-%';")[0].values[0][0]);
 if (yaRegistrado !== 6000) throw new Error('cobro: el segundo toque no debería registrar más dinero');
 
-fresh.close();
 fixtureV1.close();
 fixtureV2.close();
 
