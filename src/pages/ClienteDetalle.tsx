@@ -154,6 +154,7 @@ export default function ClienteDetalle() {
       {mostrarUbicacion && (
         <FormUbicacion
           clienteId={clienteId}
+          inicial={cliente}
           onGuardado={async () => {
             setMostrarUbicacion(false);
             await cargar();
