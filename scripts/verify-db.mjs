@@ -263,11 +263,27 @@ for (const required of ['nombre', 'fecha_planificada', 'hora_planificada']) {
 const version = Number(legacy.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
 if (version !== DB_VERSION) throw new Error(`migración: user_version = ${version}`);
 
-fresh.close();
-legacy.close();
-
 const productTypes = new Map((fresh.exec('PRAGMA table_info(productos);')[0]?.values ?? []).map((row) => [String(row[1]), String(row[2]).toUpperCase()]));
 for (const field of ['precio', 'costo']) if (productTypes.get(field) !== 'INTEGER') throw new Error('base nueva: productos.' + field + ' no usa INTEGER');
 const saleTypes = new Map((fresh.exec('PRAGMA table_info(ventas);')[0]?.values ?? []).map((row) => [String(row[1]), String(row[2]).toUpperCase()]));
 for (const field of ['precio_aplicado', 'costo_aplicado', 'total', 'utilidad', 'monto_pagado']) if (saleTypes.get(field) !== 'INTEGER') throw new Error('base nueva: ventas.' + field + ' no usa INTEGER');
-console.log('verify-db: OK (base nueva + migración v1→v3 + enteros COP + pago atómico)');
+
+fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Prueba', 2, 13000, 7000, 26000, 12000, '2026-09-24', '10:00', 'PAGADA', 'EFECTIVO', 26000, 'op-1');");
+let duplicadoRechazado = false;
+try {
+  fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Prueba', 2, 13000, 7000, 26000, 12000, '2026-09-24', '10:00', 'PAGADA', 'EFECTIVO', 26000, 'op-1');");
+} catch {
+  duplicadoRechazado = true;
+}
+if (!duplicadoRechazado) throw new Error('base nueva: operacion_id permite duplicados');
+
+fresh.run('BEGIN TRANSACTION;');
+fresh.run("INSERT INTO ventas (cliente_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, metodo_pago, monto_pagado, operacion_id) VALUES (1, 'Rollback', 1, 1000, 600, 1000, 400, '2026-09-24', '10:01', 'PENDIENTE', 'FIADO', 0, 'op-rollback');");
+fresh.run('ROLLBACK;');
+const rollbackCount = Number(fresh.exec("SELECT COUNT(*) FROM ventas WHERE operacion_id = 'op-rollback';")[0].values[0][0]);
+if (rollbackCount !== 0) throw new Error('base nueva: la transacción no hizo rollback');
+
+fresh.close();
+legacy.close();
+
+console.log('verify-db: OK (base nueva + migración v1→v3 + enteros COP + pago atómico + anti-duplicado)');
