@@ -173,6 +173,7 @@ async function sql(page, query, params = []) {
 }
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
+  await sql(page, 'DELETE FROM borradores;');
   await page.getByRole('button', { name: 'Listo' }).click().catch(() => {});
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('button', { name: /Nueva acción/ }).click();
