@@ -66,7 +66,19 @@ export default function Respaldo() {
     }
   }
 
-  async function exportarCifrado(){const password=window.prompt('Contraseña para el respaldo cifrado (mínimo 10 caracteres)');if(!password)return;setExportando(true);try{const json=await database.exportarRespaldo();const cifrado=await cifrarRespaldo(json,password);respaldoRef.current=cifrado;descargarRespaldo(cifrado);setMensaje('Respaldo cifrado descargado.');}catch(e:unknown){setError(e instanceof Error?e.message:String(e));}finally{setExportando(false);}}
+  async function exportarCifrado(){
+    const password=window.prompt('Contraseña para el respaldo cifrado (mínimo 10 caracteres)');
+    if(!password)return;
+    setExportando(true);setMensaje(null);setError(null);
+    try{
+      const json=await database.exportarRespaldo();
+      const cifrado=await cifrarRespaldo(json,password);
+      respaldoRef.current=cifrado;
+      descargarRespaldo(cifrado);
+      setMensaje('Respaldo cifrado descargado. Conserva la contraseña: sin ella no se puede restaurar.');
+    }catch(e:unknown){setError(e instanceof Error?e.message:String(e));}
+    finally{setExportando(false);}
+  }
   async function compartir() {
     if (!respaldoRef.current) {
       await exportar();
@@ -74,8 +86,9 @@ export default function Respaldo() {
     const texto = respaldoRef.current;
     if (!texto) return;
 
-    const ver = await database.validarRespaldo(texto);
-    const fecha = ver.version + '-' + new Date().toISOString().slice(0, 10);
+    const esCifrado = (()=>{try{const parsed=JSON.parse(texto) as Record<string,unknown>;return Number(parsed.camello_encrypted_backup_version)===1;}catch{return false;}})();
+    const ver = esCifrado ? null : await database.validarRespaldo(texto);
+    const fecha = (ver?.version ?? 0) + '-' + new Date().toISOString().slice(0, 10);
     const archivo = new File([texto], 'camello-respaldo-' + fecha + '.json', {
       type: 'application/json',
     });
@@ -83,7 +96,7 @@ export default function Respaldo() {
     if (navigator.share && navigator.canShare?.({ files: [archivo] })) {
       await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: 'Respaldo verificado · SHA-256 ' + (ver.checksum ?? 'sin checksum'),
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
         files: [archivo],
       });
       setMensaje('Respaldo compartido desde el dispositivo.');
@@ -169,10 +182,10 @@ export default function Respaldo() {
         <h2>Exportar</h2>
         <div className="fila-botones">
           <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>
-            {exportando ? 'Generando…' : '⬇️ Descargar respaldo sin cifrar'}
+            {exportando ? 'Generando…' : '⬇️ Descargar respaldo cifrado (recomendado)'}
           </button>
+          <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Descargar sin cifrar</button>
           <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
-          <button className="boton-secundario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>Descargar cifrado</button>
         </div>
         {ultimo && (
           <div className="lista-resumen">
