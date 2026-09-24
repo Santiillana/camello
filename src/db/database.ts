@@ -1813,6 +1813,7 @@ function juliandayDiff(desde: string, hasta: string): number {
     const montoPagado = v.monto_pagado == null ? (v.estado_pago === 'PAGADA' ? total : 0) : numeroNoNegativo(v.monto_pagado, 'El monto pagado');
     if (montoPagado > total) throw new Error('El monto pagado no puede superar el total de la venta.');
     const estado = montoPagado === total ? 'PAGADA' : 'PENDIENTE';
+    const estadoRegistro = 'activa';
     const metodo = v.metodo_pago?.trim() || (estado === 'PAGADA' ? 'EFECTIVO' : 'FIADO');
     const operacionId = v.operacion_id?.trim() || null;
     if (operacionId) {
@@ -1826,7 +1827,7 @@ function juliandayDiff(desde: string, hasta: string): number {
       const row = ruta.values?.[0];
       if (!row) throw new Error('La ruta no existe.');
       if (row.estado !== 'EN_CURSO') throw new Error('No se pueden registrar ventas en una ruta que no está en curso.');
-      const vendidos = await this.conn().query('SELECT COALESCE(SUM(cantidad), 0) as n FROM ventas WHERE ruta_id = ?;', [v.ruta_id]);
+      const vendidos = await this.conn().query("SELECT COALESCE(SUM(cantidad), 0) as n FROM ventas WHERE ruta_id = ? AND COALESCE(estado_registro,'activa')='activa';", [v.ruta_id]);
       const yaVendidos = Number(vendidos.values?.[0]?.n ?? 0);
       const llevados = Number(row.paquetes_llevados ?? 0);
       if (yaVendidos + cantidad > llevados) throw new Error('No hay suficientes paquetes disponibles en la ruta. Disponibles: ' + Math.max(llevados - yaVendidos, 0) + '.');
@@ -1867,7 +1868,7 @@ function juliandayDiff(desde: string, hasta: string): number {
     const op = operacionId?.trim() || null;
     if (op) {
       const previo = await this.conn().query(
-        "SELECT COALESCE(SUM(monto),0) as n FROM pagos WHERE operacion_id LIKE ?;",
+        "SELECT COALESCE(SUM(monto),0) as n FROM pagos WHERE operacion_id LIKE ? AND COALESCE(estado_registro,'activa')='activa';",
         [op + '-%'],
       );
       const yaRegistrado = Number(previo.values?.[0]?.n ?? 0);
@@ -1877,7 +1878,7 @@ function juliandayDiff(desde: string, hasta: string): number {
     const ventas = await this.conn().query(
       `SELECT id, total, COALESCE(monto_pagado,0) as monto_pagado
        FROM ventas
-       WHERE cliente_id = ? AND total > COALESCE(monto_pagado,0)
+       WHERE cliente_id = ? AND total > COALESCE(monto_pagado,0) AND COALESCE(estado_registro,'activa')='activa'
        ORDER BY fecha ASC, hora ASC, id ASC;`,
       [clienteId],
     );
@@ -1971,7 +1972,7 @@ function juliandayDiff(desde: string, hasta: string): number {
               COALESCE(SUM(costo_aplicado * cantidad),0) as costos,
               COALESCE(SUM(cantidad),0) as paquetes,
               COALESCE(SUM(utilidad),0) as utilidad,
-              COALESCE((SELECT SUM(p.monto) FROM pagos p WHERE p.fecha BETWEEN ? AND ?),0) as pagado,
+              COALESCE((SELECT SUM(p.monto) FROM pagos p WHERE p.fecha BETWEEN ? AND ? AND COALESCE(p.estado_registro,'activa')='activa'),0) as pagado,
               COALESCE(SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END),0) as pendiente,
               COUNT(*) as numero_ventas
        FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa';`,
@@ -2048,7 +2049,7 @@ function juliandayDiff(desde: string, hasta: string): number {
               COUNT(v.id) as ventas_pendientes
        FROM clientes c
        JOIN ventas v ON v.cliente_id = c.id
-       WHERE ${filtros.join(' AND ')}
+       WHERE ${[...filtros, "COALESCE(v.estado_registro,'activa')='activa'"].join(' AND ')}
        GROUP BY c.id, c.nombre, c.telefono1
        ORDER BY pendiente DESC, c.nombre ASC;`,
       params,
