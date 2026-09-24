@@ -5,6 +5,7 @@ import BottomNav from './components/BottomNav';
 import SideNav from './components/SideNav';
 import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import { aplicarTema } from './utils/theme';
+import { guardarRespaldoAutomatico } from './utils/respaldoAutomatico';
 import type { ConfiguracionApp } from './types';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -120,6 +121,9 @@ export default function App() {
         setConfig(resultado);
         aplicarTema(resultado.color_acento);
         setListo(true);
+        void database.exportarRespaldo().then((respaldo) => guardarRespaldoAutomatico(respaldo)).catch(() => {
+          // El respaldo automático nunca debe impedir abrir CAMELLO.
+        });
       })
       .catch((e: unknown) => {
         if (activo) setError(e instanceof Error ? e.message : String(e));
