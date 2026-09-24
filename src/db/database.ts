@@ -1359,7 +1359,7 @@ function juliandayDiff(desde: string, hasta: string): number {
 
   private async calcularRitmoAutomatico(clienteId: number): Promise<number> {
     const r = await this.conn().query(
-      'SELECT fecha FROM ventas WHERE cliente_id = ? ORDER BY fecha DESC, hora DESC, id DESC LIMIT 6;',
+      "SELECT fecha FROM ventas WHERE cliente_id = ? AND COALESCE(estado_registro,'activa')='activa' ORDER BY fecha DESC, hora DESC, id DESC LIMIT 6;",
       [clienteId],
     );
     const fechas = (r.values ?? []).map((row) => String(row.fecha)).filter(Boolean);
@@ -1756,7 +1756,7 @@ function juliandayDiff(desde: string, hasta: string): number {
               COUNT(v.id) as numero_ventas,
               COUNT(DISTINCT v.cliente_id) as clientes,
               COUNT(DISTINCT CASE WHEN c.fecha_registro = r.fecha THEN c.id END) as clientes_nuevos,
-              COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM ventas v2 WHERE v2.cliente_id = v.cliente_id AND v2.fecha < r.fecha) THEN v.cliente_id END) as clientes_recompran
+              COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM ventas v2 WHERE v2.cliente_id = v.cliente_id AND COALESCE(v2.estado_registro,'activa')='activa' AND v2.fecha < r.fecha) THEN v.cliente_id END) as clientes_recompran
        FROM ventas v
        JOIN clientes c ON c.id = v.cliente_id
        JOIN rutas r ON r.id = v.ruta_id
@@ -1989,12 +1989,12 @@ function juliandayDiff(desde: string, hasta: string): number {
     const ventas = Number(row.ventas ?? 0);
 
     const recurrentes = await this.conn().query(
-      'SELECT COUNT(*) as n FROM (SELECT cliente_id FROM ventas WHERE fecha BETWEEN ? AND ? GROUP BY cliente_id HAVING COUNT(*) > 1);',
+      "SELECT COUNT(*) as n FROM (SELECT cliente_id FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa' GROUP BY cliente_id HAVING COUNT(*) > 1);",
       [desde, hasta]
     );
     const clientesActivos = await this.conn().query("SELECT COUNT(*) as n FROM clientes WHERE estado = 'activo';");
     const clientesPorContactar = await this.conn().query(
-      'SELECT COUNT(*) as n FROM clientes WHERE estado = \'activo\' AND id IN (SELECT cliente_id FROM ventas GROUP BY cliente_id HAVING julianday(?) - julianday(MAX(fecha)) > ? AND julianday(?) - julianday(MAX(fecha)) <= ?);',
+      "SELECT COUNT(*) as n FROM clientes WHERE estado = 'activo' AND id IN (SELECT cliente_id FROM ventas WHERE COALESCE(estado_registro,'activa')='activa' GROUP BY cliente_id HAVING julianday(?) - julianday(MAX(fecha)) > ? AND julianday(?) - julianday(MAX(fecha)) <= ?);",
       [fechaLocalISO(), UMBRAL_POR_CONTACTAR_DIAS, fechaLocalISO(), UMBRAL_INACTIVO_DIAS]
     );
     const rutasRealizadas = await this.conn().query(
