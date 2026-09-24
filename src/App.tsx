@@ -99,6 +99,22 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) return undefined;
+    const actualizarAltura = () => {
+      document.documentElement.style.setProperty('--camello-vvh', visualViewport.height + 'px');
+    };
+    actualizarAltura();
+    visualViewport.addEventListener('resize', actualizarAltura);
+    visualViewport.addEventListener('scroll', actualizarAltura);
+    return () => {
+      visualViewport.removeEventListener('resize', actualizarAltura);
+      visualViewport.removeEventListener('scroll', actualizarAltura);
+      document.documentElement.style.removeProperty('--camello-vvh');
+    };
+  }, []);
+
+  useEffect(() => {
     let activo = true;
 
     if (import.meta.env.VITE_UI_SMOKE === '1') {
