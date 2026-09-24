@@ -2408,7 +2408,26 @@ class Database {
       if (!this.db) await this.abrirConexion();
       await this.prepararEsquema();
       await this.seedProductosSiVacio();
+      // Los datos propios del módulo ya forman parte del export SQLite completo.
+      // La sección modulos del sobre se conserva para versionado/auditoría; no se reinyecta
+      // para evitar duplicar filas. Las migraciones del módulo se ejecutan al arrancar.
+      await this.persist();
     }
+  }
+
+  async limpiarAplicacion(respaldoVerificado: string): Promise<void> {
+    if (!this.db) throw new Error('SQLite no está inicializado.');
+    const valido = await this.validarRespaldo(respaldoVerificado);
+    if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
+    await this.db.delete();
+    this.db = null;
+    this.activeDbName = DB_NAME;
+    await this.abrirConexion();
+    await this.prepararEsquema();
+    await this.seedProductosSiVacio();
+    const runtime = crearContexto(this);
+    await runtime.limpiarTodo();
+    await this.persist();
   }
 }
 
