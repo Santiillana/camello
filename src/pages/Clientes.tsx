@@ -86,7 +86,14 @@ export default function Clientes() {
     <div className="pantalla">
       <header className="encabezado">
         <h1>Clientes</h1>
-        <button className="boton-secundario" onClick={() => setMostrarForm((v) => !v)}>
+        <button
+          className="boton-secundario"
+          onClick={() => {
+            const siguiente = !mostrarForm;
+            setMostrarForm(siguiente);
+            navigate(siguiente ? '/clientes?nuevo=1' : '/clientes');
+          }}
+        >
           {mostrarForm ? 'Cancelar' : '+ Nuevo cliente'}
         </button>
       </header>
