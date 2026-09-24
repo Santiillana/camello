@@ -52,8 +52,18 @@ export function crearContexto(runtimeApi: {
     async exportarTodo() {
       const data: Record<string, unknown> = {};
       for (const modulo of modulos) {
-        const contexto = await runtimeApi.crearContextoModulo(modulo.id);
-        data[modulo.id] = { version: modulo.version, datos: await modulo.exportar(contexto) };
+        try {
+          const enabled = await runtimeApi.obtenerModuloHabilitado(modulo.id);
+          if (!enabled) {
+            data[modulo.id] = { version: modulo.version, estado: 'desactivado' };
+            continue;
+          }
+          const contexto = await runtimeApi.crearContextoModulo(modulo.id);
+          data[modulo.id] = { version: modulo.version, datos: await modulo.exportar(contexto) };
+        } catch {
+          await runtimeApi.guardarModuloHabilitado(modulo.id, false);
+          data[modulo.id] = { version: modulo.version, estado: 'desactivado_por_error' };
+        }
       }
       return data;
     },
