@@ -4,11 +4,53 @@
 export type EstadoCliente = 'activo' | 'archivado';
 export type EstadoMascota = 'activo' | 'archivado';
 export type EstadoPago = 'PAGADA' | 'PENDIENTE';
-export type EstadoRuta = 'PROGRAMADA' | 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
-export type TipoRuta = 'Puerta a puerta' | 'Barrio' | 'Vereda' | 'Sector' | 'Visita comercial';
+export type EstadoRegistro = 'activa' | 'anulada';
+export type MetodoPago = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
+export type EstadoRuta = 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
+export type TipoRuta = 'Puerta a puerta' | 'Venta local móvil';
 export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
 export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
+
+export type ModoRitmo = 'automatico' | 'manual';
+export type FuenteUbicacion = 'gps' | 'whatsapp' | 'manual';
+export type CategoriaFoto = 'cliente' | 'mascota' | 'casa';
+
+export interface Foto {
+  id: number;
+  cliente_id: number;
+  categoria: CategoriaFoto;
+  referencia?: string;
+  data_url: string;
+  creado_at: string;
+}
+
+export interface ConfiguracionApp {
+  negocio_nombre: string;
+  usuario_nombre: string;
+  color_acento: string;
+  moneda: 'COP';
+  mensaje_recordatorio?: string;
+  pin_habilitado?: boolean;
+  pin_lock_minutos?: number;
+  privacidad_habilitada?: boolean;
+  privacidad_texto?: string;
+  responsable_datos?: string;
+  privacy_accepted_at?: string | null;
+  privacy_responsable?: string;
+}
+
+export interface CarteraItem {
+  cliente_id: number;
+  nombre: string;
+  telefono1?: string;
+  pendiente: number;
+  ventas_pendientes: number;
+}
+
+export interface MascotaConCliente extends Mascota {
+  cliente_nombre: string;
+}
 
 export interface Cliente {
   id: number;
@@ -20,6 +62,9 @@ export interface Cliente {
   fecha_registro: string; // ISO date
   lat?: number;
   lng?: number;
+  ubicacion_precision_m?: number | null;
+  ubicacion_fuente?: FuenteUbicacion | null;
+  ubicacion_fecha?: string | null;
   observaciones?: string;
   estado: EstadoCliente;
 }
@@ -48,6 +93,7 @@ export interface Producto {
 
 export interface Ruta {
   id: number;
+  nombre: string;
   tipo: TipoRuta;
   estado: EstadoRuta;
   fecha: string;
@@ -58,6 +104,7 @@ export interface Ruta {
   lat_fin?: number;
   lng_fin?: number;
   paquetes_llevados: number;
+  paquetes_sobrantes?: number;
   notas?: string;
 }
 
@@ -75,28 +122,59 @@ export interface Venta {
   hora: string;  // HH:MM
   estado_pago: EstadoPago;
   fecha_pago?: string | null;
+  metodo_pago?: MetodoPago | string;
+  monto_pagado?: number;
+  operacion_id?: string | null;
+  estado_registro?: EstadoRegistro;
+  motivo_anulacion?: string | null;
+  anulada_at?: string | null;
 }
 
 // Vistas compuestas usadas en la UI (no son tablas)
 
 export interface ClienteConResumen extends Cliente {
   mascotas: Mascota[];
+  primera_compra?: string | null;
   ultima_compra?: string | null;
+  dias_desde_ultima_compra?: number;
   total_comprado: number;
+  total_pagado: number;
   pendiente: number;
+  paquetes_comprados: number;
+  numero_compras: number;
+  ventas_pendientes: number;
+  ticket_promedio: number;
   seguimiento: EstadoSeguimiento;
+  ritmo_modo: ModoRitmo;
+  ritmo_dias: number;
+  contactado_fecha?: string | null;
+  recordar_hasta?: string | null;
 }
 
 export interface RutaConResumen extends Ruta {
   vendidos: number;
   disponibles: number;
+  sobrantes: number;
+  costos: number;
+  utilidad: number;
+  numero_ventas: number;
+  clientes_nuevos: number;
+  duracion_minutos?: number | null;
   total_vendido: number;
   total_pendiente: number;
   clientes_atendidos: number;
+  clientes_recompran?: number;
+  cobrado?: number;
+  fiado?: number;
+  ticket_promedio?: number;
+  ventas_por_hora?: number;
+  gastos_asociados?: number;
+  utilidad_neta?: number;
 }
 
 export interface ResumenPeriodo {
   ventas: number;
+  costos: number;
   paquetes: number;
   utilidad: number;
   pagado: number;
@@ -105,4 +183,81 @@ export interface ResumenPeriodo {
   clientes_recurrentes?: number;
   numero_ventas?: number;
   ticket_promedio?: number;
+  rutas_realizadas?: number;
+  clientes_activos?: number;
+  clientes_por_contactar?: number;
+  cartera_pendiente?: number;
+  gastos_operativos?: number;
+  utilidad_neta?: number;
+  gastos_pendientes?: number;
+}
+
+
+export type TipoCategoriaGasto = 'fijo' | 'variable';
+export type NaturalezaGasto = 'operativo' | 'compra_insumos' | 'retiro_dueno';
+export type EstadoGasto = 'pagado' | 'pendiente' | 'anulado';
+
+export interface CategoriaGasto {
+  id: number;
+  nombre: string;
+  tipo: TipoCategoriaGasto;
+  naturaleza: NaturalezaGasto;
+  presupuesto_mensual?: number | null;
+  activa: 0 | 1;
+  orden: number;
+}
+
+export interface Pago {
+  id: number;
+  venta_id: number;
+  cliente_id: number;
+  monto: number;
+  fecha: string;
+  hora: string;
+  metodo_pago: string;
+  operacion_id?: string | null;
+  estado_registro: EstadoRegistro;
+  motivo_anulacion?: string | null;
+  anulada_at?: string | null;
+}
+
+export interface Gasto {
+  id: number;
+  fecha: string;
+  monto: number;
+  categoria_id: number;
+  descripcion?: string | null;
+  metodo_pago?: string | null;
+  estado: EstadoGasto;
+  fecha_pago?: string | null;
+  fecha_limite?: string | null;
+  proveedor?: string | null;
+  ruta_id?: number | null;
+  recurrente_id?: number | null;
+  periodo: string;
+  foto_ref?: string | null;
+  operacion_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  archivado: 0 | 1;
+  motivo_anulacion?: string | null;
+  anulado_at?: string | null;
+  categoria_nombre?: string;
+  naturaleza?: NaturalezaGasto;
+}
+
+export interface ResultadoMes {
+  desde?: string;
+  hasta?: string;
+  periodo: string;
+  ventas: number;
+  costo_materia_prima: number;
+  utilidad_bruta: number;
+  gastos_operativos: number;
+  utilidad_neta: number;
+  margen_neto: number;
+  cobrado: number;
+  gastos_pagados: number;
+  flujo_caja: number;
+  gastos_pendientes: number;
 }

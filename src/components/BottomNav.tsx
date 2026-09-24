@@ -1,29 +1,57 @@
-import { NavLink } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 
 const ITEMS = [
-  { to: '/', label: 'Inicio', icon: '🏠', fin: true },
-  { to: '/clientes', label: 'Clientes', icon: '👤' },
-  { to: '/venta-nueva', label: 'Vender', icon: '➕', destacado: true },
-  { to: '/rutas', label: 'Rutas', icon: '🧭' },
-  { to: '/mapa', label: 'Mapa', icon: '📍' },
+  { to: '/', label: 'Inicio', icon: '⌂', end: true },
+  { to: '/clientes', label: 'Clientes', icon: '◉' },
+  { to: '/rutas', label: 'Rutas', icon: '⌁' },
+  { to: '/cartera', label: 'Cartera', icon: '$' },
 ];
 
 export default function BottomNav() {
+  const [mostrarAcciones, setMostrarAcciones] = useState(false);
+  const navigate = useNavigate();
+
   return (
-    <nav className="bottom-nav">
-      {ITEMS.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.fin}
-          className={({ isActive }) =>
-            'bottom-nav-item' + (isActive ? ' activo' : '') + (item.destacado ? ' destacado' : '')
-          }
+    <>
+      <div className="bottom-nav-actions">
+        {mostrarAcciones && (
+          <div className="bottom-nav-menu" role="menu">
+            <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/venta-nueva'); }}>
+              <span>▣</span> Nueva venta
+            </button>
+            <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/rutas?nuevo=1'); }}>
+              <span>⌁</span> Nueva ruta
+            </button>
+            <button type="button" onClick={() => { setMostrarAcciones(false); navigate('/gastos?nuevo=1'); }}>
+              <span>◫</span> Nuevo gasto
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          className={'bottom-nav-fab' + (mostrarAcciones ? ' abierto' : '')}
+          aria-label={mostrarAcciones ? 'Cerrar acciones' : 'Nueva acción'}
+          aria-expanded={mostrarAcciones}
+          onClick={() => setMostrarAcciones((valor) => !valor)}
         >
-          <span className="bottom-nav-icono">{item.icon}</span>
-          <span className="bottom-nav-etiqueta">{item.label}</span>
-        </NavLink>
-      ))}
-    </nav>
+          +
+        </button>
+      </div>
+
+      <nav className="bottom-nav" aria-label="Navegación rápida">
+        {ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' activo' : '')}
+          >
+            <span className="bottom-nav-icono">{item.icon}</span>
+            <span className="bottom-nav-etiqueta">{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </>
   );
 }

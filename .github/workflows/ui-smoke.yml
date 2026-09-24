@@ -1,0 +1,29 @@
+name: Pruebas de pantalla CAMELLO
+
+on:
+  push:
+    branches: ["fix/sqlite-wasm-web"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: camello-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ui-c1:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright@1.55.0 install --with-deps chromium
+      - run: npm install --no-save --no-package-lock playwright@1.55.0
+      - run: VITE_UI_SMOKE=1 node scripts/verify-ui-c1.mjs

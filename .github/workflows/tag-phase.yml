@@ -1,0 +1,49 @@
+name: Etiquetar fases aprobadas
+
+on:
+  push:
+    branches:
+      - "fix/sqlite-wasm-web"
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: contains(github.event.head_commit.message, '[phase-ok:')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Extraer etiquetas
+        id: tags
+        shell: bash
+        run: |
+          raw="$(printf '%s\n' "${{ github.event.head_commit.message }}" | sed -n 's/.*\[phase-ok:\([^]]*\)\].*/\1/p' | head -n1)"
+          test -n "$raw"
+          IFS=',' read -ra tags <<< "$raw"
+          for tag in "${tags[@]}"; do
+            case "$tag" in
+              fase-[a-z0-9-]*-ok|rescate-ok|antes-de-v1) ;;
+              *) echo "Etiqueta no permitida: $tag"; exit 1 ;;
+            esac
+          done
+          echo "tags=$raw" >> "$GITHUB_OUTPUT"
+      - name: Crear etiquetas
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          IFS=',' read -ra tags <<< "$TAGS"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@github.com"
+          for tag in "${tags[@]}"; do
+            if git rev-parse "$tag" >/dev/null 2>&1; then
+              test "$(git rev-list -n1 "$tag")" = "$GITHUB_SHA"
+            else
+              git tag "$tag" "$GITHUB_SHA"
+              git push origin "refs/tags/$tag"
+            fi
+          done

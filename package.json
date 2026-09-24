@@ -1,13 +1,24 @@
 {
   "name": "camello",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "node scripts/copy-sql-wasm.mjs",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "prebuild": "node scripts/copy-sql-wasm.mjs",
+    "postinstall": "node scripts/copy-sql-wasm.mjs",
+    "lint": "oxlint src vite.config.ts capacitor.config.ts scripts",
+    "verify": "npm ls sql.js && npm audit --audit-level=high && npm run lint && npm run verify:ubicacion && npm run verify:security && npm run verify:modulos && npm run verify:db && npm run benchmark:db && npm run benchmark:scale && npm run build",
+    "preview": "vite preview",
+    "verify:db": "node --experimental-strip-types scripts/verify-db.mjs",
+    "benchmark:db": "node scripts/benchmark-db.mjs",
+    "verify:ubicacion": "node --experimental-strip-types scripts/verify-ubicacion.ts",
+    "verify:security": "node --experimental-strip-types scripts/verify-security.ts",
+    "verify:modulos": "node scripts/verify-modulos.mjs",
+    "e2e": "node scripts/e2e-core.mjs",
+    "benchmark:scale": "node scripts/benchmark-scale.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
@@ -18,7 +29,13 @@
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "sql.js": "1.11.0",
+    "@capacitor/geolocation": "^8.0.0",
+    "@capacitor/app": "^8.1.1"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
