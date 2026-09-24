@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -97,6 +97,14 @@ export const SCHEMA_STATEMENTS: string[] = [
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
   );`,
 
+  `CREATE TABLE IF NOT EXISTS seguimiento_clientes (
+    cliente_id INTEGER PRIMARY KEY,
+    modo TEXT NOT NULL DEFAULT 'automatico',
+    dias INTEGER,
+    contactado_fecha TEXT,
+    recordar_hasta TEXT,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );`,
   `CREATE TABLE IF NOT EXISTS pagos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     venta_id INTEGER NOT NULL,
