@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { listarModulos } from '../modulos/runtime';
+import { database } from '../db/database';
 
 const ITEMS = [
   { to: '/', label: 'Inicio', icon: 'M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-4v-6h-7v6h-4A1.5 1.5 0 0 1 3 19.5v-9Z', end: true },
@@ -22,6 +25,14 @@ type Props = {
 };
 
 export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpandido }: Props) {
+  const [modulos,setModulos]=useState<typeof ITEMS>([]);
+  useEffect(()=>{
+    let activo=true;
+    Promise.all(listarModulos().map(async modulo=>({to:modulo.ruta,label:modulo.nombre,icon: 'M12 3C7 3 4 7 4 12s3 9 8 9 8-4 8-9-5-9-8-9Z',enabled:await database.obtenerModuloHabilitado(modulo.id)})))
+      .then(items=>{if(activo)setModulos(items.filter(item=>item.enabled).map(({enabled,...item})=>item));})
+      .catch(()=>undefined);
+    return()=>{activo=false;};
+  },[]);
   return (
     <>
       <button
@@ -55,7 +66,7 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
         </div>
 
         <nav className="side-nav-lista" aria-label="Secciones de CAMELLO">
-          {ITEMS.map((item) => (
+          {[...ITEMS, ...modulos].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
