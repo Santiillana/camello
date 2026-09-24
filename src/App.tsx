@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Ruta } from './types';
 import PinLock from './components/PinLock';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { inicializarModulos, listarModulos, obtenerModulo, crearContexto } from './modulos/runtime';
+import ModuloErrorBoundary from './modulos/ModuloErrorBoundary';
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { database } from './db/database';
 import BottomNav from './components/BottomNav';
@@ -45,6 +47,28 @@ function inicializarBaseDeDatosConTimeout(): Promise<void> {
 
 function CargandoPagina() {
   return <div className="pantalla"><p className="texto-vacio">Cargando…</p></div>;
+}
+
+function ModuloRoute({ id }: { id: string }) {
+  const modulo = obtenerModulo(id);
+  const [habilitado,setHabilitado] = useState<boolean | null>(null);
+  const [contexto,setContexto] = useState<Awaited<ReturnType<typeof database.crearContextoModulo>> | null>(null);
+
+  useEffect(() => {
+    let activo=true;
+    Promise.all([database.obtenerModuloHabilitado(id),database.crearContextoModulo(id)])
+      .then(([enabled,ctx]) => { if(activo){setHabilitado(enabled);setContexto(ctx);} })
+      .catch(() => { if(activo)setHabilitado(false); });
+    return()=>{activo=false;};
+  },[id]);
+
+  if (!modulo || habilitado === false) return <Navigate to="/" replace />;
+  if (habilitado === null || !contexto) return <CargandoPagina />;
+  return (
+    <ModuloErrorBoundary modulo={modulo} contexto={contexto}>
+      <modulo.Componente contexto={contexto} />
+    </ModuloErrorBoundary>
+  );
 }
 
 function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp; onConfigChanged: (config: ConfiguracionApp) => void }) {
@@ -131,6 +155,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
             <Route path="/gastos" element={<Gastos />} />
             <Route path="/configuracion" element={<Configuracion onConfigChanged={onConfigChanged} />} />
             <Route path="/respaldo" element={<Respaldo />} />
+            {listarModulos().map((modulo) => <Route key={modulo.id} path={modulo.ruta} element={<ModuloRoute id={modulo.id} />} />)}
             <Route path="*" element={<Dashboard config={config} />} />
           </Routes>
         </Suspense>
@@ -200,6 +225,7 @@ export default function App() {
     inicializarBaseDeDatosConTimeout()
       .then(async () => {
         await database.verificarSalud();
+        await inicializarModulos(database);
         const seguridad = await database.obtenerSeguridadPin();
         if (activo) { setSeguridadPin({habilitado:seguridad.habilitado,lock_minutos:seguridad.lock_minutos}); setDesbloqueado(!seguridad.habilitado); }
         const resultado = await database.obtenerConfiguracion();
