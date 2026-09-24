@@ -11,6 +11,7 @@ export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
 export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
 
+export type ModoRitmo = 'automatico' | 'manual';
 export type FuenteUbicacion = 'gps' | 'whatsapp' | 'manual';
 export type CategoriaFoto = 'cliente' | 'mascota' | 'casa';
 
@@ -133,6 +134,10 @@ export interface ClienteConResumen extends Cliente {
   ventas_pendientes: number;
   ticket_promedio: number;
   seguimiento: EstadoSeguimiento;
+  ritmo_modo: ModoRitmo;
+  ritmo_dias: number;
+  contactado_fecha?: string | null;
+  recordar_hasta?: string | null;
 }
 
 export interface RutaConResumen extends Ruta {
