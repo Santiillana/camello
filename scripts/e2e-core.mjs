@@ -174,7 +174,9 @@ async function sql(page, query, params = []) {
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.goto('http://127.0.0.1:5173/#/venta-nueva?e2e=' + Date.now(), { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.getByRole('button', { name: /Nueva acción/ }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Nueva venta' }).click();
+  await page.getByRole('heading', { name: /Nueva venta/ }).waitFor({ timeout: 20000 });
   const clienteSelect = page.locator('select').first();
   try {
     await page.locator('input[placeholder="Nombre o mascota…"]').waitFor({ state: 'visible', timeout: 60000 });
