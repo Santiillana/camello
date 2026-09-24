@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
+import { App } from '@capacitor/app';
 
 export type TarjetaAsistente = {
   id: string;
@@ -97,6 +98,21 @@ export default function AsistenteTarjetas({
     await onGuardarBorrador?.();
     onCancelar();
   }
+
+  useEffect(() => {
+    let remover: (() => void) | null = null;
+    void App.addListener('backButton', () => {
+      if (paso > 0) {
+        setPaso((valor) => valor - 1);
+        setError(null);
+      } else {
+        void cancelar();
+      }
+    }).then((listener) => {
+      remover = () => listener.remove();
+    }).catch(() => undefined);
+    return () => remover?.();
+  }, [paso]);
 
   useEffect(() => {
     const primerCampo = contenidoRef.current?.querySelector<HTMLElement>('input, textarea, select, button');
