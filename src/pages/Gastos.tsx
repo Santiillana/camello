@@ -46,7 +46,7 @@ export default function Gastos(){
     </header>
     {mostrar&&<FormularioGasto categorias={categorias} onGuardado={()=>{setMostrar(false);setParams({});void cargar();}} onCancelar={()=>{setMostrar(false);setParams({});}} />}
     <section className="periodo-selector">{(['hoy','semana','mes'] as FiltroPeriodo[]).map(x=><button key={x} type="button" className={'periodo-tab'+(filtro===x?' activo':'')} onClick={()=>setFiltro(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</section>
-    <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><strong>{formatoMoneda(total)}</strong></div>
+    <section className="tarjeta"><div className="fila-titulo-boton"><h2>Total</h2><div className="fila-botones"><strong>{formatoMoneda(total)}</strong><button type="button" className="boton-secundario" onClick={()=>descargarCSV(gastos)}>Exportar CSV</button></div></div>
       <div className="grid-dos-columnas">
         <label>Categoría<select value={categoriaId} onChange={e=>setCategoriaId(e.target.value)}><option value="">Todas</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
         <label>Estado<select value={estado} onChange={e=>setEstado(e.target.value as EstadoGasto|'')}><option value="">Todos</option><option value="pagado">Pagado</option><option value="pendiente">Por pagar</option><option value="anulado">Anulado</option></select></label>
