@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { crearHashPin } from '../utils/seguridad';
+import { listarModulos } from '../modulos/runtime';
 import { database } from '../db/database';
 import { aplicarTema } from '../utils/theme';
 import { formatoMoneda } from '../utils/format';
@@ -267,6 +268,12 @@ export default function Configuracion({ onConfigChanged }: Props) {
         <ul className="lista-resumen">{recurrentes.map(r=><li key={r.id}><span>{r.nombre} · {formatoMoneda(r.monto_estimado)} · día {r.dia_vencimiento}</span><button className="boton-texto peligro-texto" disabled={!r.activo} onClick={()=>void database.archivarGastoRecurrente(r.id).then(cargar)}>Archivar</button></li>)}</ul>
       </section>
       <section className="tarjeta">
+        <h2>Módulos</h2>
+        <p className="texto-vacio">Los módulos son independientes del núcleo. Desactivarlos conserva sus datos hasta que elijas borrarlos.</p>
+        {listarModulos().map((modulo) => <ModuloConfig key={modulo.id} modulo={modulo} onMensaje={setMensaje} />)}
+      </section>
+
+      <section className="tarjeta">
         <h2>Privacidad y datos</h2>
         <p className="texto-vacio">PIN local PBKDF2; olvidar el PIN requiere restaurar un respaldo.</p>
         <div className="grid-dos-columnas"><label>PIN nuevo<input inputMode="numeric" type="password" maxLength={6} value={pinActual} onChange={e=>setPinActual(e.target.value.replace(/\D/g,''))}/></label><label>Repetir PIN<input inputMode="numeric" type="password" maxLength={6} value={pinConfirmacion} onChange={e=>setPinConfirmacion(e.target.value.replace(/\D/g,''))}/></label></div>
@@ -294,4 +301,19 @@ export default function Configuracion({ onConfigChanged }: Props) {
       {error && <p className="texto-error">{error}</p>}
     </div>
   );
+}
+
+function ModuloConfig({ modulo, onMensaje }: { modulo: ReturnType<typeof listarModulos>[number]; onMensaje: (mensaje: string) => void }) {
+  const [habilitado,setHabilitado]=useState<boolean>(true);
+  const [cargando,setCargando]=useState(true);
+  useEffect(()=>{void database.obtenerModuloHabilitado(modulo.id).then(setHabilitado).finally(()=>setCargando(false));},[modulo.id]);
+  return <div className="fila-botones">
+    <strong>{modulo.nombre}</strong>
+    <button className={habilitado ? 'boton-primario' : 'boton-secundario'} disabled={cargando} onClick={async()=>{const siguiente=!habilitado;await database.guardarModuloHabilitado(modulo.id,siguiente);setHabilitado(siguiente);onMensaje(siguiente?modulo.nombre+' activado.':modulo.nombre+' desactivado.');}}>
+      {habilitado ? 'Activado' : 'Desactivado'}
+    </button>
+    <button className="boton-texto peligro-texto" onClick={async()=>{if(!window.confirm('¿Borrar los datos de '+modulo.nombre+'? Esta acción no borra datos del núcleo.'))return;await database.limpiarModuloDatosPrefijados(modulo.id);onMensaje('Datos del módulo borrados.');}}>
+      Borrar datos
+    </button>
+  </div>;
 }
