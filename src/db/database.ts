@@ -1050,16 +1050,23 @@ class Database {
     };
   }
 
-  async listarCartera(): Promise<CarteraItem[]> {
+  async listarCartera(desde?: string, hasta?: string): Promise<CarteraItem[]> {
+    const filtros = ["c.estado = 'activo'", 'v.total > COALESCE(v.monto_pagado,0)'];
+    const params: unknown[] = [];
+    if (desde && hasta) {
+      filtros.push('v.fecha BETWEEN ? AND ?');
+      params.push(desde, hasta);
+    }
     const r = await this.conn().query(
       `SELECT c.id as cliente_id, c.nombre, c.telefono1,
-              COALESCE(SUM(v.total),0) as pendiente,
+              COALESCE(SUM(v.total - COALESCE(v.monto_pagado,0)),0) as pendiente,
               COUNT(v.id) as ventas_pendientes
        FROM clientes c
-       JOIN ventas v ON v.cliente_id = c.id AND v.estado_pago = 'PENDIENTE'
-       WHERE c.estado = 'activo'
+       JOIN ventas v ON v.cliente_id = c.id
+       WHERE ${filtros.join(' AND ')}
        GROUP BY c.id, c.nombre, c.telefono1
-       ORDER BY pendiente DESC, c.nombre ASC;`
+       ORDER BY pendiente DESC, c.nombre ASC;`,
+      params,
     );
     return (r.values ?? []).map((row) => ({
       cliente_id: Number(row.cliente_id),
