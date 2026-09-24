@@ -52,6 +52,26 @@ jobs:
             echo "Secretos de release ausentes: se omite el firmado sin fallar."
           fi
 
+      - name: Compilar APK debug fallback
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          chmod +x android/gradlew
+          ./gradlew -p android assembleDebug --no-daemon \\
+            -PversionCodeOverride="${{ github.run_number }}" \\
+            -PversionNameOverride="$VERSION_NAME"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "CAMELLO-debug-v${VERSION_NAME}.apk"
+          sha256sum "CAMELLO-debug-v${VERSION_NAME}.apk" | tee "CAMELLO-debug-v${VERSION_NAME}.apk.sha256"
+
+      - name: Publicar APK debug fallback
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMELLO-debug-run-${{ github.run_number }}
+          path: |
+            CAMELLO-debug-v*.apk
+            CAMELLO-debug-v*.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Materializar keystore temporal
         if: env.SIGNING_READY == 'true'
         env:
@@ -68,13 +88,30 @@ jobs:
           KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon             -PversionCodeOverride="${{ github.run_number }}"             -PversionNameOverride="${{ github.ref_name }}"             -PRELEASE_STORE_FILE="camello-release.jks"             -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD"             -PRELEASE_KEY_ALIAS="$KEY_ALIAS"             -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
+          VERSION_NAME=$(node -p "require('../package.json').version")
+          ./gradlew assembleRelease --no-daemon \\
+            -PversionCodeOverride="${{ github.run_number }}" \\
+            -PversionNameOverride="$VERSION_NAME" \\
+            -PRELEASE_STORE_FILE="camello-release.jks" \\
+            -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD" \\
+            -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \\
+            -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
+
+      - name: Preparar release firmado y SHA-256
+        if: env.SIGNING_READY == 'true'
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          cp android/app/build/outputs/apk/release/app-release.apk "CAMELLO-release-v${VERSION_NAME}.apk"
+          sha256sum "CAMELLO-release-v${VERSION_NAME}.apk" | tee "CAMELLO-release-v${VERSION_NAME}.apk.sha256"
 
       - name: Publicar APK release
+        if: env.SIGNING_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: camello-release-${{ github.run_number }}
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: CAMELLO-release-${{ github.run_number }}
+          path: |
+            CAMELLO-release-v*.apk
+            CAMELLO-release-v*.apk.sha256
           if-no-files-found: error
           retention-days: 30
 
