@@ -10,7 +10,7 @@
     "prebuild": "node scripts/copy-sql-wasm.mjs",
     "postinstall": "node scripts/copy-sql-wasm.mjs",
     "lint": "oxlint src vite.config.ts capacitor.config.ts scripts",
-    "verify": "npm ls sql.js && npm audit --audit-level=high && npm run lint && npm run verify:db && npm run build",
+    "verify": "npm ls sql.js && npm audit --audit-level=high && npm run lint && npm run verify:db && npm run benchmark:db && npm run build",
     "preview": "vite preview",
     "verify:db": "node scripts/verify-db.mjs",
     "benchmark:db": "node scripts/benchmark-db.mjs"
