@@ -57,6 +57,9 @@ async function eliminar(id: string): Promise<void> {
 export async function guardarRespaldoAutomatico(json: string, ahora = new Date()): Promise<void> {
   const fecha = ahora.toISOString();
   const dia = fecha.slice(0, 10);
+  const existentes = await listar();
+  const tipoHoy: BackupItem['kind'] = ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
+  if (existentes.some((item) => item.id === tipoHoy + '-' + dia)) return;
   const kind: BackupItem['kind'] = ahora.getUTCDay() === 0 ? 'weekly' : 'daily';
   const checksum = await calcularChecksum(json);
 
