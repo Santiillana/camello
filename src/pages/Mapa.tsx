@@ -292,7 +292,7 @@ export default function Mapa() {
           <p className="texto-kicker">Clientes geolocalizados</p>
           <h1>Mapa de clientes</h1>
         </div>
-        <button className="boton-secundario" onClick={() => void centrarEnMiUbicacion}>Centrar en mí</button>
+        <button className="boton-secundario" onClick={() => void centrarEnMiUbicacion()}>Centrar en mí</button>
       </header>
 
       {error && <p className="texto-error">{error}</p>}
