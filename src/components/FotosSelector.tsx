@@ -43,6 +43,11 @@ export default function FotosSelector({ fotos, onChange, onOmitir }: Props) {
       for (const file of Array.from(files).slice(0, 6)) {
         if (!file.type.startsWith('image/')) continue;
         const data_url = await comprimirArchivo(file);
+        if (data_url.length > 4_000_000) throw new Error('La foto comprimida supera el límite de almacenamiento por foto.');
+        if (navigator.storage?.estimate) {
+          const estimate = await navigator.storage.estimate();
+          if (estimate.quota && estimate.usage && estimate.usage / estimate.quota > 0.9) throw new Error('Hay poco espacio disponible. Exporta un respaldo antes de seguir guardando fotos.');
+        }
         nuevas.push({
           categoria,
           referencia: referencia.trim() || undefined,

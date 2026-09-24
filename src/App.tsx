@@ -199,6 +199,7 @@ export default function App() {
 
     inicializarBaseDeDatosConTimeout()
       .then(async () => {
+        await database.verificarSalud();
         const seguridad = await database.obtenerSeguridadPin();
         if (activo) { setSeguridadPin({habilitado:seguridad.habilitado,lock_minutos:seguridad.lock_minutos}); setDesbloqueado(!seguridad.habilitado); }
         const resultado = await database.obtenerConfiguracion();
