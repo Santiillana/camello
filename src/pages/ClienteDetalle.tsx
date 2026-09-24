@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { database } from '../db/database';
+function esSexoMascota(value: string): value is SexoMascota { return value === 'M' || value === 'H' || value === 'Desconocido'; }
+function esTamanoMascota(value: string): value is TamanoMascota { return value === 'Pequeño' || value === 'Mediano' || value === 'Grande'; }
+function esModoRitmo(value: string): value is ModoRitmo { return value === 'automatico' || value === 'manual'; }
+function esFuenteUbicacion(value: unknown): value is 'gps' | 'whatsapp' | 'manual' { return value === 'gps' || value === 'whatsapp' || value === 'manual'; }
+
 import type {
   Cliente,
   ClienteConResumen,
@@ -535,7 +540,7 @@ function FormMascota({
   const tarjetas = [
     { id: 'nombre', titulo: 'Nombre', contenido: <label>Nombre<input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} /></label>, validar: () => nombre.trim() ? null : 'El nombre es obligatorio.' },
     { id: 'cumpleanos', titulo: 'Cumpleaños', opcional: true, contenido: <div className="grid-dos-columnas"><label>Día<input type="number" min={1} max={31} value={cumpleDia} onChange={(e) => setCumpleDia(e.target.value)} /></label><label>Mes<input type="number" min={1} max={12} value={cumpleMes} onChange={(e) => setCumpleMes(e.target.value)} /></label></div> },
-    { id: 'sexo-tamano', titulo: 'Sexo y tamaño', contenido: <div className="grid-dos-columnas"><label>Sexo<select value={sexo} onChange={(e) => setSexo(e.target.value as SexoMascota)}><option value="Desconocido">No especificado</option><option value="M">Macho</option><option value="H">Hembra</option></select></label><label>Tamaño<select value={tamano} onChange={(e) => setTamano(e.target.value as TamanoMascota)}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label></div> },
+    { id: 'sexo-tamano', titulo: 'Sexo y tamaño', contenido: <div className="grid-dos-columnas"><label>Sexo<select value={sexo} onChange={(e) => { if (esSexoMascota(e.target.value)) setSexo(e.target.value); }}><option value="Desconocido">No especificado</option><option value="M">Macho</option><option value="H">Hembra</option></select></label><label>Tamaño<select value={tamano} onChange={(e) => { if (esTamanoMascota(e.target.value)) setTamano(e.target.value); }}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label></div> },
     { id: 'raza', titulo: 'Raza', opcional: true, contenido: <label>Raza<input value={raza} onChange={(e) => setRaza(e.target.value)} /></label> },
     { id: 'preferencias', titulo: 'Preferencias', opcional: true, contenido: <label>Preferencias<input value={preferencias} onChange={(e) => setPreferencias(e.target.value)} /></label> },
     { id: 'observaciones', titulo: 'Observaciones', opcional: true, contenido: <label>Observaciones<textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={3} /></label> },
@@ -630,7 +635,7 @@ function RitmoCompra({
       <div className="formulario">
         <label>
           Modo
-          <select value={modo} onChange={(e) => setModo(e.target.value as ModoRitmo)}>
+          <select value={modo} onChange={(e) => { if (esModoRitmo(e.target.value)) setModo(e.target.value); }}>
             <option value="automatico">Automático</option>
             <option value="manual">Manual</option>
           </select>
@@ -678,7 +683,7 @@ function FormUbicacion({
   const [lat, setLat] = useState<number | undefined>(inicial.lat);
   const [lng, setLng] = useState<number | undefined>(inicial.lng);
   const [precision, setPrecision] = useState<number | undefined>(inicial.ubicacion_precision_m ?? undefined);
-  const [fuente, setFuente] = useState<'gps' | 'whatsapp' | 'manual' | undefined>(inicial.ubicacion_fuente as Datos['fuente']);
+  const [fuente, setFuente] = useState<'gps' | 'whatsapp' | 'manual' | undefined>(esFuenteUbicacion(inicial.ubicacion_fuente) ? inicial.ubicacion_fuente : undefined);
   const [fecha, setFecha] = useState<string | undefined>(inicial.ubicacion_fecha ?? undefined);
   const [pasoInicial, setPasoInicial] = useState(0);
   const datos: Datos = { lat, lng, precision, fuente, fecha };
