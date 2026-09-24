@@ -11,6 +11,18 @@ export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
 export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
 
+export type FuenteUbicacion = 'gps' | 'whatsapp' | 'manual';
+export type CategoriaFoto = 'cliente' | 'mascota' | 'casa';
+
+export interface Foto {
+  id: number;
+  cliente_id: number;
+  categoria: CategoriaFoto;
+  referencia?: string;
+  data_url: string;
+  creado_at: string;
+}
+
 export interface ConfiguracionApp {
   negocio_nombre: string;
   usuario_nombre: string;
@@ -40,6 +52,9 @@ export interface Cliente {
   fecha_registro: string; // ISO date
   lat?: number;
   lng?: number;
+  ubicacion_precision_m?: number | null;
+  ubicacion_fuente?: FuenteUbicacion | null;
+  ubicacion_fecha?: string | null;
   observaciones?: string;
   estado: EstadoCliente;
 }
