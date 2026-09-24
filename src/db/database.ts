@@ -57,7 +57,15 @@ function normalizarTelefono(valor?: string): string {
 }
 
 function escaparGlob(valor: string): string {
-  return valor.replace(/[\\*?\[]/g, (caracter) => caracter === '\\' ? '[\\\\]' : '[' + caracter + ']');
+  let salida = '';
+  for (const caracter of valor) {
+    if (caracter === '\\') salida += '[\\\\]';
+    else if (caracter === '*') salida += '[*]';
+    else if (caracter === '?') salida += '[?]';
+    else if (caracter === '[') salida += '[[]';
+    else salida += caracter;
+  }
+  return salida;
 }
 
 function validarMesDia(mes: number | undefined, dia: number | undefined, campo: string): void {
