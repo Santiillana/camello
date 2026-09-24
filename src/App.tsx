@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { Ruta } from './types';
 import PinLock from './components/PinLock';
 import { Link, Navigate } from 'react-router-dom';
@@ -29,6 +29,12 @@ const Gastos = lazy(() => import('./pages/Gastos'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
 
 const DB_INIT_TIMEOUT_MS = 15_000;
+
+function duracionRuta(fecha: string, hora: string): string {
+  const inicio = new Date(fecha + 'T' + hora + ':00-05:00').getTime();
+  const minutos = Math.max(0, Math.floor((Date.now() - inicio) / 60000));
+  return String(Math.floor(minutos / 60)).padStart(2, '0') + ':' + String(minutos % 60).padStart(2, '0');
+}
 
 function inicializarBaseDeDatosConTimeout(): Promise<void> {
   let timer: number | undefined;
@@ -83,6 +89,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
   const esInicio = location.pathname === '/';
   const [rutaActiva, setRutaActiva] = useState<Ruta | null>(null);
   const [rutaAviso12h, setRutaAviso12h] = useState(false);
+  const [ahoraMs, setAhoraMs] = useState(() => Date.now());
 
   useEffect(() => {
     let activo = true;
@@ -108,7 +115,8 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
     };
     void cargarRuta();
     const intervalo = window.setInterval(() => void cargarRuta(), 30000);
-    return () => { activo = false; window.clearInterval(intervalo); };
+    const reloj = window.setInterval(() => setAhoraMs(Date.now()), 1000);
+    return () => { activo = false; window.clearInterval(intervalo); window.clearInterval(reloj); };
   }, [location.pathname]);
 
   return (
@@ -136,7 +144,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
       </header>
       {rutaActiva && (
         <Link to={`/rutas/${rutaActiva.id}`} className="banner-ruta-activa banner-ruta-global">
-          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · paquetes {rutaActiva.paquetes_llevados}
+          🧭 Ruta en curso: {rutaActiva.nombre} · {rutaActiva.hora_inicio} · {duracionRuta(rutaActiva.fecha, rutaActiva.hora_inicio)} · paquetes {rutaActiva.paquetes_llevados}
         </Link>
       )}
       <main className="app-contenido">
