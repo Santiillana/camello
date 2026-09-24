@@ -26,7 +26,12 @@ type Voucher = {
 export default function NuevaVenta() {
   const navigate = useNavigate();
   const location = useLocation();
-  const clienteIdInicial = (location.state as { clienteId?: number } | null)?.clienteId;
+  const clienteIdInicial = (() => {
+    const estado: unknown = location.state;
+    if (!estado || typeof estado !== 'object' || Array.isArray(estado)) return undefined;
+    const candidato = Reflect.get(estado, 'clienteId');
+    return typeof candidato === 'number' && Number.isInteger(candidato) ? candidato : undefined;
+  })();
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [rutaActiva, setRutaActiva] = useState<Ruta | null>(null);
