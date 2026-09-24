@@ -33,8 +33,31 @@ function toSqlParams(params: unknown[]): SqlValue[] {
   });
 }
 
-function toBytes(value: StoredValue): Promise<Uint8Array | null> {
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(texto: string): Uint8Array {
+  const binary = atob(texto);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function toBytes(value: StoredValue | string): Promise<Uint8Array | null> {
   if (value == null) return Promise.resolve(null);
+  if (typeof value === 'string') {
+    try {
+      return Promise.resolve(base64ToBytes(value));
+    } catch {
+      return Promise.resolve(null);
+    }
+  }
   if (typeof value === 'string') {
     try { return Promise.resolve(base64ToBytes(value)); } catch { return Promise.resolve(null); }
   }
@@ -66,7 +89,7 @@ async function openStore(name: string): Promise<IDBDatabase> {
 async function readStore(name: string, key: string): Promise<Uint8Array | null> {
   try {
     const db = await openStore(name);
-    const value = await new Promise<StoredValue>((resolve, reject) => {
+    const value = await new Promise<StoredValue | string>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const request = tx.objectStore(STORE_NAME).get(key);
       request.onsuccess = () => resolve(request.result as StoredValue);
