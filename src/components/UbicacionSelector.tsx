@@ -48,7 +48,7 @@ export default function UbicacionSelector({ lat, lng, precision_m, fuente, fecha
     try {
       const compartido = localStorage.getItem('camello.sharedText');
       if (compartido) setPegado(compartido);
-    } catch {}
+    } catch { /* El portapapeles compartido puede no estar disponible en el ciclo de vida actual de Android. */ }
     window.addEventListener('camelloShare', recibirCompartido);
     return () => window.removeEventListener('camelloShare', recibirCompartido);
   }, []);
@@ -103,7 +103,7 @@ export default function UbicacionSelector({ lat, lng, precision_m, fuente, fecha
       const resultado = await resolverUbicacionPegada(pegado);
       onChange(resultado); setManualLat(String(resultado.lat)); setManualLng(String(resultado.lng));
       setMensaje('Ubicación pegada correctamente.');
-      try { localStorage.removeItem('camello.sharedText'); } catch {}
+      try { localStorage.removeItem('camello.sharedText'); } catch { /* El portapapeles compartido puede no estar disponible en el ciclo de vida actual de Android. */ }
     } catch (e: unknown) {
       const mensajeError = e instanceof Error ? e.message : String(e);
       setError(mensajeError === 'FORMATO_NO_RECONOCIDO' ? 'No reconocí coordenadas ni un enlace de Google Maps válido.' : mensajeError);
