@@ -13,6 +13,7 @@ import { aplicarTema } from '../utils/theme';
 import { formatoMoneda } from '../utils/format';
 import type { ConfiguracionApp, Producto } from '../types';
 import { descargarRespaldo, diasDesdeUltimoRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
+import type { TipoCategoriaGasto, NaturalezaGasto } from '../types';
 
 type Props = {
   onConfigChanged?: (config: ConfiguracionApp) => void;
@@ -39,7 +40,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [privacyAceptada,setPrivacyAceptada]=useState(false);
   const [categoriasGasto, setCategoriasGasto] = useState<Awaited<ReturnType<typeof database.listarCategoriasGasto>>>([]);
   const [recurrentes, setRecurrentes] = useState<Awaited<ReturnType<typeof database.listarGastosRecurrentes>>>([]);
-  const [nuevoGastoCat, setNuevoGastoCat] = useState({nombre:'',tipo:'variable',naturaleza:'operativo',presupuesto:''});
+  const [nuevoGastoCat, setNuevoGastoCat] = useState<{nombre:string;tipo:TipoCategoriaGasto;naturaleza:NaturalezaGasto;presupuesto:string}>({nombre:'',tipo:'variable',naturaleza:'operativo',presupuesto:''});
   const [nuevoFijo, setNuevoFijo] = useState({categoria:'',nombre:'',monto:'',dia:'1'});
 
   async function cargar() {
