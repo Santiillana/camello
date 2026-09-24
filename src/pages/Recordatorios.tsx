@@ -138,7 +138,7 @@ function RecordatorioItem({
   }
 
   const whatsapp = cliente.telefono1
-    ? 'https://wa.me/57' + cliente.telefono1.replace(/D/g, '') + '?text=' + encodeURIComponent(mensaje)
+    ? 'https://wa.me/57' + cliente.telefono1.replace(/\D/g, '') + '?text=' + encodeURIComponent(mensaje)
     : null;
 
   return (
