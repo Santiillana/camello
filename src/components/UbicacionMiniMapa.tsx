@@ -19,7 +19,7 @@ export default function UbicacionMiniMapa({ lat, lng }: Props) {
       attribution: '&copy; colaboradores de OpenStreetMap',
     }).addTo(mapa);
     L.marker([lat, lng]).addTo(mapa);
-    return () => mapa.remove();
+    return () => { mapa.remove(); };
   }, [lat, lng]);
 
   const url = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(lat + ',' + lng);
