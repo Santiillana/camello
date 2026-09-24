@@ -1,7 +1,7 @@
 {
   "name": "camello",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,8 @@
     "benchmark:db": "node scripts/benchmark-db.mjs",
     "verify:ubicacion": "node --experimental-strip-types scripts/verify-ubicacion.ts",
     "verify:security": "node --experimental-strip-types scripts/verify-security.ts",
-    "verify:modulos": "node scripts/verify-modulos.mjs"
+    "verify:modulos": "node scripts/verify-modulos.mjs",
+    "e2e": "node scripts/e2e-core.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
