@@ -66,6 +66,8 @@ function BloquePeriodo({
             <MiniStat etiqueta="Paquetes" valor={String(resumen.paquetes)} />
             <MiniStat etiqueta="Materia prima" valor={formatoMoneda(resumen.costos)} />
             <MiniStat etiqueta="Utilidad" valor={formatoMoneda(resumen.utilidad)} />
+            {mes && <MiniStat etiqueta="Gastos" valor={formatoMoneda(resumen.gastos_operativos ?? 0)} />}
+            {mes && <MiniStat etiqueta="Utilidad neta" valor={formatoMoneda(resumen.utilidad_neta ?? resumen.utilidad)} alerta={(resumen.utilidad_neta ?? 0) < 0} />}
             <MiniStat etiqueta="Cobrado" valor={formatoMoneda(resumen.pagado)} />
             <MiniStat etiqueta="Pendiente" valor={formatoMoneda(resumen.pendiente)} alerta={resumen.pendiente > 0} />
           </div>
@@ -77,6 +79,7 @@ function BloquePeriodo({
             {mes && <div><span>Clientes activos</span><strong>{resumen.clientes_activos ?? 0}</strong></div>}
             {mes && <div><span>Clientes por contactar</span><strong>{resumen.clientes_por_contactar ?? 0}</strong></div>}
             {mes && <div><span>Cartera total actual</span><strong>{formatoMoneda(resumen.cartera_pendiente ?? 0)}</strong></div>}
+            {mes && <div><span>Por pagar de gastos</span><strong>{formatoMoneda(resumen.gastos_pendientes ?? 0)}</strong></div>}
             {extendido && <div><span>Ticket promedio</span><strong>{formatoMoneda(resumen.ticket_promedio ?? 0)}</strong></div>}
           </div>
         </>
