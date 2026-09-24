@@ -23,14 +23,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: TEMP generar lockfile para auditoría
-        run: npm install --package-lock-only --ignore-scripts
-      - name: TEMP publicar lockfile generado
-        uses: actions/upload-artifact@v4
-        with:
-          name: temp-package-lock
-          path: package-lock.json
-          if-no-files-found: error
       - name: Instalar y verificar en clon limpio
         run: npm ci && npm run verify
 
@@ -49,24 +41,3 @@ jobs:
           rm -rf src/modulos/sorpresa
           npm run build
 
-  sync-lock-temporary:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - name: Generar lockfile
-        run: npm install --package-lock-only --ignore-scripts
-      - name: Incorporar lockfile
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git diff --cached --quiet && exit 0
-          git commit -m "chore: sincronizar lockfile de pruebas"
-          git push origin HEAD:release/v1
