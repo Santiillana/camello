@@ -46,6 +46,7 @@ try {
     const menuLinks = page.locator('.side-nav .side-nav-item');
     if (await menuLinks.count() !== 10) throw new Error('C1: el menú lateral no muestra las 10 secciones.');
     if (await page.getByRole('link', { name: 'Vender' }).count() !== 0) throw new Error('C1: todavía existe Vender en la barra inferior.');
+    await page.getByRole('button', { name: 'Cerrar menú' }).click();
     const fab = page.getByRole('button', { name: 'Nueva acción' });
     if (await fab.count() !== 1) throw new Error('C1: falta el botón flotante +.');
     await fab.click();
