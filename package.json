@@ -10,14 +10,15 @@
     "prebuild": "node scripts/copy-sql-wasm.mjs",
     "postinstall": "node scripts/copy-sql-wasm.mjs",
     "lint": "oxlint src vite.config.ts capacitor.config.ts scripts",
-    "verify": "npm ls sql.js && npm audit --audit-level=high && npm run lint && npm run verify:ubicacion && npm run verify:security && npm run verify:modulos && npm run verify:db && npm run benchmark:db && npm run build",
+    "verify": "npm ls sql.js && npm audit --audit-level=high && npm run lint && npm run verify:ubicacion && npm run verify:security && npm run verify:modulos && npm run verify:db && npm run benchmark:db && npm run benchmark:scale && npm run build",
     "preview": "vite preview",
     "verify:db": "node --experimental-strip-types scripts/verify-db.mjs",
     "benchmark:db": "node scripts/benchmark-db.mjs",
     "verify:ubicacion": "node --experimental-strip-types scripts/verify-ubicacion.ts",
     "verify:security": "node --experimental-strip-types scripts/verify-security.ts",
     "verify:modulos": "node scripts/verify-modulos.mjs",
-    "e2e": "node scripts/e2e-core.mjs"
+    "e2e": "node scripts/e2e-core.mjs",
+    "benchmark:scale": "node scripts/benchmark-scale.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
