@@ -9,8 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "postinstall": "node scripts/copy-sql-wasm.mjs",
-    "predev": "node scripts/copy-sql-wasm.mjs",
-    "verify:web-sqlite": "node scripts/verify-web-sqlite.mjs"
+    "predev": "node scripts/copy-sql-wasm.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "8.1.1",
