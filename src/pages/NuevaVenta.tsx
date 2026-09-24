@@ -40,6 +40,7 @@ export default function NuevaVenta() {
   const [error, setError] = useState<string | null>(null);
   const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
   const [voucher, setVoucher] = useState<Voucher | null>(null);
+  const [ventaAnulada, setVentaAnulada] = useState(false);
   const [pasoInicial, setPasoInicial] = useState(0);
   const operacionIdRef = useRef<string | null>(null);
 
@@ -312,6 +313,17 @@ export default function NuevaVenta() {
           </div>
           <div className="fila-botones">
             <button className="boton-secundario" onClick={() => void compartirWhatsApp()}>Compartir por WhatsApp</button>
+            {!ventaAnulada && <button className="boton-secundario peligro-texto" onClick={async () => {
+              const motivo = window.prompt('Motivo de anulación de la venta');
+              if (!motivo) return;
+              try {
+                await database.anularVenta(voucher.id, motivo);
+                setVentaAnulada(true);
+              } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : String(e));
+              }
+            }}>Anular venta</button>}
+            {ventaAnulada && <span className="etiqueta-estado">Venta anulada</span>}
             <button className="boton-primario" onClick={() => navigate(rutaActiva ? '/rutas/' + rutaActiva.id : '/clientes/' + clienteId)}>Listo</button>
           </div>
         </section>

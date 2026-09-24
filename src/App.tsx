@@ -54,11 +54,6 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
   useEffect(() => {
     localStorage.setItem('camello.menuExpandido', menuExpandido ? '1' : '0');
   }, [menuExpandido]);
-  useEffect(() => {
-    let ocultoDesde=0;
-    const onVis=()=>{if(document.visibilityState==='hidden') ocultoDesde=Date.now(); else if(ocultoDesde&&seguridadPin.habilitado&&Date.now()-ocultoDesde>=seguridadPin.lock_minutos*60000){setBloqueadoPorInactividad(true);setDesbloqueado(false);}};
-    document.addEventListener('visibilitychange',onVis); return()=>document.removeEventListener('visibilitychange',onVis);
-  },[seguridadPin]);
   const location = useLocation();
   const navigate = useNavigate();
   const esInicio = location.pathname === '/';
@@ -162,6 +157,13 @@ export default function App() {
   const [desbloqueado,setDesbloqueado]=useState(false);
   const [seguridadPin,setSeguridadPin]=useState({habilitado:false,lock_minutos:5});
   const [bloqueadoPorInactividad,setBloqueadoPorInactividad]=useState(false);
+
+  useEffect(() => {
+    let ocultoDesde=0;
+    const onVis=()=>{if(document.visibilityState==='hidden') ocultoDesde=Date.now(); else if(ocultoDesde&&seguridadPin.habilitado&&Date.now()-ocultoDesde>=seguridadPin.lock_minutos*60000){setBloqueadoPorInactividad(true);setDesbloqueado(false);}};
+    document.addEventListener('visibilitychange',onVis);
+    return()=>document.removeEventListener('visibilitychange',onVis);
+  },[seguridadPin]);
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
