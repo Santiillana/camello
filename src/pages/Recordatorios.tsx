@@ -44,7 +44,7 @@ export default function Recordatorios() {
       });
   }, [clientes, filtro]);
 
-  function mensajePara(cliente: ClienteConResumen): string {
+  function mensajePara(cliente: RecordatorioCliente): string {
     return mensaje
       .replaceAll('{nombre}', cliente.nombre)
       .replaceAll('{dias}', String(cliente.dias_desde_ultima_compra ?? 0));
