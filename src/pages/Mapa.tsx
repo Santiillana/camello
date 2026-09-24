@@ -5,11 +5,6 @@ import { database } from '../db/database';
 import type { ClienteConResumen, RutaConResumen } from '../types';
 import { obtenerMejorUbicacion } from '../utils/ubicacion';
 
-// Arregla el ícono por defecto de Leaflet, que no se resuelve bien con el empaquetado de Vite.
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
-import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
-import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
 
 const VILLAVICENCIO: [number, number] = [4.142, -73.6266];
 const CLAVE_FILTROS_MAPA = 'camello.mapa.filtros.v1';
