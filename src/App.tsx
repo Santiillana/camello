@@ -233,6 +233,11 @@ export default function App() {
     inicializarBaseDeDatosConTimeout()
       .then(async () => {
         await database.verificarSalud();
+        const ultimaSalud = localStorage.getItem('camello.ultimaSaludBd');
+        if (!ultimaSalud || Date.now() - Number(ultimaSalud) >= 7 * 24 * 60 * 60 * 1000) {
+          await database.verificarSalud();
+          localStorage.setItem('camello.ultimaSaludBd', String(Date.now()));
+        }
         await inicializarModulos(database);
         const seguridad = await database.obtenerSeguridadPin();
         if (activo) { setSeguridadPin({habilitado:seguridad.habilitado,lock_minutos:seguridad.lock_minutos}); setDesbloqueado(!seguridad.habilitado); }
