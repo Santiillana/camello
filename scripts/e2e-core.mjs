@@ -88,7 +88,19 @@ async function crearCliente(page) {
     }
     await sleep(250);
   }
-  if (!creado) throw new Error('E2E: el cliente no quedó persistido tras guardar el formulario.');
+  if (!creado) {
+    const pantalla = await page.locator('body').innerText().catch(() => '');
+    const errores = await page.locator('.texto-error,[role="alert"]').allTextContents().catch(() => []);
+    const botones = await page.getByRole('button').allTextContents().catch(() => []);
+    await page.screenshot({ path: 'e2e-fallo-cliente.png', fullPage: true }).catch(() => {});
+    throw new Error(
+      'E2E: el cliente no quedó persistido tras guardar el formulario. '
+      + 'URL=' + page.url()
+      + ' errores=' + JSON.stringify(errores)
+      + ' botones=' + JSON.stringify(botones)
+      + ' pantalla=' + pantalla.slice(0, 5000),
+    );
+  }
 }
 
 async function expectOption(select, label) {
