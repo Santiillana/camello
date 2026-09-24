@@ -28,7 +28,7 @@ const Recordatorios = lazy(() => import('./pages/Recordatorios'));
 const Gastos = lazy(() => import('./pages/Gastos'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
 
-const DB_INIT_TIMEOUT_MS = 15_000;
+const DB_INIT_TIMEOUT_MS = 60_000;
 
 function duracionRuta(fecha: string, hora: string, ahora = Date.now()): string {
   const inicio = new Date(fecha + 'T' + hora + ':00-05:00').getTime();
