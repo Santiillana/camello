@@ -38,7 +38,6 @@ function migrate3(db) {
   const ventasOk = v.has('metodo_pago') && v.has('monto_pagado') && v.has('operacion_id') &&
     (db.exec('PRAGMA table_info(ventas);')[0]?.values ?? []).filter(r => ['precio_aplicado','costo_aplicado','total','utilidad'].includes(String(r[1]))).every(r => String(r[2]).toUpperCase() === 'INTEGER');
   if (productosOk && ventasOk) return;
-  db.run('PRAGMA foreign_keys=OFF;');
   try {
     if (!productosOk) {
       db.run('ALTER TABLE productos RENAME TO productos_migracion_v3;');
@@ -58,7 +57,7 @@ function migrate3(db) {
       db.run("INSERT INTO ventas SELECT id,cliente_id,ruta_id,producto_nombre,cantidad,CAST(ROUND(precio_aplicado) AS INTEGER),CAST(ROUND(costo_aplicado) AS INTEGER),CAST(ROUND(total) AS INTEGER),CAST(ROUND(utilidad) AS INTEGER),fecha,hora,estado_pago,fecha_pago,"+metodo+","+monto+","+operacion+" FROM ventas_migracion_v3;");
       db.run('DROP TABLE ventas_migracion_v3;');
     }
-  } finally { db.run('PRAGMA foreign_keys=ON;'); }
+  }
 }
 function migrate4(db) {
   addColumn(db,'clientes','ubicacion_precision_m','ubicacion_precision_m REAL');
@@ -75,7 +74,6 @@ function migrate8(db) {
   const cols = columnNames(db,'rutas');
   if (!cols.has('fecha_planificada') && !cols.has('hora_planificada')) return;
   const snap = db.exec("SELECT id,nombre,tipo,estado,fecha,hora_inicio,hora_fin,lat_inicio,lng_inicio,lat_fin,lng_fin,paquetes_llevados,COALESCE(paquetes_sobrantes,0),notas FROM rutas ORDER BY id;")[0]?.values ?? [];
-  db.run('PRAGMA foreign_keys=OFF;');
   try {
     db.run('DROP TABLE IF EXISTS rutas_reconstruccion_v8;');
     db.run(`CREATE TABLE rutas_reconstruccion_v8 (id INTEGER PRIMARY KEY AUTOINCREMENT,nombre TEXT NOT NULL DEFAULT '',tipo TEXT NOT NULL,estado TEXT NOT NULL DEFAULT 'EN_CURSO',fecha TEXT NOT NULL,hora_inicio TEXT,hora_fin TEXT,lat_inicio REAL,lng_inicio REAL,lat_fin REAL,lng_fin REAL,paquetes_llevados INTEGER NOT NULL DEFAULT 0,paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,notas TEXT);`);
@@ -85,7 +83,7 @@ function migrate8(db) {
     db.run('INSERT INTO rutas SELECT * FROM rutas_reconstruccion_v8;');
     db.run('DROP TABLE rutas_reconstruccion_v8;');
     if (Number(db.exec('SELECT COUNT(*) FROM rutas;')[0].values[0][0]) !== snap.length) throw new Error('v8: cambió el número de rutas.');
-  } finally { db.run('PRAGMA foreign_keys=ON;'); }
+  }
 }
 function migrate9(db) {
   const refs = db.exec("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';")[0]?.values ?? [];
@@ -96,7 +94,6 @@ function migrate9(db) {
     for (const match of String(row[3] ?? '').match(rx) ?? []) refsMap.set(match,match.split('_migracion_')[0]);
     if (String(row[1]).includes('_migracion_')) refsMap.set(String(row[1]),String(row[1]).split('_migracion_')[0]);
   }
-  db.run('PRAGMA foreign_keys=OFF;');
   try {
     for (const row of refs.filter(r => String(r[0]) === 'table' && !String(r[1]).includes('_migracion_') && [...refsMap.keys()].some(t => String(r[3]).includes(t)))) {
       const name=String(row[1]), create=CURRENT_SCHEMA.find(s=>s.trimStart().startsWith('CREATE TABLE IF NOT EXISTS '+name+' '));
@@ -112,7 +109,7 @@ function migrate9(db) {
       const exists=Number(db.exec("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"+canonical.replace(/'/g,"''")+"'")[0].values[0][0]??0);
       if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)db.run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
     }
-  } finally { db.run('PRAGMA foreign_keys=ON;'); }
+  }
   health(db,'v9');
 }
 function migrate10(db){ db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS borradores')) ?? ''); }
@@ -137,8 +134,22 @@ function initialize(db){
   applySchema(db);
   const current=Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0]??0);
   if(current>DB_VERSION)throw new Error('Esquema '+current+' incompatible con '+DB_VERSION);
-  const migrations=[[2,migrate2],[3,migrate3],[4,migrate4],[5,migrate5],[6,migrate6],[7,migrate7],[8,migrate8],[9,migrate9],[10,migrate10],[11,migrate11],[12,migrate12],[13,migrate13],[14,migrate14]];
-  for(const [version,fn] of migrations)if(current<version)fn(db);
+  const migrations=[[2,migrate2,false],[3,migrate3,true],[4,migrate4,false],[5,migrate5,false],[6,migrate6,false],[7,migrate7,false],[8,migrate8,true],[9,migrate9,true],[10,migrate10,false],[11,migrate11,false],[12,migrate12,false],[13,migrate13,false],[14,migrate14,false]];
+  for(const [version,fn,foreignKeysOff] of migrations){
+    if(current>=version)continue;
+    if(foreignKeysOff)db.run('PRAGMA foreign_keys=OFF;');
+    try {
+      db.run('BEGIN;');
+      fn(db);
+      db.run('PRAGMA user_version='+version+';');
+      db.run('COMMIT;');
+    } catch(error) {
+      try { db.run('ROLLBACK;'); } catch { /* SQLite puede haber revertido la transacción automáticamente. */ }
+      throw error;
+    } finally {
+      if(foreignKeysOff)db.run('PRAGMA foreign_keys=ON;');
+    }
+  }
   for(const statement of CURRENT_SCHEMA.filter((statement) => /^CREATE (INDEX|TRIGGER) IF NOT EXISTS /i.test(statement.trim()))) {
     db.run(statement);
   }
@@ -191,8 +202,45 @@ function anulacionesTest(db){
   if(row[0]!=='anulada'||!row[1]||!row[2])throw new Error('anulación sin auditoría');
 }
 
+
+function bytesEqual(a,b){if(a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;}
+
+function transactionalFailureTest(SQL){
+  const db=fixture(SQL,'schema-v7.sql');
+  initialize(db);
+  const before=db.export();
+  db.run('PRAGMA foreign_keys=OFF;');
+  try {
+    db.run('BEGIN;');
+    db.run('CREATE TABLE transaccion_temporal (id INTEGER PRIMARY KEY, valor TEXT);');
+    db.run("INSERT INTO transaccion_temporal VALUES (1,'debe desaparecer');");
+    db.run("UPDATE clientes SET nombre='CORRUPCION_SIMULADA' WHERE id=1;");
+    throw new Error('fallo de migración simulado');
+  } catch {
+    db.run('ROLLBACK;');
+  } finally {
+    db.run('PRAGMA foreign_keys=ON;');
+  }
+  const after=db.export();
+  if(!bytesEqual(before,after))throw new Error('Rollback transaccional no dejó la BD exactamente como estaba.');
+  health(db,'rollback simulado');
+  db.close();
+}
+
+function versionMayorTest(SQL){
+  const db=new SQL.Database();
+  applySchema(db);
+  db.run('PRAGMA user_version='+(DB_VERSION+1)+';');
+  let fallo=false;
+  try{initialize(db);}catch(error){fallo=true;if(!String(error?.message??error).includes('incompatible'))throw error;}
+  if(!fallo)throw new Error('No se rechazó una versión de esquema mayor a la soportada.');
+  db.close();
+}
+
 const SQL=await initSqlJs({locateFile:file=>fileURLToPath(new URL('../node_modules/sql.js/dist/'+file,import.meta.url))});
-const fresh=new SQL.Database(); initialize(fresh); flujo(fresh,'fresh'); gastosTest(fresh); anulacionesTest(fresh);
+const fresh=new SQL.Database(); initialize(fresh); initialize(fresh); flujo(fresh,'fresh');
+transactionalFailureTest(SQL);
+versionMayorTest(SQL); gastosTest(fresh); anulacionesTest(fresh);
 const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
 const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
 const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
@@ -202,4 +250,4 @@ if(!brokenDDL.some(r=>String(r[0])==='ventas'&&String(r[1]).includes('rutas_migr
 const beforeD=resumen(dañada); initialize(dañada); same(beforeD,resumen(dañada),'damaged'); flujo(dañada,'damaged');
 for(const db of [fresh,v1,v2,v7,dañada]){health(db,'final');db.close();}
 console.log('verify-db: OK');
-console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
+console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',idempotencia:'PASÓ',version_mayor:'PASÓ',rollback_transaccional_simulado:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
