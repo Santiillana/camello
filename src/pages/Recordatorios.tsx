@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { database } from '../db/database';
-import type { ClienteConResumen } from '../types';
+type RecordatorioCliente = { id:number; nombre:string; telefono1?:string; dias_desde_ultima_compra:number; ritmo_dias:number; pendiente:number; recordar_hasta?:string|null };
 import { formatoMoneda, hoyISO } from '../utils/format';
 
 type Filtro = '7' | '15' | '20' | 'ritmo';
 
 export default function Recordatorios() {
-  const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
+  const [clientes, setClientes] = useState<RecordatorioCliente[]>([]);
   const [filtro, setFiltro] = useState<Filtro>('20');
   const [mensaje, setMensaje] = useState('Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
   const [error, setError] = useState<string | null>(null);
@@ -15,13 +15,10 @@ export default function Recordatorios() {
   async function cargar() {
     try {
       const [items, config] = await Promise.all([
-        database.listarClientes({ soloActivos: true }),
+        database.listarRecordatoriosRecompra(hoyISO()),
         database.obtenerConfiguracion(),
       ]);
-      setClientes(items.filter((cliente) =>
-        cliente.dias_desde_ultima_compra != null &&
-        cliente.dias_desde_ultima_compra > 0,
-      ));
+      setClientes(items);
       if (config.mensaje_recordatorio) setMensaje(config.mensaje_recordatorio);
       setError(null);
     } catch (e: unknown) {
@@ -107,7 +104,7 @@ function RecordatorioItem({
   mensaje,
   onActualizado,
 }: {
-  cliente: ClienteConResumen;
+  cliente: RecordatorioCliente;
   mensaje: string;
   onActualizado: () => Promise<void>;
 }) {
