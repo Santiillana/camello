@@ -1,33 +1,22 @@
-# Instalar CAMELLO en Android
+# INSTALAR-APK.md
 
 ## APK debug
-1. En GitHub entra a Actions.
-2. Abre la última ejecución VERDE de “Compilar APK de CAMELLO”.
-3. Descarga el Artifact `CAMELLO-debug-vX.Y.Z`.
-4. Pasa el APK al teléfono.
-5. Android puede pedir permiso para instalar aplicaciones de esa fuente: habilítalo solo para la aplicación desde la que instalas.
-6. Abre CAMELLO.
-7. Configura negocio y usuario.
+1. Ir a GitHub → Actions → Compilar APK de CAMELLO.
+2. Abrir la ejecución verde más reciente.
+3. Descargar el Artifact CAMELLO-debug-v....
+4. Pasar el APK al teléfono Android.
+5. Permitir instalación desde la fuente usada para abrir el APK.
+6. Instalar y abrir CAMELLO.
+7. Comparar el SHA-256 con el archivo .sha256 adjunto.
 
-El Artifact incluye un archivo `.sha256` para comprobar la integridad del APK.
+## APK firmado
+Requiere CAMELLO_RELEASE_KEYSTORE_B64, CAMELLO_KEYSTORE_PASSWORD, CAMELLO_KEY_ALIAS y CAMELLO_KEY_PASSWORD en GitHub Secrets.
 
-## Release firmado
-El workflow de release siempre puede producir un APK debug. El APK release firmado solo se produce si existen estos secretos:
-`CAMELLO_RELEASE_KEYSTORE_B64`, `CAMELLO_KEYSTORE_PASSWORD`, `CAMELLO_KEY_ALIAS`, `CAMELLO_KEY_PASSWORD`.
+## Keystore
+Crear uno nuevo solo si todavía no existe:
+keytool -genkeypair -v -keystore camello-release.jks -alias camello -keyalg RSA -keysize 2048 -validity 10000
+base64 -w 0 camello-release.jks
+Guardar el resultado como CAMELLO_RELEASE_KEYSTORE_B64 y crear los otros tres secretos con sus valores.
 
-## Crear un keystore
-En una máquina segura:
-```bash
-keytool -genkeypair -v -keystore camello-release.jks -alias camello -keyalg RSA -keysize 4096 -validity 10000
-```
-
-El archivo no debe entrar al repositorio. Convierte el keystore a Base64 para cargar el primer secreto:
-```bash
-base64 -w0 camello-release.jks
-```
-
-## Pérdida de la clave
-Si se pierde el keystore usado para firmar un APK instalado, Android no permitirá actualizar esa instalación con otra firma. La alternativa es desinstalar y perder los datos locales, salvo que exista un respaldo propio que luego pueda restaurarse.
-
-## Actualización encima
-La actualización encima de una instalación existente solo debe probarse con el mismo certificado de firma. Esta prueba es manual porque requiere un teléfono real.
+## Actualización
+Una actualización firmada con la misma clave y applicationId debe instalarse encima conservando SQLite; esto requiere validación manual.
