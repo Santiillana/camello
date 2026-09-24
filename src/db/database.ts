@@ -21,7 +21,6 @@ import type {
   ModoRitmo,
   CategoriaFoto,
   Foto,
-  FuenteUbicacion,
 } from '../types';
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';

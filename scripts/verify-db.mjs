@@ -277,10 +277,48 @@ function migrateVersion8(db) {
   db.run('PRAGMA foreign_keys = OFF;');
   try {
     db.run('DROP TABLE IF EXISTS rutas_reconstruccion_v8;');
-    db.run('CREATE TABLE rutas_reconstruccion_v8 (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL DEFAULT '''', tipo TEXT NOT NULL, estado TEXT NOT NULL DEFAULT ''EN_CURSO'', fecha TEXT NOT NULL, hora_inicio TEXT, hora_fin TEXT, lat_inicio REAL, lng_inicio REAL, lat_fin REAL, lng_fin REAL, paquetes_llevados INTEGER NOT NULL DEFAULT 0, paquetes_sobrantes INTEGER NOT NULL DEFAULT 0, notas TEXT);'.replace(/''/g, "'"));
-    db.run('INSERT INTO rutas_reconstruccion_v8 (id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas) SELECT id, nombre, tipo, CASE WHEN estado = ''PROGRAMADA'' THEN ''CANCELADA'' ELSE estado END, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, COALESCE(paquetes_sobrantes, 0), notas FROM rutas;'.replace(/''/g, "'"));
+    db.run(`CREATE TABLE rutas_reconstruccion_v8 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'EN_CURSO',
+      fecha TEXT NOT NULL,
+      hora_inicio TEXT,
+      hora_fin TEXT,
+      lat_inicio REAL,
+      lng_inicio REAL,
+      lat_fin REAL,
+      lng_fin REAL,
+      paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+      paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
+      notas TEXT
+    );`);
+    db.run(`INSERT INTO rutas_reconstruccion_v8 (
+      id, nombre, tipo, estado, fecha, hora_inicio, hora_fin,
+      lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados,
+      paquetes_sobrantes, notas
+    ) SELECT id, nombre, tipo,
+      CASE WHEN estado = 'PROGRAMADA' THEN 'CANCELADA' ELSE estado END,
+      fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin,
+      lng_fin, paquetes_llevados, COALESCE(paquetes_sobrantes, 0), notas
+    FROM rutas;`);
     db.run('DROP TABLE rutas;');
-    db.run('CREATE TABLE rutas (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL DEFAULT '''', tipo TEXT NOT NULL, estado TEXT NOT NULL DEFAULT ''EN_CURSO'', fecha TEXT NOT NULL, hora_inicio TEXT, hora_fin TEXT, lat_inicio REAL, lng_inicio REAL, lat_fin REAL, lng_fin REAL, paquetes_llevados INTEGER NOT NULL DEFAULT 0, paquetes_sobrantes INTEGER NOT NULL DEFAULT 0, notas TEXT);'.replace(/''/g, "'"));
+    db.run(`CREATE TABLE rutas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'EN_CURSO',
+      fecha TEXT NOT NULL,
+      hora_inicio TEXT,
+      hora_fin TEXT,
+      lat_inicio REAL,
+      lng_inicio REAL,
+      lat_fin REAL,
+      lng_fin REAL,
+      paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+      paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
+      notas TEXT
+    );`);
     db.run('INSERT INTO rutas (id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas) SELECT id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas FROM rutas_reconstruccion_v8;');
     db.run('DROP TABLE rutas_reconstruccion_v8;');
 

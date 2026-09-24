@@ -67,7 +67,6 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   await clienteSelect.selectOption({ label: 'Cliente E2E' });
 
   await siguiente(page);
-  const cantidadMinus = page.getByRole('button', { name: '−' });
   const cantidadPlus = page.getByRole('button', { name: '+' });
   if (cantidad > 1) {
     for (let i = 1; i < cantidad; i += 1) await cantidadPlus.click();

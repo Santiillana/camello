@@ -5,3 +5,4 @@ public/assets/sql-wasm.wasm
 android/.gradle/
 android/build/
 android/app/build/
+android/app/src/main/assets/public/
