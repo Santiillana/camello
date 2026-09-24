@@ -538,11 +538,11 @@ class Database {
         `SELECT MIN(fecha) as primera,
                 MAX(fecha) as ultima,
                 COALESCE(SUM(total),0) as total,
-                COALESCE(SUM(CASE WHEN estado_pago = 'PAGADA' THEN total ELSE 0 END),0) as pagado,
-                COALESCE(SUM(CASE WHEN estado_pago = 'PENDIENTE' THEN total ELSE 0 END),0) as pendiente,
+                COALESCE(SUM(monto_pagado),0) as pagado,
+                COALESCE(SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END),0) as pendiente,
                 COALESCE(SUM(cantidad),0) as paquetes,
                 COUNT(*) as compras,
-                COUNT(CASE WHEN estado_pago = 'PENDIENTE' THEN 1 END) as ventas_pendientes
+                COUNT(CASE WHEN total > COALESCE(monto_pagado,0) THEN 1 END) as ventas_pendientes
          FROM ventas WHERE cliente_id = ?;`,
         [c.id]
       ),
