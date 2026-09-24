@@ -31,6 +31,7 @@ const DEFAULT_CONFIG: ConfiguracionApp = {
   usuario_nombre: '',
   color_acento: '#c2642b',
   moneda: 'COP',
+  mensaje_recordatorio: 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.',
 };
 
 function normalizarTelefono(valor?: string): string {
@@ -1186,6 +1187,7 @@ class Database {
       usuario_nombre: valores.get('usuario_nombre') ?? DEFAULT_CONFIG.usuario_nombre,
       color_acento: valores.get('color_acento') ?? DEFAULT_CONFIG.color_acento,
       moneda: 'COP',
+      mensaje_recordatorio: valores.get('mensaje_recordatorio') ?? DEFAULT_CONFIG.mensaje_recordatorio,
     };
   }
 
