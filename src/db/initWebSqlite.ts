@@ -1,5 +1,9 @@
 import { Capacitor } from '@capacitor/core';
 
+function marcarEtapa(etapa: string): void {
+  if (import.meta.env.VITE_E2E === '1') document.documentElement.dataset.camelloSqliteStage = etapa;
+}
+
 function webBasePath(): string {
   return import.meta.env.BASE_URL.endsWith('/')
     ? import.meta.env.BASE_URL
@@ -9,9 +13,13 @@ function webBasePath(): string {
 export async function initWebSqlite(): Promise<void> {
   if (Capacitor.getPlatform() !== 'web') return;
 
+  marcarEtapa('loader-import');
   const { defineCustomElements, applyPolyfills } = await import('jeep-sqlite/loader');
+  marcarEtapa('polyfills');
   await applyPolyfills();
+  marcarEtapa('define-element');
   defineCustomElements(window);
+  marcarEtapa('defined');
   await customElements.whenDefined('jeep-sqlite');
 
   const base = webBasePath();
@@ -23,6 +31,7 @@ export async function initWebSqlite(): Promise<void> {
 
   jeepEl.wasmPath = base + 'assets';
 
+  marcarEtapa('element-create');
   if (!jeepEl.isConnected) {
     document.body.appendChild(jeepEl);
   }
@@ -30,5 +39,9 @@ export async function initWebSqlite(): Promise<void> {
     wasmPath?: string;
     componentOnReady?: () => Promise<unknown>;
   };
-  if (listo.componentOnReady) await listo.componentOnReady();
+  if (listo.componentOnReady) {
+    marcarEtapa('component-ready');
+    await listo.componentOnReady();
+  }
+  marcarEtapa('ready');
 }
