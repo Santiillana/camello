@@ -24,15 +24,29 @@ const COLOR_FILTRO: Record<string, string> = {
 export default function Mapa() {
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [error, setError] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const capaMarcadoresRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    database.listarClientes({ soloActivos: true }).then(setClientes);
+    let activo = true;
+    database.listarClientes({ soloActivos: true })
+      .then((resultado) => {
+        if (activo) setClientes(resultado);
+      })
+      .catch((e: unknown) => {
+        if (activo) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      activo = false;
+    };
   }, []);
 
-  const clientesConUbicacion = useMemo(() => clientes.filter((c) => c.lat != null && c.lng != null), [clientes]);
+  const clientesConUbicacion = useMemo(
+    () => clientes.filter((c) => c.lat != null && c.lng != null),
+    [clientes],
+  );
 
   const clientesFiltrados = useMemo(() => {
     if (filtro === 'todos') return clientesConUbicacion;
@@ -42,16 +56,25 @@ export default function Mapa() {
 
   useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
-    mapaRef.current = L.map(contenedorRef.current).setView(VILLAVICENCIO, 13);
+    const mapa = L.map(contenedorRef.current).setView(VILLAVICENCIO, 13);
+    mapaRef.current = mapa;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; colaboradores de OpenStreetMap',
-    }).addTo(mapaRef.current);
-    capaMarcadoresRef.current = L.layerGroup().addTo(mapaRef.current);
+    }).addTo(mapa);
+    capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
+
+    return () => {
+      capaMarcadoresRef.current?.clearLayers();
+      capaMarcadoresRef.current = null;
+      mapa.remove();
+      mapaRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
     if (!capaMarcadoresRef.current) return;
     capaMarcadoresRef.current.clearLayers();
+
     clientesFiltrados.forEach((c) => {
       const color = COLOR_FILTRO[c.pendiente > 0 ? 'pendientes' : c.seguimiento] ?? '#1971c2';
       const marcador = L.circleMarker([c.lat!, c.lng!], {
@@ -61,10 +84,24 @@ export default function Mapa() {
         fillOpacity: 0.85,
         weight: 2,
       });
-      marcador.bindPopup(
-        `<strong>${c.nombre}</strong><br/>${c.telefono1 ?? ''}<br/>${c.ultima_compra ? 'Última compra: ' + c.ultima_compra : 'Sin compras'}`
-      );
-      marcador.addTo(capaMarcadoresRef.current!);
+
+      const popup = document.createElement('div');
+      const nombre = document.createElement('strong');
+      nombre.textContent = c.nombre;
+      popup.appendChild(nombre);
+
+      const telefono = document.createElement('div');
+      telefono.textContent = c.telefono1 ?? '';
+      popup.appendChild(telefono);
+
+      const ultimaCompra = document.createElement('div');
+      ultimaCompra.textContent = c.ultima_compra
+        ? 'Última compra: ' + c.ultima_compra
+        : 'Sin compras';
+      popup.appendChild(ultimaCompra);
+
+      marcador.bindPopup(popup);
+      marcador.addTo(capaMarcadoresRef.current);
     });
   }, [clientesFiltrados]);
 
@@ -74,6 +111,8 @@ export default function Mapa() {
         <h1>Mapa de clientes</h1>
       </header>
 
+      {error && <p className="texto-error">{error}</p>}
+
       <div className="filtros-mapa">
         {(['todos', 'ACTIVO', 'POR_CONTACTAR', 'INACTIVO', 'pendientes'] as Filtro[]).map((f) => (
           <button
@@ -81,7 +120,15 @@ export default function Mapa() {
             className={'chip-filtro' + (filtro === f ? ' activo' : '')}
             onClick={() => setFiltro(f)}
           >
-            {f === 'todos' ? 'Todos' : f === 'ACTIVO' ? 'Activos' : f === 'POR_CONTACTAR' ? 'Por contactar' : f === 'INACTIVO' ? 'Inactivos' : 'Con pagos pendientes'}
+            {f === 'todos'
+              ? 'Todos'
+              : f === 'ACTIVO'
+                ? 'Activos'
+                : f === 'POR_CONTACTAR'
+                  ? 'Por contactar'
+                  : f === 'INACTIVO'
+                    ? 'Inactivos'
+                    : 'Con pagos pendientes'}
           </button>
         ))}
       </div>
