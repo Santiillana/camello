@@ -83,3 +83,12 @@ export function sumarDiasISO(iso: string, dias: number): string {
   fecha.setUTCDate(fecha.getUTCDate() + dias);
   return isoDesdeCalendario(fecha.getUTCFullYear(), fecha.getUTCMonth() + 1, fecha.getUTCDate());
 }
+
+export function diasEntreISO(desde: string, hasta: string): number {
+  const a = calendarioDesdeISO(desde);
+  const b = calendarioDesdeISO(hasta);
+  if (!a || !b) return 0;
+  return Math.abs(
+    Math.floor((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86_400_000),
+  );
+}
