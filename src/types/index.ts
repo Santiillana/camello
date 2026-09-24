@@ -174,6 +174,9 @@ export interface ResumenPeriodo {
   clientes_activos?: number;
   clientes_por_contactar?: number;
   cartera_pendiente?: number;
+  gastos_operativos?: number;
+  utilidad_neta?: number;
+  gastos_pendientes?: number;
 }
 
 

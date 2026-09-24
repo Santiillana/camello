@@ -5,6 +5,7 @@ import BottomNav from './components/BottomNav';
 import SideNav from './components/SideNav';
 import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import { aplicarTema } from './utils/theme';
+import { fechaLocalISO } from './utils/format';
 import { guardarRespaldoAutomatico, necesitaRespaldoAutomatico } from './utils/respaldoAutomatico';
 import type { ConfiguracionApp } from './types';
 
@@ -156,6 +157,7 @@ export default function App() {
         setConfig(resultado);
         aplicarTema(resultado.color_acento);
         setListo(true);
+        void database.sincronizarGastosRecurrentes(fechaLocalISO().slice(0, 7)).catch(() => undefined);
         void necesitaRespaldoAutomatico()
           .then((necesario) => necesario ? database.exportarRespaldo().then((respaldo) => guardarRespaldoAutomatico(respaldo)) : undefined)
           .catch(() => {

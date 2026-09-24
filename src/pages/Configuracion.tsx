@@ -23,12 +23,18 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [categoriasGasto, setCategoriasGasto] = useState<Awaited<ReturnType<typeof database.listarCategoriasGasto>>>([]);
+  const [recurrentes, setRecurrentes] = useState<Awaited<ReturnType<typeof database.listarGastosRecurrentes>>>([]);
+  const [nuevoGastoCat, setNuevoGastoCat] = useState({nombre:'',tipo:'variable' as 'fijo'|'variable',naturaleza:'operativo' as 'operativo'|'compra_insumos'|'retiro_dueno',presupuesto:''});
+  const [nuevoFijo, setNuevoFijo] = useState({categoria:'',nombre:'',monto:'',dia:'1'});
 
   async function cargar() {
     try {
       const [cfg, ps] = await Promise.all([
         database.obtenerConfiguracion(),
         database.listarProductos({ incluirInactivos: true }),
+        database.listarCategoriasGasto(true),
+        database.listarGastosRecurrentes(),
       ]);
       setConfig(cfg);
       setNegocio(cfg.negocio_nombre);
@@ -36,6 +42,8 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setColor(cfg.color_acento);
       setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
       setProductos(ps);
+      setCategoriasGasto(categoriasGasto);
+      setRecurrentes(recurrentes);
       aplicarTema(cfg.color_acento);
       setError(null);
     } catch (e: unknown) {
@@ -230,6 +238,31 @@ export default function Configuracion({ onConfigChanged }: Props) {
         </ul>
       </section>
 
+
+      <section className="tarjeta">
+        <div className="fila-titulo-boton"><div><h2>Categorías de gasto</h2><p className="texto-vacio">Fijo/variable y naturaleza determinan cómo entra al Resultado.</p></div></div>
+        <div className="formulario">
+          <input placeholder="Nombre" value={nuevoGastoCat.nombre} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,nombre:e.target.value})}/>
+          <div className="grid-dos-columnas">
+            <select value={nuevoGastoCat.tipo} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,tipo:e.target.value as 'fijo'|'variable'})}><option value="fijo">Fijo</option><option value="variable">Variable</option></select>
+            <select value={nuevoGastoCat.naturaleza} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,naturaleza:e.target.value as 'operativo'|'compra_insumos'|'retiro_dueno'})}><option value="operativo">Operativo</option><option value="compra_insumos">Compra de insumos</option><option value="retiro_dueno">Retiro del dueño</option></select>
+          </div>
+          <input type="number" min={0} step={1} placeholder="Presupuesto mensual" value={nuevoGastoCat.presupuesto} onChange={e=>setNuevoGastoCat({...nuevoGastoCat,presupuesto:e.target.value})}/>
+          <button className="boton-primario" onClick={async()=>{await database.crearCategoriaGasto({nombre:nuevoGastoCat.nombre,tipo:nuevoGastoCat.tipo,naturaleza:nuevoGastoCat.naturaleza,presupuesto_mensual:nuevoGastoCat.presupuesto?Number(nuevoGastoCat.presupuesto):null});setNuevoGastoCat({...nuevoGastoCat,nombre:'',presupuesto:''});await cargar();}}>Crear categoría</button>
+        </div>
+        <ul className="lista-resumen">{categoriasGasto.map(c=><li key={c.id}><span>{c.nombre} · {c.tipo} · {c.naturaleza}</span><button className="boton-texto peligro-texto" disabled={!c.activa} onClick={()=>void database.archivarCategoriaGasto(c.id).then(cargar)}>Archivar</button></li>)}</ul>
+      </section>
+      <section className="tarjeta">
+        <h2>Gastos fijos / recurrentes</h2>
+        <div className="grid-dos-columnas">
+          <select value={nuevoFijo.categoria} onChange={e=>setNuevoFijo({...nuevoFijo,categoria:e.target.value})}><option value="">Categoría</option>{categoriasGasto.filter(c=>c.activa).map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
+          <input placeholder="Nombre" value={nuevoFijo.nombre} onChange={e=>setNuevoFijo({...nuevoFijo,nombre:e.target.value})}/>
+          <input type="number" min={1} step={1} placeholder="Monto estimado" value={nuevoFijo.monto} onChange={e=>setNuevoFijo({...nuevoFijo,monto:e.target.value})}/>
+          <input type="number" min={1} max={31} value={nuevoFijo.dia} onChange={e=>setNuevoFijo({...nuevoFijo,dia:e.target.value})}/>
+        </div>
+        <button className="boton-primario" onClick={async()=>{await database.crearGastoRecurrente({categoria_id:Number(nuevoFijo.categoria),nombre:nuevoFijo.nombre,monto_estimado:Number(nuevoFijo.monto),dia_vencimiento:Number(nuevoFijo.dia)});setNuevoFijo({categoria:'',nombre:'',monto:'',dia:'1'});await cargar();}}>Agregar gasto fijo</button>
+        <ul className="lista-resumen">{recurrentes.map(r=><li key={r.id}><span>{r.nombre} · {formatoMoneda(r.monto_estimado)} · día {r.dia_vencimiento}</span><button className="boton-texto peligro-texto" disabled={!r.activo} onClick={()=>void database.archivarGastoRecurrente(r.id).then(cargar)}>Archivar</button></li>)}</ul>
+      </section>
       <section className="tarjeta">
         <h2>Respaldo</h2>
         {(() => {

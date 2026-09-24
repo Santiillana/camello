@@ -69,6 +69,13 @@ export default function Gastos(){
     {mensaje&&<p className="banner-exito">{mensaje}</p>}{error&&<p className="texto-error">{error}</p>}
   </div>
 }
+
+function descargarCSV(gastos:Gasto[]) {
+  const filas=[['fecha','categoria','monto','estado','metodo','proveedor','descripcion'],...gastos.map(g=>[g.fecha,g.categoria_nombre??'',String(g.monto),g.estado,g.metodo_pago??'',g.proveedor??'',g.descripcion??''])];
+  const csv=filas.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='camello-gastos.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
 function FormularioGasto({categorias,onGuardado,onCancelar}:{categorias:CategoriaGasto[];onGuardado:()=>void;onCancelar:()=>void}){
   const [monto,setMonto]=useState(''); const [categoria,setCategoria]=useState(''); const [fecha,setFecha]=useState(hoyISO()); const [estado,setEstado]=useState<EstadoGasto>('pagado'); const [metodo,setMetodo]=useState('EFECTIVO'); const [fechaLimite,setFechaLimite]=useState(''); const [nota,setNota]=useState(''); const [proveedor,setProveedor]=useState(''); const [foto,setFoto]=useState(''); const [ruta,setRuta]=useState<number|undefined>();
   const [paso,setPaso]=useState(0); const [guardando,setGuardando]=useState(false);

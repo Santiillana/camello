@@ -21,6 +21,12 @@ import type {
   ModoRitmo,
   CategoriaFoto,
   Foto,
+  CategoriaGasto,
+  Gasto,
+  ResultadoMes,
+  TipoCategoriaGasto,
+  NaturalezaGasto,
+  EstadoGasto,
 } from '../types';
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
@@ -688,6 +694,33 @@ class Database {
     await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_estado ON gastos(estado);', false);
     await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_ruta ON gastos(ruta_id);', false);
     await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_recurrentes_categoria ON gastos_recurrentes(categoria_id);', false);
+  }
+
+  async listarGastosRecurrentes(): Promise<Array<{ id: number; categoria_id: number; nombre: string; monto_estimado: number; dia_vencimiento: number; activo: 0 | 1; categoria_nombre?: string }>> {
+    const r = await this.conn().query(
+      `SELECT r.*, c.nombre AS categoria_nombre FROM gastos_recurrentes r
+       JOIN categorias_gasto c ON c.id=r.categoria_id ORDER BY r.activo DESC, r.nombre;`,
+    );
+    return (r.values ?? []) as Array<{ id: number; categoria_id: number; nombre: string; monto_estimado: number; dia_vencimiento: number; activo: 0 | 1; categoria_nombre?: string }>;
+  }
+
+  async crearGastoRecurrente(data: { categoria_id: number; nombre: string; monto_estimado: number; dia_vencimiento: number }): Promise<number> {
+    const nombre = textoObligatorio(data.nombre, 'El nombre del gasto fijo').slice(0, 100);
+    const monto = enteroPositivo(data.monto_estimado, 'El monto estimado');
+    if (!Number.isInteger(data.dia_vencimiento) || data.dia_vencimiento < 1 || data.dia_vencimiento > 31) throw new Error('El día de vencimiento debe estar entre 1 y 31.');
+    const cat = await this.conn().query('SELECT id FROM categorias_gasto WHERE id=? AND activa=1;', [data.categoria_id]);
+    if (!cat.values?.length) throw new Error('La categoría no existe.');
+    const r = await this.conn().run(
+      'INSERT INTO gastos_recurrentes (categoria_id,nombre,monto_estimado,dia_vencimiento) VALUES (?,?,?,?);',
+      [data.categoria_id,nombre,monto,data.dia_vencimiento],
+    );
+    await this.persist();
+    return Number(r.changes?.lastId ?? 0);
+  }
+
+  async archivarGastoRecurrente(id: number): Promise<void> {
+    await this.conn().run('UPDATE gastos_recurrentes SET activo=0 WHERE id=?;', [id]);
+    await this.persist();
   }
 
   async listarCategoriasGasto(incluirInactivas = false): Promise<CategoriaGasto[]> {
@@ -1671,6 +1704,18 @@ class Database {
     );
     const cartera = await this.conn().query("SELECT COALESCE(SUM(total - COALESCE(monto_pagado,0)),0) as n FROM ventas WHERE total > COALESCE(monto_pagado,0);");
 
+    const gastos = await this.conn().query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN c.naturaleza='operativo' AND g.estado <> 'anulado' THEN g.monto ELSE 0 END),0) operativo,
+         COALESCE(SUM(CASE WHEN g.estado='pendiente' AND g.archivado=0 THEN g.monto ELSE 0 END),0) pendientes,
+         COALESCE(SUM(CASE WHEN g.estado='pagado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) pagados
+       FROM gastos g JOIN categorias_gasto c ON c.id=g.categoria_id
+       WHERE g.periodo >= substr(?,1,7) AND g.fecha BETWEEN ? AND ?;`,
+      [hasta, desde, hasta],
+    );
+    const gr = gastos.values?.[0] ?? {};
+    const gastosOperativos = Number(gr.operativo ?? 0);
+    const utilidadBruta = Number(row.ventas ?? 0) - Number(row.costos ?? 0);
     return {
       ventas,
       costos: Number(row.costos ?? 0),
@@ -1686,6 +1731,9 @@ class Database {
       clientes_activos: Number(clientesActivos.values?.[0]?.n ?? 0),
       clientes_por_contactar: Number(clientesPorContactar.values?.[0]?.n ?? 0),
       cartera_pendiente: Number(cartera.values?.[0]?.n ?? 0),
+      gastos_operativos: gastosOperativos,
+      utilidad_neta: utilidadBruta - gastosOperativos,
+      gastos_pendientes: Number(gr.pendientes ?? 0),
     };
   }
 

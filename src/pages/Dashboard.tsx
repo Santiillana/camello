@@ -114,6 +114,8 @@ export default function Dashboard({ config }: Props) {
             <StatCard etiqueta="Utilidad" valor={formatoMoneda(resumen.utilidad)} />
             <StatCard etiqueta="Cobrado" valor={formatoMoneda(resumen.pagado)} />
             <StatCard etiqueta="Pendiente" valor={formatoMoneda(resumen.pendiente)} alerta={resumen.pendiente > 0} />
+            {periodo === 'mes' && <StatCard etiqueta="Gastos" valor={formatoMoneda(resumen.gastos_operativos ?? 0)} />}
+            {periodo === 'mes' && <StatCard etiqueta="Utilidad neta" valor={formatoMoneda(resumen.utilidad_neta ?? resumen.utilidad)} alerta={(resumen.utilidad_neta ?? 0) < 0} />}
           </section>
 
           <section className="tarjeta">
