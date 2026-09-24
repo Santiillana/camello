@@ -1812,6 +1812,8 @@ class Database {
         ? Number(row.numero_ventas ?? 0) / (minutosEntre(ruta.hora_inicio, ruta.hora_fin)! / 60)
         : 0,
       duracion_minutos: minutosEntre(ruta.hora_inicio, ruta.hora_fin),
+      gastos_asociados: Number((await this.conn().query("SELECT COALESCE(SUM(monto),0) AS total FROM gastos WHERE ruta_id=? AND estado<>'anulado' AND archivado=0;", [ruta.id])).values?.[0]?.total ?? 0),
+      utilidad_neta: Number(row.utilidad ?? 0) - Number((await this.conn().query("SELECT COALESCE(SUM(monto),0) AS total FROM gastos g JOIN categorias_gasto c ON c.id=g.categoria_id WHERE g.ruta_id=? AND g.estado<>'anulado' AND g.archivado=0 AND c.naturaleza='operativo';", [ruta.id])).values?.[0]?.total ?? 0),
     };
   }
 
