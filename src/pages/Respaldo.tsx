@@ -65,17 +65,33 @@ export default function Respaldo() {
     }
     const texto = respaldoRef.current;
     if (!texto) return;
+
     const ver = await database.validarRespaldo(texto);
-    const share = navigator.share;
-    if (share) {
-      await share({
+    const fecha = ver.version + '-' + new Date().toISOString().slice(0, 10);
+    const archivo = new File([texto], 'camello-respaldo-' + fecha + '.json', {
+      type: 'application/json',
+    });
+
+    if (navigator.share && navigator.canShare?.({ files: [archivo] })) {
+      await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: 'Respaldo CAMELLO v' + ver.version + ' · SHA-256 ' + (ver.checksum ?? 'sin checksum'),
+        text: 'Respaldo verificado · SHA-256 ' + (ver.checksum ?? 'sin checksum'),
+        files: [archivo],
       });
-      setMensaje('Respaldo verificado. El sistema de compartir del dispositivo está listo.');
-    } else {
-      setMensaje('Este dispositivo no ofrece compartir directo; usa el archivo descargado.');
+      setMensaje('Respaldo compartido desde el dispositivo.');
+      return;
     }
+
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Respaldo CAMELLO',
+        text: 'Respaldo verificado · SHA-256 ' + (ver.checksum ?? 'sin checksum'),
+      });
+      setMensaje('El dispositivo no permitió adjuntar el archivo; comparte también el archivo descargado.');
+      return;
+    }
+
+    setMensaje('Este dispositivo no ofrece compartir directo; usa el archivo descargado.');
   }
 
   async function importar(file: File) {
