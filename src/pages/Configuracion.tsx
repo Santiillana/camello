@@ -33,7 +33,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
 
   async function cargar() {
     try {
-      const [cfg, ps] = await Promise.all([
+      const [cfg, ps, cats, recs] = await Promise.all([
         database.obtenerConfiguracion(),
         database.listarProductos({ incluirInactivos: true }),
         database.listarCategoriasGasto(true),
@@ -46,8 +46,8 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
       const seg=await database.obtenerSeguridadPin(); setPinMinutos(seg.lock_minutos);
       setProductos(ps);
-      setCategoriasGasto(categoriasGasto);
-      setRecurrentes(recurrentes);
+      setCategoriasGasto(cats);
+      setRecurrentes(recs);
       aplicarTema(cfg.color_acento);
       setError(null);
     } catch (e: unknown) {
