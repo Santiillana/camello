@@ -68,7 +68,8 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
 
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', guardarAhora);
-    window.addEventListener('pause', guardarAhora as EventListener);
+    const onPause: EventListener = guardarAhora;
+    window.addEventListener('pause', onPause);
 
     let removerApp: (() => void) | null = null;
     void App.addListener('appStateChange', ({ isActive }) => {
@@ -80,7 +81,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', guardarAhora);
-      window.removeEventListener('pause', guardarAhora as EventListener);
+      window.removeEventListener('pause', onPause);
       removerApp?.();
     };
   }, [activo, tipo, clave]);
