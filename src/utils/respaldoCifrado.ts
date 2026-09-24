@@ -11,10 +11,11 @@ type RespaldoCifrado = {
 };
 
 function esRespaldoCifrado(value: unknown): value is RespaldoCifrado {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Formato de respaldo cifrado no reconocido.');
-  }
-  return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return 'camello_encrypted_backup_version' in value
+    && 'iv' in value
+    && 'salt' in value
+    && 'ciphertext' in value;
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -41,7 +42,8 @@ export async function descifrarRespaldo(texto:string,password:string):Promise<st
   const parsed: unknown = JSON.parse(texto);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Formato de respaldo cifrado no reconocido.');
   // JSON.parse devuelve unknown: el type guard valida la estructura antes de leer los campos.
-  const data = esRespaldoCifrado(parsed);
+  if (!esRespaldoCifrado(parsed)) throw new Error('Formato de respaldo cifrado no reconocido.');
+  const data = parsed;
   if(Number(data.camello_encrypted_backup_version)!==1) throw new Error('Formato de respaldo cifrado no reconocido.');
   try {
     const iv = bytes(String(data.iv));
