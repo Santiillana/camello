@@ -19,3 +19,9 @@
 - B3: GPS y resolución de enlaces cortos dependen de APIs nativas en APK; en navegador se explicita la limitación en lugar de simular disponibilidad.
 - B4: el riel móvil permanece visible para que el contenido no quede tapado; la expansión se persiste localmente.
 - B5: un workflow QUEUED no se interpreta como PASÓ; el bloqueo de runner queda visible y se conserva el E2E para ejecutarse cuando exista runner.
+
+## Auditoría total 2026-09-24
+- No se declara verde una corrida queued, failure sin pasos o sin logs verificables.
+- Un job mínimo falló en ubuntu-24.04 y ubuntu-latest sin ejecutar steps; los workflows temporales fueron retirados.
+- El backup SQLite completo ya contiene las tablas propias del módulo; restore no reinyecta modulos.<id> y evita duplicados.
+- SQLCipher permanece desactivado por falta de validación cross-device.
