@@ -173,6 +173,7 @@ async function sql(page, query, params = []) {
 }
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
+  await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.goto('http://127.0.0.1:5173/#/venta-nueva?e2e=' + Date.now(), { waitUntil: 'domcontentloaded', timeout: 15000 });
   const clienteSelect = page.locator('select').first();
   try {
