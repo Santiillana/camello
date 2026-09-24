@@ -5,8 +5,9 @@ import type { ClienteConResumen, Producto, Ruta } from '../types';
 import { fechaLocalISO, formatoMoneda, horaLocalHHMM } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import ClienteForm from '../components/ClienteForm';
+import MetodoPagoSelector, { type MetodoPagoVenta } from '../components/MetodoPagoSelector';
 
-type Metodo = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
+type Metodo = MetodoPagoVenta;
 
 type Voucher = {
   id: number;
@@ -151,24 +152,11 @@ export default function NuevaVenta() {
       id: 'pago',
       titulo: 'Método de pago',
       contenido: (
-        <div className="metodos-pago">
-          {([
-            ['EFECTIVO', 'Efectivo'],
-            ['TRANSFERENCIA_NEQUI', 'Transferencia / Nequi'],
-            ['FIADO', 'Fiado'],
-            ['PARCIAL', 'Pago parcial'],
-          ] as Array<[Metodo, string]>).map(([id, label]) => (
-            <button
-              type="button"
-              key={id}
-              className={'metodo-pago-card' + (metodo === id ? ' activo' : '')}
-              onClick={() => setMetodo(id)}
-            >
-              <strong>{label}</strong>
-              <span>{id === 'FIADO' ? '0 hoy' : id === 'PARCIAL' ? 'Define cuánto paga' : 'Pago completo'}</span>
-            </button>
-          ))}
-          {metodo === 'PARCIAL' && (
+        <MetodoPagoSelector
+          value={metodo}
+          options={['EFECTIVO', 'TRANSFERENCIA_NEQUI', 'FIADO', 'PARCIAL']}
+          onChange={setMetodo}
+          extra={metodo === 'PARCIAL' ? (
             <label>
               ¿Cuánto paga ahora?
               <input
@@ -181,8 +169,8 @@ export default function NuevaVenta() {
                 inputMode="numeric"
               />
             </label>
-          )}
-        </div>
+          ) : undefined}
+        />
       ),
       validar: () => {
         if (metodo === 'PARCIAL') {
