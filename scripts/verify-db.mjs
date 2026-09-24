@@ -2,7 +2,7 @@ import initSqlJs from 'sql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const DB_VERSION = 5;
+const DB_VERSION = 8;
 const REQUIRED_TABLES = [
   'clientes',
   'mascotas',
@@ -12,6 +12,7 @@ const REQUIRED_TABLES = [
   'configuracion_app',
   'fotos',
   'pagos',
+  'seguimiento_clientes',
 ];
 
 const SCHEMA_STATEMENTS = [
@@ -56,10 +57,8 @@ const SCHEMA_STATEMENTS = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL DEFAULT '',
     tipo TEXT NOT NULL,
-    estado TEXT NOT NULL DEFAULT 'PROGRAMADA',
+    estado TEXT NOT NULL DEFAULT 'EN_CURSO',
     fecha TEXT NOT NULL,
-    fecha_planificada TEXT,
-    hora_planificada TEXT,
     hora_inicio TEXT,
     hora_fin TEXT,
     lat_inicio REAL,
@@ -67,6 +66,7 @@ const SCHEMA_STATEMENTS = [
     lat_fin REAL,
     lng_fin REAL,
     paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+    paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
     notas TEXT
   );`,
   `CREATE TABLE IF NOT EXISTS ventas (
@@ -97,6 +97,14 @@ const SCHEMA_STATEMENTS = [
     referencia TEXT,
     data_url TEXT NOT NULL,
     creado_at TEXT NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS seguimiento_clientes (
+    cliente_id INTEGER PRIMARY KEY,
+    modo TEXT NOT NULL DEFAULT 'automatico',
+    dias INTEGER,
+    contactado_fecha TEXT,
+    recordar_hasta TEXT,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
   );`,
   `CREATE TABLE IF NOT EXISTS pagos (
@@ -230,6 +238,66 @@ function migrateVersion5(db) {
   }
 }
 
+function migrateVersion6(db) {
+  db.run(`CREATE TABLE IF NOT EXISTS seguimiento_clientes (
+    cliente_id INTEGER PRIMARY KEY,
+    modo TEXT NOT NULL DEFAULT 'automatico',
+    dias INTEGER,
+    contactado_fecha TEXT,
+    recordar_hasta TEXT,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );`);
+}
+
+function migrateVersion7(db) {
+  const rows = db.exec('PRAGMA table_info(rutas);')[0]?.values ?? [];
+  const columns = new Set(rows.map((row) => String(row[1])));
+  if (!columns.has('paquetes_sobrantes')) db.run('ALTER TABLE rutas ADD COLUMN paquetes_sobrantes INTEGER NOT NULL DEFAULT 0;');
+}
+
+function migrateVersion8(db) {
+  const rows = db.exec('PRAGMA table_info(rutas);')[0]?.values ?? [];
+  const columns = new Set(rows.map((row) => String(row[1])));
+  if (!columns.has('fecha_planificada') && !columns.has('hora_planificada')) return;
+  db.run('PRAGMA foreign_keys = OFF;');
+  db.run('BEGIN TRANSACTION;');
+  try {
+    db.run('ALTER TABLE rutas RENAME TO rutas_migracion_v8;');
+    db.run(`CREATE TABLE rutas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'EN_CURSO',
+      fecha TEXT NOT NULL,
+      hora_inicio TEXT,
+      hora_fin TEXT,
+      lat_inicio REAL,
+      lng_inicio REAL,
+      lat_fin REAL,
+      lng_fin REAL,
+      paquetes_llevados INTEGER NOT NULL DEFAULT 0,
+      paquetes_sobrantes INTEGER NOT NULL DEFAULT 0,
+      notas TEXT
+    );`);
+    db.run(`INSERT INTO rutas (
+      id, nombre, tipo, estado, fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio,
+      lat_fin, lng_fin, paquetes_llevados, paquetes_sobrantes, notas
+    )
+    SELECT id, nombre, tipo,
+      CASE WHEN estado = 'PROGRAMADA' THEN 'CANCELADA' ELSE estado END,
+      fecha, hora_inicio, hora_fin, lat_inicio, lng_inicio, lat_fin, lng_fin,
+      paquetes_llevados, COALESCE(paquetes_sobrantes,0), notas
+    FROM rutas_migracion_v8;`);
+    db.run('DROP TABLE rutas_migracion_v8;');
+    db.run('COMMIT;');
+  } catch (error) {
+    try { db.run('ROLLBACK;'); } catch {}
+    throw error;
+  } finally {
+    db.run('PRAGMA foreign_keys = ON;');
+  }
+}
+
 function initialize(db) {
   applySchema(db);
   const currentVersion = Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0] ?? 0);
@@ -244,6 +312,9 @@ function initialize(db) {
   migrateVersion3(db);
   migrateVersion4(db);
   migrateVersion5(db);
+  migrateVersion6(db);
+  migrateVersion7(db);
+  migrateVersion8(db);
   db.run(`PRAGMA user_version = ${DB_VERSION};`);
   assertRequiredTables(db, 'inicialización');
 }
