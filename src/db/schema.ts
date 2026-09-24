@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -17,6 +17,9 @@ export const SCHEMA_STATEMENTS: string[] = [
     fecha_registro TEXT NOT NULL,
     lat REAL,
     lng REAL,
+    ubicacion_precision_m REAL,
+    ubicacion_fuente TEXT,
+    ubicacion_fecha TEXT,
     observaciones TEXT,
     estado TEXT NOT NULL DEFAULT 'activo'
   );`,
@@ -84,6 +87,16 @@ export const SCHEMA_STATEMENTS: string[] = [
     CHECK (monto_pagado >= 0 AND monto_pagado <= total)
   );`,
 
+  `CREATE TABLE IF NOT EXISTS fotos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER NOT NULL,
+    categoria TEXT NOT NULL,
+    referencia TEXT,
+    data_url TEXT NOT NULL,
+    creado_at TEXT NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+  );`,
+
   `CREATE TABLE IF NOT EXISTS configuracion_app (\n    clave TEXT PRIMARY KEY,\n    valor TEXT NOT NULL\n  );`,
 
   `CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);`,
@@ -91,4 +104,5 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);`,
+  `CREATE INDEX IF NOT EXISTS idx_fotos_cliente ON fotos(cliente_id);`,
 ];
