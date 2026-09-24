@@ -32,7 +32,7 @@ import type {
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { initWebSqlite } from './initWebSqlite';
 import { calcularChecksum } from '../utils/respaldo';
-import { crearContexto, listarModulos } from '../modulos/runtime';
+import { crearContexto } from '../modulos/runtime';
 
 type SqliteExportData = Record<string, unknown> & {
   database: string;
