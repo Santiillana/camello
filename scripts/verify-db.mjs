@@ -289,6 +289,8 @@ function migrateVersion8(db) {
       paquetes_llevados, COALESCE(paquetes_sobrantes,0), notas
     FROM rutas_migracion_v8;`);
     db.run('DROP TABLE rutas_migracion_v8;');
+    const fk = db.exec('PRAGMA foreign_key_check;')[0]?.values ?? [];
+    if (fk.length) throw new Error('migración v8: foreign keys rotas');
     db.run('COMMIT;');
   } catch (error) {
     try { db.run('ROLLBACK;'); } catch {}
