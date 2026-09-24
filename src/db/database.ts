@@ -206,8 +206,10 @@ class Database {
         })
         .filter((name) => name && name !== 'database');
 
-      if (nombres.includes(DB_NAME + '.db')) return DB_NAME + '.db';
-      if (nombres.includes(DB_NAME)) return DB_NAME;
+      // jeep-sqlite usa DB_NAME como nombre lógico y persiste internamente DB_NAME + 'SQLite.db'.
+      if (nombres.includes(DB_NAME + 'SQLite.db') || nombres.includes(DB_NAME + '.db') || nombres.includes(DB_NAME)) {
+        return DB_NAME;
+      }
     } catch {
       // Algunas plataformas pueden no exponer la lista en este momento.
     }
