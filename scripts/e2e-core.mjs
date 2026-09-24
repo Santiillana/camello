@@ -51,8 +51,9 @@ async function crearCliente(page) {
     await page.getByLabel('Nombre completo').waitFor({ timeout: 70000 });
   } catch (error) {
     const texto = await page.locator('body').innerText().catch(() => '');
+    const sqliteStage = await page.evaluate(() => document.documentElement.dataset.camelloSqliteStage || 'sin-etapa').catch(() => 'sin-etapa');
     await page.screenshot({ path: 'e2e-fallo-clientes.png', fullPage: true }).catch(() => {});
-    throw new Error('No apareció Nombre completo. Texto de pantalla:\n' + texto.slice(0, 5000) + '\nCausa: ' + String(error));
+    throw new Error('No apareció Nombre completo. Etapa SQLite: ' + sqliteStage + '. Texto de pantalla:\n' + texto.slice(0, 5000) + '\nCausa: ' + String(error));
   }
 
   await page.getByLabel('Nombre completo').fill('Cliente E2E');
