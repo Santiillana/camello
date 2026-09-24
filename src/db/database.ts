@@ -141,6 +141,10 @@ class Database {
         }
         await this.ejecutarMigracion(targetVersion, statements);
       }
+      const faltantes = await this.tablasFaltantes();
+      if (faltantes.length > 0) {
+        throw new Error('La migración terminó pero faltan tablas esperadas: ' + faltantes.join(', ') + '.');
+      }
       return true;
     }
 
