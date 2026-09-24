@@ -26,14 +26,16 @@ insertVentas.free();
 
 function timed(name,fn,limitMs){ const start=performance.now(); const result=fn(); const ms=performance.now()-start; if(ms>limitMs) throw new Error(name+' tardó '+ms.toFixed(1)+' ms > '+limitMs); return {name,ms:Math.round(ms*10)/10,result}; }
 const results=[];
-results.push(timed('clientes_por_nombre',()=>db.exec("SELECT id FROM clientes WHERE nombre_normalizado LIKE 'cliente 35%' LIMIT 100"),300));
-results.push(timed('mascotas_por_nombre',()=>db.exec("SELECT m.id FROM mascotas m JOIN clientes c ON c.id=m.cliente_id WHERE m.nombre_normalizado LIKE 'mascota 35%' LIMIT 100"),300));
+results.push(timed('clientes_por_nombre',()=>db.exec("SELECT id FROM clientes WHERE nombre_normalizado GLOB 'cliente 35*' LIMIT 100"),300));
+results.push(timed('mascotas_por_nombre',()=>db.exec("SELECT m.id FROM mascotas m JOIN clientes c ON c.id=m.cliente_id WHERE m.nombre_normalizado GLOB 'mascota 35*' LIMIT 100"),300));
 results.push(timed('ventas_por_fecha',()=>db.exec("SELECT COALESCE(SUM(total),0) FROM ventas WHERE fecha BETWEEN '2026-08-01' AND '2026-08-31' AND estado_registro='activa'"),300));
 results.push(timed('ventas_por_cliente',()=>db.exec("SELECT COALESCE(SUM(total),0) FROM ventas WHERE cliente_id=? AND estado_registro='activa'",[[12345]]),300));
 
-const explain=db.exec("EXPLAIN QUERY PLAN SELECT id FROM clientes WHERE nombre_normalizado LIKE 'cliente 35%' LIMIT 100")[0]?.values ?? [];
+const explain=db.exec("EXPLAIN QUERY PLAN SELECT id FROM clientes WHERE nombre_normalizado GLOB 'cliente 35*' LIMIT 100")[0]?.values ?? [];
 const plan=JSON.stringify(explain);
-if(/SCAN clientes/i.test(plan)) throw new Error('S1: EXPLAIN detectó scan completo de clientes: '+plan);
+if(/SCAN clientes(?! USING COVERING INDEX idx_clientes_nombre_norm)/i.test(plan) || !/SEARCH clientes USING COVERING INDEX idx_clientes_nombre_norm/i.test(plan)) {
+  throw new Error('S1: EXPLAIN no usa búsqueda indexada de clientes: ' + plan);
+}
 
 console.log('benchmark-scale: PASÓ');
 console.log(JSON.stringify({clientes:36000,mascotas:60000,ventas:150000,results,explain},null,2));
