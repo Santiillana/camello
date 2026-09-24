@@ -1005,7 +1005,7 @@ class Database {
               COALESCE(SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END),0) as pendiente,
               COUNT(*) as numero_ventas
        FROM ventas WHERE fecha BETWEEN ? AND ?;`,
-      [desde, hasta]
+      [desde, hasta, desde, hasta]
     );
     const row = r.values?.[0] ?? {};
 
@@ -1030,7 +1030,7 @@ class Database {
       "SELECT COUNT(*) as n FROM rutas WHERE estado = 'FINALIZADA' AND fecha BETWEEN ? AND ?;",
       [desde, hasta]
     );
-    const cartera = await this.conn().query("SELECT COALESCE(SUM(total),0) as n FROM ventas WHERE estado_pago = 'PENDIENTE';");
+    const cartera = await this.conn().query("SELECT COALESCE(SUM(total - COALESCE(monto_pagado,0)),0) as n FROM ventas WHERE total > COALESCE(monto_pagado,0);");
 
     return {
       ventas,
