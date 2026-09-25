@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { database } from '../db/database';
-import type { ClienteConResumen, RutaConResumen } from '../types';
+import type { ClienteConResumen, PedidoConDetalle, RutaConResumen } from '../types';
 import { obtenerMejorUbicacion } from '../utils/ubicacion';
 
 
@@ -76,11 +76,13 @@ export default function Mapa() {
   const [clientesRuta, setClientesRuta] = useState<Set<number> | null>(null);
   const [clientesSeleccionados, setClientesSeleccionados] = useState<Set<number>>(new Set());
   const [mostrarSeleccionClientes, setMostrarSeleccionClientes] = useState(false);
+  const [pedidosRuta, setPedidosRuta] = useState<PedidoConDetalle[]>([]);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number; precision?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const capaMarcadoresRef = useRef<L.LayerGroup | null>(null);
+  const capaRutaRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
     let activo = true;
@@ -112,23 +114,30 @@ export default function Mapa() {
     let activo = true;
     if (!filtros.rutaId) {
       setClientesRuta(null);
+      setPedidosRuta([]);
       return () => { activo = false; };
     }
 
     const rutaId = Number(filtros.rutaId);
     if (!Number.isInteger(rutaId) || rutaId <= 0) {
       setClientesRuta(null);
+      setPedidosRuta([]);
       return () => { activo = false; };
     }
 
-    database.listarVentasPorRuta(rutaId)
-      .then((ventas) => {
+    Promise.all([
+      database.listarVentasPorRuta(rutaId),
+      database.listarPedidos({ rutaId }).catch(() => [] as PedidoConDetalle[]),
+    ])
+      .then(([ventas, pedidos]) => {
         if (!activo) return;
         setClientesRuta(new Set(ventas.map((venta) => venta.cliente_id)));
+        setPedidosRuta(pedidos);
       })
       .catch((e: unknown) => {
         if (!activo) return;
         setClientesRuta(null);
+        setPedidosRuta([]);
         setError(e instanceof Error ? e.message : String(e));
       });
 
@@ -183,11 +192,14 @@ export default function Mapa() {
     }).addTo(mapa);
 
     capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
+    capaRutaRef.current = L.layerGroup().addTo(mapa);
     window.setTimeout(() => mapa.invalidateSize(), 0);
 
     return () => {
       capaMarcadoresRef.current?.clearLayers();
       capaMarcadoresRef.current = null;
+      capaRutaRef.current?.clearLayers();
+      capaRutaRef.current = null;
       mapa.remove();
       mapaRef.current = null;
     };
@@ -268,6 +280,35 @@ export default function Mapa() {
     });
   }, [clientesFiltrados]);
 
+  useEffect(() => {
+    if (!capaRutaRef.current || !filtros.rutaId) {
+      capaRutaRef.current?.clearLayers();
+      return;
+    }
+    capaRutaRef.current.clearLayers();
+    const paradas = pedidosRuta
+      .filter((pedido) => pedido.estado !== 'CANCELADO')
+      .sort((a,b) => Number(a.orden_entrega ?? 0) - Number(b.orden_entrega ?? 0))
+      .map((pedido) => {
+        const cliente = clientes.find((item) => item.id === pedido.cliente_id);
+        return cliente?.lat != null && cliente?.lng != null ? { pedido, lat: cliente.lat, lng: cliente.lng } : null;
+      })
+      .filter((item): item is { pedido: PedidoConDetalle; lat:number; lng:number } => item !== null);
+
+    if (paradas.length < 2) return;
+    const latlngs = paradas.map((item) => [item.lat, item.lng] as [number,number]);
+    L.polyline(latlngs, { weight: 4, opacity: 0.75, dashArray: '8 6' }).addTo(capaRutaRef.current);
+    paradas.forEach((item, index) => {
+      L.circleMarker([item.lat,item.lng], {
+        radius: 13,
+        color: '#212529',
+        fillColor: '#fff',
+        fillOpacity: 0.9,
+        weight: 2,
+      }).bindTooltip(String(index + 1), { permanent: true, direction: 'center', className: 'mapa-numero-parada' }).addTo(capaRutaRef.current);
+    });
+  }, [pedidosRuta, clientes, filtros.rutaId]);
+
   async function centrarEnMiUbicacion() {
     setError(null);
     try {
@@ -296,7 +337,7 @@ export default function Mapa() {
       </header>
 
       {error && <p className="texto-error">{error}</p>}
-      <p className="banner-info">Mapa con calles de OpenStreetMap. Los datos y filtros de clientes siguen almacenados localmente.</p>
+      <p className="banner-info">Mapa con calles de OpenStreetMap. Los datos y filtros de clientes siguen almacenados localmente. En una ruta de entrega se dibuja el orden de las paradas; no es navegación giro a giro.</p>
       {miUbicacion && <p className="detalle-cliente">Mi ubicación: ±{miUbicacion.precision != null ? Math.round(miUbicacion.precision) + ' m' : 'precisión no disponible'}.</p>}
 
       <section className="tarjeta">
@@ -365,7 +406,7 @@ export default function Mapa() {
         </div>
       </section>
 
-      <p className="detalle-cliente">{clientesFiltrados.length} de {clientesConUbicacion.length} clientes con ubicación cumplen los filtros.</p>
+      <p className="detalle-cliente">{clientesFiltrados.length} de {clientesConUbicacion.length} clientes con ubicación cumplen los filtros.{pedidosRuta.length > 0 ? ' · ' + pedidosRuta.length + ' pedidos en la ruta seleccionada.' : ''}</p>
 
       <div className="filtros-mapa">
         {['todos', 'ACTIVO', 'POR_CONTACTAR', 'INACTIVO', 'pendientes'].filter(esFiltroMapa).map((f) => (
