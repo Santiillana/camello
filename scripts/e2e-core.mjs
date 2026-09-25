@@ -461,20 +461,29 @@ try {
     }
     const clientePedido = formularioPedido.locator('select').nth(0);
     const productoPedido = formularioPedido.locator('select').nth(1);
-    try {
-      await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
-      await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
-    } catch (error) {
-      const diagnostico = {
-        url: page.url(),
-        clienteOpciones: await clientePedido.locator('option').allTextContents().catch(() => []),
-        productoOpciones: await productoPedido.locator('option').allTextContents().catch(() => []),
-        errores: await page.locator('.texto-error,[role="alert"]').allTextContents().catch(() => []),
-        sqlCliente: await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;").catch(() => []),
-        sqlProductos: await sql(page, "SELECT id,nombre,activo FROM productos ORDER BY id ASC LIMIT 10;").catch(() => []),
-      };
-      throw new Error('E2E: opciones del formulario de pedidos no se hidrataron: ' + JSON.stringify(diagnostico) + ' causa=' + String(error));
-    }
+
+    await page.waitForFunction(
+      (productoId) => {
+        const section = Array.from(document.querySelectorAll('section.tarjeta'))
+          .find((element) => element.textContent?.includes('Registrar pedido'));
+        const selects = section ? Array.from(section.querySelectorAll('select')) : [];
+        if (selects.length < 2) return false;
+        const clienteListo = Array.from(selects[0].options).some((option) => option.textContent?.trim() === 'Cliente E2E');
+        const productoListo = Array.from(selects[1].options).some((option) => option.value === String(productoId));
+        if (!clienteListo || !productoListo) return false;
+        const marca = 'data-e2e-pedidos-estable';
+        if (section.getAttribute(marca) !== '1') {
+          section.setAttribute(marca, '1');
+          return false;
+        }
+        return true;
+      },
+      ids[0].producto_id,
+      { timeout: 60000 },
+    );
+
+    await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
+    await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
     await clientePedido.selectOption(String(ids[0].cliente_id));
     await productoPedido.selectOption(String(ids[0].producto_id));
     await formularioPedido.getByLabel('Cantidad').fill('2');
