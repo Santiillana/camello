@@ -69,8 +69,9 @@ try {
     if (await page.getByRole('link', { name: 'Gastos' }).count() !== 1) throw new Error('B4: falta Gastos en el menú lateral.');
     const marca = await page.locator('.side-nav-marca').innerText();
     if (marca !== 'CAMELLO') throw new Error('B4: el nombre CAMELLO no se muestra completo.');
-    await page.getByRole('button', { name: 'Abrir menú' }).click();
-    await page.locator('.side-nav .side-nav-toggle').getByRole('button', { name: 'Cerrar menú' }).click();
+    const menuToggle = page.locator('.side-nav .side-nav-toggle').first();
+    await menuToggle.getByRole('button', { name: /Expandir menú|Abrir menú/ }).click();
+    await menuToggle.getByRole('button', { name: /Contraer menú|Cerrar menú/ }).click();
     console.log('ui-c1: comprobar +');
     const fab = page.getByRole('button', { name: 'Nueva acción' });
     if (await fab.count() !== 1) throw new Error('C1: falta el botón flotante +.');
