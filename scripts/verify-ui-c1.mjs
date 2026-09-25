@@ -17,7 +17,7 @@ async function esperarServidor(url, timeoutMs = 30000) {
     try {
       const response = await fetch(url);
       if (response.ok) return;
-    } catch {}
+    } catch { /* Espera auxiliar best-effort; el bucle principal reintenta hasta el límite configurado. */ }
     await sleep(300);
   }
   throw new Error('Vite no inició a tiempo.\n' + logs);
