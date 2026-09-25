@@ -1,4 +1,4 @@
-import { bytesToBase64, base64ToBytes } from './base64';
+import { bytesToBase64, base64ToBytes } from './base64.ts';
 
 const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 const ITERACIONES = 180000;
