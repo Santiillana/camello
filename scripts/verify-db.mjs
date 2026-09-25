@@ -83,7 +83,7 @@ function migrate8(db) {
 }
 function migrate9(db, run = db.run.bind(db)) {
   const refs = db.exec(
-    "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion_%' ESCAPE '\\';"
+    "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';"
   )[0]?.values ?? [];
   if (!refs.length) return;
 
@@ -162,7 +162,7 @@ function migrate9(db, run = db.run.bind(db)) {
   }
 
   const remaining = db.exec(
-    "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion_%' ESCAPE '\\';"
+    "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';"
   )[0]?.values ?? [];
   if (remaining.length) {
     throw new Error('v9: quedaron referencias a _migracion_: ' + JSON.stringify(remaining));
