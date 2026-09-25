@@ -2256,6 +2256,15 @@ class Database {
     await this.conn().beginTransaction();
     try {
       const res = await this.conn().run(`INSERT INTO ventas (cliente_id, ruta_id, producto_nombre, cantidad, precio_aplicado, costo_aplicado, total, utilidad, fecha, hora, estado_pago, fecha_pago, metodo_pago, monto_pagado, operacion_id, estado_registro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [v.cliente_id, v.ruta_id ?? null, productoNombre, cantidad, precio, costo, total, utilidad, fechaLocalISO(ahora), horaLocalHHMM(ahora), estado, estado === 'PAGADA' ? fechaLocalISO(ahora) : null, metodo, montoPagado, operacionId, estadoRegistro], false);
+      const ventaId = Number(res.changes?.lastId ?? 0);
+      if (!ventaId) throw new Error('No se pudo registrar la venta.');
+      if (montoPagado > 0) {
+        await this.conn().run(
+          'INSERT INTO pagos (venta_id, cliente_id, monto, fecha, hora, metodo_pago, operacion_id) VALUES (?, ?, ?, ?, ?, ?, ?);',
+          [ventaId, v.cliente_id, montoPagado, fechaLocalISO(ahora), horaLocalHHMM(ahora), metodo, operacionId ? operacionId + '-pago' : null],
+          false,
+        );
+      }
       await this.conn().commitTransaction();
       await this.persist();
       return Number(res.changes?.lastId ?? 0);
