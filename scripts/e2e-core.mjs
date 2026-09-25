@@ -84,22 +84,20 @@ async function crearCliente(page) {
 
   await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).waitFor({ timeout: 60000 });
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.waitForFunction(
-    () => document.querySelector('input[aria-label="Nombre completo"]')?.value === 'Cliente E2E',
-    undefined,
-    { timeout: 30000 },
-  );
-  await page.getByLabel('Nombre completo').inputValue().then((value) => {
-    if (value !== 'Cliente E2E') throw new Error('El borrador no restauró el nombre.');
-  });
-  await page.waitForFunction(
-    () => document.querySelector('input[aria-label="Teléfono 1"]')?.value === '3001234567',
-    undefined,
-    { timeout: 30000 },
-  );
-  await page.getByLabel('Teléfono 1').inputValue().then((value) => {
-    if (value !== '3001234567') throw new Error('El borrador no restauró el teléfono.');
-  });
+  const nombreInput = page.getByLabel('Nombre completo');
+  const telefonoInput = page.getByLabel('Teléfono 1');
+  let nombreRestaurado = false;
+  let telefonoRestaurado = false;
+  for (let intento = 0; intento < 120; intento += 1) {
+    const nombre = await nombreInput.inputValue().catch(() => '');
+    const telefono = await telefonoInput.inputValue().catch(() => '');
+    nombreRestaurado = nombre === 'Cliente E2E';
+    telefonoRestaurado = telefono === '3001234567';
+    if (nombreRestaurado && telefonoRestaurado) break;
+    await sleep(250);
+  }
+  if (!nombreRestaurado) throw new Error('El borrador no restauró el nombre.');
+  if (!telefonoRestaurado) throw new Error('El borrador no restauró el teléfono.');
 
   await siguiente(page);
   for (let i = 0; i < 5; i += 1) await omitir(page);
