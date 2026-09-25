@@ -28,6 +28,7 @@ const Respaldo = lazy(() => import('./pages/Respaldo'));
 const Recordatorios = lazy(() => import('./pages/Recordatorios'));
 const Gastos = lazy(() => import('./pages/Gastos'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
+const GastosPersonales = lazy(() => import('./pages/GastosPersonales'));
 
 const DB_INIT_TIMEOUT_MS = 60_000;
 
@@ -163,6 +164,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
             <Route path="/cartera" element={<Cartera />} />
             <Route path="/recordatorios" element={<Recordatorios />} />
             <Route path="/gastos" element={<Gastos />} />
+            <Route path="/gastos-personales" element={<GastosPersonales />} />
             <Route path="/configuracion" element={<Configuracion onConfigChanged={onConfigChanged} />} />
             <Route path="/respaldo" element={<Respaldo />} />
             {listarModulos().map((modulo) => <Route key={modulo.id} path={modulo.ruta} element={<ModuloRoute id={modulo.id} />} />)}
