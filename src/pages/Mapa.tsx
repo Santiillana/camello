@@ -225,6 +225,7 @@ export default function Mapa() {
       window.clearTimeout(timerEstable);
       observador?.disconnect();
       window.removeEventListener('resize', redimensionar);
+      mapa.stop();
       capaMarcadoresRef.current?.clearLayers();
       capaMarcadoresRef.current = null;
       capaRutaRef.current?.clearLayers();
