@@ -2,6 +2,7 @@ const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 const ITERACIONES = 180000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+import { bytesToBase64, base64ToBytes } from './base64';
 
 type RespaldoCifrado = {
   camello_encrypted_backup_version?: unknown;
@@ -35,7 +36,7 @@ export async function cifrarRespaldo(texto:string,password:string):Promise<strin
   const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
   const ivBuffer = toArrayBuffer(iv);
   const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv:ivBuffer},await keyFromPassword(password,salt),enc.encode(texto));
-  return JSON.stringify({camello_encrypted_backup_version:1,kdf:'PBKDF2-SHA256',iterations:ITERACIONES,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(cipher))});
+  return JSON.stringify({camello_encrypted_backup_version:1,kdf:'PBKDF2-SHA256',iterations:ITERACIONES,salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(cipher))});
 }
 export async function descifrarRespaldo(texto:string,password:string):Promise<string>{
   if(new TextEncoder().encode(texto).byteLength>MAX_BACKUP_BYTES) throw new Error('El respaldo supera 25 MB.');
@@ -46,9 +47,9 @@ export async function descifrarRespaldo(texto:string,password:string):Promise<st
   const data = parsed;
   if(Number(data.camello_encrypted_backup_version)!==1) throw new Error('Formato de respaldo cifrado no reconocido.');
   try {
-    const iv = bytes(String(data.iv));
-    const salt = bytes(String(data.salt));
-    const ciphertext = bytes(String(data.ciphertext));
+    const iv = base64ToBytes(String(data.iv));
+    const salt = base64ToBytes(String(data.salt));
+    const ciphertext = base64ToBytes(String(data.ciphertext));
     const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:toArrayBuffer(iv)},await keyFromPassword(password,salt),toArrayBuffer(ciphertext));
     return dec.decode(plain);
   } catch { throw new Error('Contraseña incorrecta o respaldo cifrado alterado.'); }
