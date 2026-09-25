@@ -2408,8 +2408,9 @@ class Database {
 
   // RUTAS
 
-  async iniciarRuta(r: { nombre?: string; tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
+  async iniciarRuta(r: { nombre?: string; tipo: Ruta['tipo']; paquetes_llevados: number; fecha?: string; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
     const paquetes = enteroPositivo(r.paquetes_llevados, 'Los paquetes llevados');
+    if (r.fecha != null && !/^\\d{4}-\\d{2}-\\d{2}$/.test(r.fecha)) throw new Error('La fecha de la ruta no es válida.');
 
     const activa = await this.obtenerRutaActiva();
     if (activa) throw new Error('Ya existe una ruta en curso.');
@@ -2425,7 +2426,7 @@ class Database {
       [
         r.nombre?.trim() || r.tipo,
         r.tipo,
-        fechaLocalISO(ahora),
+        r.fecha ?? fechaLocalISO(ahora),
         horaLocalHHMM(ahora),
         r.lat_inicio ?? null,
         r.lng_inicio ?? null,
