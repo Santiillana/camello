@@ -208,9 +208,12 @@ export default function Mapa() {
 
     capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
     capaRutaRef.current = L.layerGroup().addTo(mapa);
-    const redimensionar = () => mapa.invalidateSize({ pan: false });
-    window.setTimeout(redimensionar, 0);
-    window.setTimeout(redimensionar, 250);
+    const redimensionar = () => {
+      if (!mapaRef.current || !contenedorRef.current) return;
+      mapa.invalidateSize({ pan: false });
+    };
+    const timerInicial = window.setTimeout(redimensionar, 0);
+    const timerEstable = window.setTimeout(redimensionar, 250);
     const observador = typeof ResizeObserver !== 'undefined' && contenedorRef.current
       ? new ResizeObserver(redimensionar)
       : null;
@@ -218,6 +221,8 @@ export default function Mapa() {
     window.addEventListener('resize', redimensionar);
 
     return () => {
+      window.clearTimeout(timerInicial);
+      window.clearTimeout(timerEstable);
       observador?.disconnect();
       window.removeEventListener('resize', redimensionar);
       capaMarcadoresRef.current?.clearLayers();
