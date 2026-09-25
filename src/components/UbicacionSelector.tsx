@@ -55,7 +55,7 @@ export default function UbicacionSelector({ lat, lng, precision_m, fuente, fecha
 
   useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
-    const mapa = L.map(contenedorRef.current).setView([actual.lat, actual.lng], lat != null ? 16 : 13);
+    const mapa = L.map(contenedorRef.current, { zoomAnimation: false }).setView([actual.lat, actual.lng], lat != null ? 16 : 13);
     mapaRef.current = mapa;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; colaboradores de OpenStreetMap' }).addTo(mapa);
     const icono = L.divIcon({ className: 'camello-pin', html: ICONO_PIN, iconSize: [40, 50], iconAnchor: [20, 48] });
