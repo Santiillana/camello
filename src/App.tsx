@@ -167,7 +167,6 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
           </Routes>
         </Suspense>
       </main>
-      <BottomNav />
       {rutaAviso12h && rutaActiva && (
         <div className="modal-flotante" role="dialog" aria-modal="true" aria-label="Ruta en curso por más de 12 horas">
           <div className="tarjeta">
