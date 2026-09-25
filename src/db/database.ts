@@ -1705,6 +1705,21 @@ class Database {
        LIMIT 3;`
     );
 
+    const mejorCantidad = await this.conn().query(
+      `SELECT c.id, c.nombre, COALESCE(SUM(v.cantidad),0) AS cantidad
+       FROM clientes c LEFT JOIN ventas v ON v.cliente_id=c.id AND COALESCE(v.estado_registro,'activa')='activa'
+       WHERE c.estado='activo' GROUP BY c.id,c.nombre,c.nombre_normalizado
+       ORDER BY cantidad DESC,c.nombre_normalizado ASC,c.id ASC LIMIT 3;`,
+    );
+    const sinRecompra = await this.conn().query(
+      `SELECT c.id,c.nombre,MAX(v.fecha) AS ultima_compra
+       FROM clientes c LEFT JOIN ventas v ON v.cliente_id=c.id AND COALESCE(v.estado_registro,'activa')='activa'
+       WHERE c.estado='activo' GROUP BY c.id,c.nombre,c.nombre_normalizado
+       HAVING COUNT(v.id)=1 OR COUNT(v.id)=0
+       ORDER BY CASE WHEN ultima_compra IS NULL THEN 0 ELSE 1 END, ultima_compra ASC, c.nombre_normalizado ASC
+       LIMIT 5;`,
+    );
+
     const cumpleanos = await this.conn().query(
       `SELECT
          (SELECT COUNT(*) FROM clientes
@@ -1732,10 +1747,10 @@ class Database {
         total_comprado: Number(item.total_comprado ?? 0),
       })),
       mejorFrecuencia: (mejoresFrecuencia.values ?? []).map((item) => ({
-        id: Number(item.id),
-        nombre: String(item.nombre),
-        ritmo_dias: Math.max(1, Number(item.ritmo_dias ?? 20)),
+        id: Number(item.id), nombre: String(item.nombre), ritmo_dias: Math.max(1, Number(item.ritmo_dias ?? 20)),
       })),
+      mejorCantidad: (mejorCantidad.values ?? []).map((item) => ({ id:Number(item.id), nombre:String(item.nombre), cantidad:Number(item.cantidad ?? 0) })),
+      sinRecompra: (sinRecompra.values ?? []).map((item) => ({ id:Number(item.id), nombre:String(item.nombre), ultima_compra:item.ultima_compra == null ? null : String(item.ultima_compra) })),
     };
   }
   async obtenerCliente(id: number): Promise<ClienteConResumen | null> {
