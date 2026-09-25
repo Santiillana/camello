@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { database } from '../db/database';
 import type { PedidoConDetalle, RutaConResumen, TipoRuta } from '../types';
-import { formatoFecha, formatoMoneda } from '../utils/format';
+import { formatoFecha, formatoMoneda, hoyISO } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
@@ -123,6 +123,7 @@ function FormNuevaRuta({
 }) {
   const [nombre, setNombre] = useState('Ruta de hoy');
   const [tipo, setTipo] = useState<TipoRuta>('Puerta a puerta');
+  const [fecha, setFecha] = useState(hoyISO());
   const [paquetes, setPaquetes] = useState(20);
   const [usarGps, setUsarGps] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -131,7 +132,7 @@ function FormNuevaRuta({
   const [pedidosDisponibles, setPedidosDisponibles] = useState<PedidoConDetalle[]>([]);
   const [pedidosCargando, setPedidosCargando] = useState(false);
   const [pedidosSeleccionados, setPedidosSeleccionados] = useState<number[]>([]);
-  const datosBorrador = { nombre, tipo, paquetes, usarGps, pedidosSeleccionados };
+  const datosBorrador = { nombre, tipo, fecha, paquetes, usarGps, pedidosSeleccionados };
   useEffect(() => {
     let activo = true;
     if (tipo !== 'Entrega de pedidos') {
@@ -183,6 +184,12 @@ function FormNuevaRuta({
       titulo: 'Nombre de la ruta',
       contenido: <label>Nombre de la ruta<input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} /></label>,
       validar: () => nombre.trim() ? null : 'Escribe un nombre para la ruta.',
+    },
+    {
+      id: 'fecha',
+      titulo: 'Fecha de la ruta',
+      contenido: <label>Fecha<input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></label>,
+      validar: () => /^\\d{4}-\\d{2}-\\d{2}$/.test(fecha) ? null : 'Selecciona una fecha válida.',
     },
     {
       id: 'tipo',
@@ -237,6 +244,7 @@ function FormNuevaRuta({
       titulo: 'Confirmar ruta',
       contenido: <div className="resumen-venta"><div className="lista-resumen">
         <div><span>Nombre</span><strong>{nombre}</strong></div>
+        <div><span>Fecha</span><strong>{fecha}</strong></div>
         <div><span>Tipo</span><strong>{tipo}</strong></div>
         <div><span>Paquetes</span><strong>{tipo === 'Entrega de pedidos' ? pedidosSeleccionados.reduce((total, id) => total + (pedidosDisponibles.find((pedido) => pedido.id === id)?.items.reduce((s, item) => s + item.cantidad, 0) ?? 0), 0) : paquetes}</strong></div>
         <div><span>Pedidos</span><strong>{tipo === 'Entrega de pedidos' ? pedidosSeleccionados.length : '—'}</strong></div>
@@ -270,6 +278,7 @@ function FormNuevaRuta({
       const id = await database.iniciarRuta({
         nombre: nombre.trim(),
         tipo,
+        fecha,
         paquetes_llevados: tipo === 'Entrega de pedidos'
           ? pedidosSeleccionados.reduce((total, id) => total + (pedidosDisponibles.find((pedido) => pedido.id === id)?.items.reduce((s, item) => s + item.cantidad, 0) ?? 0), 0)
           : paquetes,
@@ -298,6 +307,7 @@ function FormNuevaRuta({
             const paso = await borrador.continuar();
             setNombre(pendiente.datos.nombre);
             setTipo(pendiente.datos.tipo);
+            setFecha(pendiente.datos.fecha ?? hoyISO());
             setPaquetes(pendiente.datos.paquetes);
             setUsarGps(pendiente.datos.usarGps);
             setPedidosSeleccionados(pendiente.datos.pedidosSeleccionados ?? []);
