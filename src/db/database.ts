@@ -33,6 +33,7 @@ import type {
 import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO } from '../utils/format';
 import { calcularChecksum } from '../utils/respaldo';
 import { crearContexto } from '../modulos/runtime';
+import { bytesToBase64, base64ToBytes } from '../utils/base64';
 
 type SqliteExportData = Record<string, unknown> & {
   database: string;
@@ -42,22 +43,6 @@ type SqliteExportData = Record<string, unknown> & {
   format?: 'json' | 'sqlite-binary';
   bytes_base64?: string;
 };
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(texto: string): Uint8Array {
-  const binary = atob(texto);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
 
 const DEFAULT_CONFIG: ConfiguracionApp = {
   negocio_nombre: '',
