@@ -294,6 +294,7 @@ class Database {
       { version: 12, ejecutar: () => this.migrarVersion12(), foreignKeysOff: false },
       { version: 13, ejecutar: () => this.migrarVersion13(), foreignKeysOff: false },
       { version: 14, ejecutar: () => this.migrarVersion14(), foreignKeysOff: false },
+      { version: 15, ejecutar: () => this.migrarVersion15(), foreignKeysOff: false },
     ] as const;
 
     for (const migracion of migraciones) {
@@ -1024,6 +1025,45 @@ class Database {
       cobrado:Number(row.cobrado??0), gastos_pagados:Number(gr.pagados??0),
       flujo_caja:Number(row.cobrado??0)-Number(gr.pagados??0), gastos_pendientes:Number(gr.pendientes??0)
     };
+  }
+
+  private async migrarVersion15(): Promise<void> {
+    await this.conn().execute(\`CREATE TABLE IF NOT EXISTS pedidos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cliente_id INTEGER NOT NULL,
+      fecha_pedido TEXT NOT NULL,
+      fecha_entrega TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE','ASIGNADO','ENTREGADO','NO_ENTREGADO','CANCELADO')),
+      ruta_id INTEGER,
+      orden_entrega INTEGER,
+      notas TEXT,
+      total_estimado INTEGER NOT NULL DEFAULT 0 CHECK (total_estimado >= 0),
+      pago_estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (pago_estado IN ('PENDIENTE','COBRADO','FIADO')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      entregado_at TEXT,
+      FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+      FOREIGN KEY (ruta_id) REFERENCES rutas(id)
+    );\`, false);
+    await this.conn().execute(\`CREATE TABLE IF NOT EXISTS pedido_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pedido_id INTEGER NOT NULL,
+      producto_id INTEGER,
+      producto_nombre TEXT NOT NULL,
+      cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+      precio_aplicado INTEGER NOT NULL CHECK (precio_aplicado >= 0),
+      costo_aplicado INTEGER NOT NULL CHECK (costo_aplicado >= 0),
+      total INTEGER NOT NULL CHECK (total >= 0),
+      FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
+      FOREIGN KEY (producto_id) REFERENCES productos(id)
+    );\`, false);
+    const ventas = await this.columnasDeTabla('ventas');
+    if (!ventas.has('pedido_id')) await this.conn().execute('ALTER TABLE ventas ADD COLUMN pedido_id INTEGER;', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pedidos_cliente ON pedidos(cliente_id);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_entrega ON pedidos(fecha_entrega);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pedidos_ruta ON pedidos(ruta_id);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pedido_items_pedido ON pedido_items(pedido_id);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_ventas_pedido ON ventas(pedido_id);', false);
   }
 
   private async migrarVersion14(): Promise<void> {
@@ -1846,6 +1886,202 @@ class Database {
     );
     await this.persist();
     return Number(res.changes?.lastId ?? 0);
+  }
+
+  // PEDIDOS
+  async crearPedido(data: {
+    cliente_id: number;
+    fecha_entrega: string;
+    notas?: string;
+    items: Array<{ producto_id: number; cantidad: number }>;
+  }): Promise<number> {
+    if (!Number.isInteger(data.cliente_id) || data.cliente_id <= 0) throw new Error('Cliente inválido.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha_entrega)) throw new Error('La fecha de entrega no es válida.');
+    if (!Array.isArray(data.items) || data.items.length === 0) throw new Error('Agrega al menos un producto al pedido.');
+    const cliente = await this.conn().query('SELECT id FROM clientes WHERE id=? AND estado=\'activo\';', [data.cliente_id]);
+    if (!cliente.values?.length) throw new Error('El cliente no existe o está archivado.');
+
+    const items: Array<{ producto_id:number; producto_nombre:string; cantidad:number; precio:number; costo:number; total:number }> = [];
+    let total = 0;
+    for (const item of data.items) {
+      const cantidad = enteroPositivo(item.cantidad, 'La cantidad');
+      const producto = await this.conn().query('SELECT id,nombre,precio,costo FROM productos WHERE id=? AND activo=1;', [item.producto_id]);
+      const row = producto.values?.[0];
+      if (!row) throw new Error('Uno de los productos no existe o está archivado.');
+      const precio = numeroNoNegativo(Number(row.precio), 'El precio');
+      const costo = numeroNoNegativo(Number(row.costo), 'El costo');
+      const subtotal = multiplicarDinero(precio, cantidad, 'El total del pedido');
+      total += subtotal;
+      if (!Number.isSafeInteger(total)) throw new Error('El total del pedido excede el límite seguro.');
+      items.push({ producto_id:Number(row.id), producto_nombre:String(row.nombre), cantidad, precio, costo, total:subtotal });
+    }
+
+    const ahora = new Date().toISOString();
+    await this.conn().beginTransaction();
+    try {
+      const pedido = await this.conn().run(
+        \`INSERT INTO pedidos (cliente_id,fecha_pedido,fecha_entrega,estado,notas,total_estimado,pago_estado,created_at,updated_at)
+         VALUES (?,?,?,'PENDIENTE',?,?,'PENDIENTE',?,?);\`,
+        [data.cliente_id, fechaLocalISO(), data.fecha_entrega, data.notas?.trim() || null, total, ahora, ahora],
+        false,
+      );
+      const pedidoId = Number(pedido.changes?.lastId ?? 0);
+      if (!pedidoId) throw new Error('No se pudo crear el pedido.');
+      for (const item of items) {
+        await this.conn().run(
+          \`INSERT INTO pedido_items (pedido_id,producto_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total)
+           VALUES (?,?,?,?,?,?,?);\`,
+          [pedidoId,item.producto_id,item.producto_nombre,item.cantidad,item.precio,item.costo,item.total],
+          false,
+        );
+      }
+      await this.conn().commitTransaction();
+      await this.persist();
+      return pedidoId;
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch { /* La transacción puede haberse revertido. */ }
+      throw error;
+    }
+  }
+
+  async listarPedidos(opts: {
+    estados?: import('../types').EstadoPedido[];
+    fechaEntrega?: string;
+    rutaId?: number;
+    sinRuta?: boolean;
+  } = {}): Promise<import('../types').PedidoConDetalle[]> {
+    const filtros: string[] = [];
+    const params: unknown[] = [];
+    if (opts.estados?.length) {
+      filtros.push(\`p.estado IN (\${opts.estados.map(() => '?').join(',')})\`);
+      params.push(...opts.estados);
+    }
+    if (opts.fechaEntrega) { filtros.push('p.fecha_entrega=?'); params.push(opts.fechaEntrega); }
+    if (opts.rutaId != null) { filtros.push('p.ruta_id=?'); params.push(opts.rutaId); }
+    if (opts.sinRuta) filtros.push('p.ruta_id IS NULL');
+    const where = filtros.length ? ' WHERE ' + filtros.join(' AND ') : '';
+    const base = await this.conn().query(
+      \`SELECT p.*, c.nombre AS cliente_nombre, c.telefono1 AS cliente_telefono
+       FROM pedidos p JOIN clientes c ON c.id=p.cliente_id\${where}
+       ORDER BY CASE WHEN p.estado='PENDIENTE' THEN 0 WHEN p.estado='ASIGNADO' THEN 1 ELSE 2 END, p.fecha_entrega ASC, p.id ASC;\`,
+      params,
+    );
+    const pedidos = (base.values ?? []).map((row) => ({
+      ...row,
+      id: Number(row.id),
+      cliente_id: Number(row.cliente_id),
+      total_estimado: Number(row.total_estimado ?? 0),
+      ruta_id: row.ruta_id == null ? null : Number(row.ruta_id),
+      orden_entrega: row.orden_entrega == null ? null : Number(row.orden_entrega),
+    }));
+    if (!pedidos.length) return [];
+    const ids = pedidos.map((p) => Number(p.id));
+    const itemsResult = await this.conn().query(
+      \`SELECT * FROM pedido_items WHERE pedido_id IN (\${ids.map(() => '?').join(',')}) ORDER BY pedido_id ASC, id ASC;\`,
+      ids,
+    );
+    const agrupados = new Map<number, import('../types').PedidoItem[]>();
+    for (const row of itemsResult.values ?? []) {
+      const item: import('../types').PedidoItem = {
+        id:Number(row.id), pedido_id:Number(row.pedido_id),
+        producto_id:row.producto_id == null ? null : Number(row.producto_id),
+        producto_nombre:String(row.producto_nombre), cantidad:Number(row.cantidad),
+        precio_aplicado:Number(row.precio_aplicado), costo_aplicado:Number(row.costo_aplicado), total:Number(row.total),
+      };
+      const lista=agrupados.get(item.pedido_id) ?? [];
+      lista.push(item);
+      agrupados.set(item.pedido_id,lista);
+    }
+    return pedidos.map((p) => ({ ...p, items:agrupados.get(Number(p.id)) ?? [] })) as import('../types').PedidoConDetalle[];
+  }
+
+  async asignarPedidosARuta(rutaId: number, pedidoIds: number[]): Promise<void> {
+    if (!Number.isInteger(rutaId) || rutaId <= 0) throw new Error('Ruta inválida.');
+    const ids=[...new Set(pedidoIds)].filter((id)=>Number.isInteger(id)&&id>0);
+    if (!ids.length) throw new Error('Selecciona al menos un pedido.');
+    const ruta=await this.conn().query('SELECT id,estado,tipo FROM rutas WHERE id=?;',[rutaId]);
+    const rr=ruta.values?.[0];
+    if (!rr) throw new Error('La ruta no existe.');
+    if (rr.estado!=='EN_CURSO' || rr.tipo!=='Entrega de pedidos') throw new Error('La ruta no está disponible para recibir pedidos.');
+    const disponibles=await this.listarPedidos({estados:['PENDIENTE'],sinRuta:true});
+    const set=new Set(disponibles.map((p)=>p.id));
+    for(const id of ids) if(!set.has(id)) throw new Error('Uno de los pedidos ya no está disponible para asignar.');
+
+    await this.conn().beginTransaction();
+    try {
+      for(let i=0;i<ids.length;i+=1) {
+        await this.conn().run(
+          \`UPDATE pedidos SET ruta_id=?,orden_entrega=?,estado='ASIGNADO',updated_at=? WHERE id=? AND estado='PENDIENTE' AND ruta_id IS NULL;\`,
+          [rutaId,i+1,new Date().toISOString(),ids[i]],false
+        );
+      }
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch(error) {
+      try { await this.conn().rollbackTransaction(); } catch { /* La transacción puede haberse revertido. */ }
+      throw error;
+    }
+  }
+
+  async registrarEntregaPedido(pedidoId: number, metodoPago: 'EFECTIVO'|'TRANSFERENCIA_NEQUI'|'FIADO'): Promise<void> {
+    if(!Number.isInteger(pedidoId)||pedidoId<=0) throw new Error('Pedido inválido.');
+    const pedidoResult=await this.conn().query(
+      \`SELECT p.*,r.estado AS ruta_estado,r.tipo AS ruta_tipo FROM pedidos p JOIN rutas r ON r.id=p.ruta_id WHERE p.id=?;\`,
+      [pedidoId],
+    );
+    const pedido=pedidoResult.values?.[0];
+    if(!pedido) throw new Error('El pedido no existe o no tiene ruta.');
+    if(pedido.estado!=='ASIGNADO') throw new Error('Este pedido ya fue resuelto.');
+    if(pedido.ruta_estado!=='EN_CURSO'||pedido.ruta_tipo!=='Entrega de pedidos') throw new Error('La ruta de entrega no está en curso.');
+    const items=await this.conn().query('SELECT * FROM pedido_items WHERE pedido_id=? ORDER BY id;',[pedidoId]);
+    if(!items.values?.length) throw new Error('El pedido no tiene productos.');
+
+    const ahora=new Date();
+    await this.conn().beginTransaction();
+    try {
+      for(const item of items.values) {
+        const operacionId='pedido-'+pedidoId+'-item-'+Number(item.id);
+        const existente=await this.conn().query('SELECT id FROM ventas WHERE operacion_id=?;',[operacionId]);
+        if(existente.values?.length) continue;
+        const cantidad=enteroPositivo(Number(item.cantidad),'La cantidad');
+        const precio=numeroNoNegativo(Number(item.precio_aplicado),'El precio');
+        const costo=numeroNoNegativo(Number(item.costo_aplicado),'El costo');
+        const totalItem=multiplicarDinero(precio,cantidad,'El total de la venta');
+        const utilidad=multiplicarDinero(precio-costo,cantidad,'La utilidad');
+        const pagada=metodoPago!=='FIADO';
+        await this.conn().run(
+          \`INSERT INTO ventas (cliente_id,ruta_id,pedido_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,fecha_pago,metodo_pago,monto_pagado,operacion_id,estado_registro)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'activa');\`,
+          [Number(pedido.cliente_id),Number(pedido.ruta_id),pedidoId,String(item.producto_nombre),cantidad,precio,costo,totalItem,utilidad,
+            fechaLocalISO(ahora),horaLocalHHMM(ahora),pagada?'PAGADA':'PENDIENTE',pagada?fechaLocalISO(ahora):null,
+            metodoPago,pagada?totalItem:0,operacionId],
+          false,
+        );
+      }
+      await this.conn().run(
+        \`UPDATE pedidos SET estado='ENTREGADO',pago_estado=?,entregado_at=?,updated_at=? WHERE id=? AND estado='ASIGNADO';\`,
+        [metodoPago==='FIADO'?'FIADO':'COBRADO',ahora.toISOString(),ahora.toISOString(),pedidoId],
+        false,
+      );
+      await this.conn().commitTransaction();
+      await this.persist();
+    } catch(error) {
+      try { await this.conn().rollbackTransaction(); } catch { /* La transacción puede haberse revertido. */ }
+      throw error;
+    }
+  }
+
+  async marcarPedidoNoEntregado(pedidoId: number, nota?: string): Promise<void> {
+    if(!Number.isInteger(pedidoId)||pedidoId<=0) throw new Error('Pedido inválido.');
+    const notaLimpia=nota?.trim() ?? '';
+    const r=await this.conn().run(
+      \`UPDATE pedidos SET estado='NO_ENTREGADO',
+       notas=CASE WHEN ? <> '' THEN TRIM(COALESCE(notas,'') || CASE WHEN COALESCE(notas,'')='' THEN '' ELSE ' | ' END || ?) ELSE notas END,
+       updated_at=? WHERE id=? AND estado='ASIGNADO';\`,
+      [notaLimpia,notaLimpia,new Date().toISOString(),pedidoId],
+    );
+    if(Number(r.changes?.changes ?? 0)===0) throw new Error('El pedido no estaba pendiente de entrega.');
+    await this.persist();
   }
 
   // RUTAS
