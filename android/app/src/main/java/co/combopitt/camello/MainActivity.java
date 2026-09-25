@@ -8,11 +8,14 @@ import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
+import co.combopitt.camello.CamelloStoragePlugin;
+
 import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(CamelloStoragePlugin.class);
         super.onCreate(savedInstanceState);
         if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
             getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
