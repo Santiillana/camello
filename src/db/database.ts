@@ -1509,7 +1509,7 @@ class Database {
     let sql = 'SELECT * FROM clientes';
     const cond: string[] = [];
     const params: unknown[] = [];
-    const limite = Math.min(100, Math.max(1, Math.floor(opts?.limite ?? 100)));
+    const limite = Math.min(2000, Math.max(1, Math.floor(opts?.limite ?? 100)));
     const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
 
     if (opts?.soloActivos) cond.push(`estado = 'activo'`);
