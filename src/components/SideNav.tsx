@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { listarModulos } from '../modulos/runtime';
 import { database } from '../db/database';
 
@@ -25,26 +25,102 @@ type Props = {
   onAlternarExpandido: () => void;
 };
 
+type NavItem = (typeof ITEMS)[number];
+
 export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpandido }: Props) {
-  const [modulos,setModulos]=useState<typeof ITEMS>([]);
-  const [gastosPersonales,setGastosPersonales]=useState(false);
-  useEffect(()=>{
-    let activo=true;
+  const [modulos, setModulos] = useState<NavItem[]>([]);
+  const [gastosPersonales, setGastosPersonales] = useState(false);
+  const [tabTop, setTabTop] = useState(48);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let activo = true;
     Promise.all([
-      ...listarModulos().map(async modulo=>({to:modulo.ruta,label:modulo.nombre,icon: 'M12 3C7 3 4 7 4 12s3 9 8 9 8-4 8-9-5-9-8-9Z',enabled:await database.obtenerModuloHabilitado(modulo.id)})),
-      database.obtenerModuloHabilitado('gastos-personales').then(enabled=>({to:'/gastos-personales',label:'Gastos personales',icon:'M4 5h16v14H4zM8 9h8M8 13h5',enabled})),
-    ])
-      .then(items=>{
-        if(!activo)return;
-        const personal=items.find(item=>item.to==='/gastos-personales');
-        setGastosPersonales(Boolean(personal?.enabled));
-        setModulos(items.filter(item=>item.enabled && item.to!=='/gastos-personales').map(item=>({to:item.to,label:item.label,icon:item.icon})));
-      })
-      .catch(()=>undefined);
-    return()=>{activo=false;};
-  },[]);
+      ...listarModulos().map(async (modulo) => ({
+        to: modulo.ruta,
+        label: modulo.nombre,
+        icon: 'M12 3C7 3 4 7 4 12s3 9 8 9 8-4 8-9-5-9-8-9Z',
+        enabled: await database.obtenerModuloHabilitado(modulo.id),
+      })),
+      database.obtenerModuloHabilitado('gastos-personales').then((enabled) => ({
+        to: '/gastos-personales',
+        label: 'Gastos personales',
+        icon: 'M4 5h16v14H4zM8 9h8M8 13h5',
+        enabled,
+      })),
+    ]).then((items) => {
+      if (!activo) return;
+      const personal = items.find((item) => item.to === '/gastos-personales');
+      setGastosPersonales(Boolean(personal?.enabled));
+      setModulos(items.filter((item) => item.enabled && item.to !== '/gastos-personales').map(({ to, label, icon }) => ({ to, label, icon })));
+    }).catch(() => undefined);
+    return () => { activo = false; };
+  }, []);
+
+  const items = useMemo<NavItem[]>(() => [
+    ...ITEMS,
+    ...(gastosPersonales ? [{ to: '/gastos-personales', label: 'Gastos personales', icon: 'M4 5h16v14H4zM8 9h8M8 13h5' } as NavItem] : []),
+    ...modulos,
+  ], [gastosPersonales, modulos]);
+
+  const activoIndex = Math.max(0, items.findIndex((item) => item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(item.to + '/'))));
+  const activo = items[activoIndex] ?? ITEMS[0];
+
+  function moverTab(clientY: number) {
+    const height = Math.max(window.innerHeight, 1);
+    const porcentaje = Math.max(8, Math.min(92, (clientY / height) * 100));
+    setTabTop(porcentaje);
+  }
+
+  function terminarArrastre(clientX: number, clientY: number) {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag) return;
+    const dx = clientX - drag.startX;
+    const dy = clientY - drag.startY;
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+      onAlternarExpandido();
+      return;
+    }
+    if (dx > 70) {
+      onAlternarExpandido();
+      return;
+    }
+    if (Math.abs(dy) >= 35 && items.length > 1) {
+      const ratio = Math.max(0, Math.min(1, clientY / Math.max(window.innerHeight, 1)));
+      const index = Math.round(ratio * (items.length - 1));
+      navigate(items[index]?.to ?? '/');
+    }
+  }
+
   return (
     <>
+      <button
+        type="button"
+        className="side-nav-tab"
+        aria-label={expandido || abierto ? 'Cerrar menú' : 'Sección activa; arrastra para cambiar de sección'}
+        style={{ top: tabTop + '%' }}
+        onPointerDown={(event) => {
+          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+          dragRef.current.moved = true;
+          moverTab(event.clientY);
+        }}
+        onPointerUp={(event) => {
+          terminarArrastre(event.clientX, event.clientY);
+        }}
+        onPointerCancel={() => { dragRef.current = null; }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d={activo.icon} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
       <button
         type="button"
         className={'side-nav-backdrop' + (abierto ? ' visible' : '')}
@@ -57,16 +133,16 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
           <button
             type="button"
             className="side-nav-toggle"
-            aria-label={abierto ? 'Cerrar menú' : (expandido ? 'Contraer menú' : 'Expandir menú')}
-            title={abierto ? 'Cerrar menú' : (expandido ? 'Contraer menú' : 'Expandir menú')}
-            onClick={abierto ? onCerrar : onAlternarExpandido}
+            aria-label={abierto ? 'Cerrar menú' : 'Contraer menú'}
+            title={abierto ? 'Cerrar menú' : 'Contraer menú'}
+            onClick={onCerrar}
           >
-            {expandido ? '‹' : '›'}
+            ‹
           </button>
         </div>
 
         <nav className="side-nav-lista" aria-label="Secciones de CAMELLO">
-          {[...ITEMS, ...(gastosPersonales ? [{ to: '/gastos-personales', label: 'Gastos personales', icon: 'M4 5h16v14H4zM8 9h8M8 13h5' }] : []), ...modulos].map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
