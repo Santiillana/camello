@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { DB_VERSION, SCHEMA_STATEMENTS as CURRENT_SCHEMA } from '../src/db/schema.ts';
 
 const REQUIRED = [
-  'clientes','mascotas','productos','rutas','ventas','fotos','seguimiento_clientes',
+  'clientes','mascotas','productos','rutas','pedidos','pedido_items','ventas','fotos','seguimiento_clientes',
   'pagos','configuracion_app','borradores','categorias_gasto','gastos','gastos_recurrentes','modulos_migraciones',
 ];
 
@@ -181,6 +181,16 @@ function migrate14(db){
   db.run('CREATE INDEX IF NOT EXISTS idx_clientes_nombre_norm ON clientes(nombre_normalizado);');
   db.run('CREATE INDEX IF NOT EXISTS idx_mascotas_nombre_norm ON mascotas(nombre_normalizado);');
 }
+function migrate15(db){
+  db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS pedidos')) ?? '');
+  db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS pedido_items')) ?? '');
+  addColumn(db,'ventas','pedido_id','pedido_id INTEGER');
+  db.run('CREATE INDEX IF NOT EXISTS idx_pedidos_cliente ON pedidos(cliente_id);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_entrega ON pedidos(fecha_entrega);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_pedidos_ruta ON pedidos(ruta_id);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_pedido_items_pedido ON pedido_items(pedido_id);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_ventas_pedido ON ventas(pedido_id);');
+}
 
 
 function applySchema(db){
@@ -193,7 +203,7 @@ function initialize(db){
   applySchema(db);
   const current=Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0]??0);
   if(current>DB_VERSION)throw new Error('Esquema '+current+' incompatible con '+DB_VERSION);
-  const migrations=[[2,migrate2,false],[3,migrate3,true],[4,migrate4,false],[5,migrate5,false],[6,migrate6,false],[7,migrate7,false],[8,migrate8,true],[9,migrate9,true],[10,migrate10,false],[11,migrate11,false],[12,migrate12,false],[13,migrate13,false],[14,migrate14,false]];
+  const migrations=[[2,migrate2,false],[3,migrate3,true],[4,migrate4,false],[5,migrate5,false],[6,migrate6,false],[7,migrate7,false],[8,migrate8,true],[9,migrate9,true],[10,migrate10,false],[11,migrate11,false],[12,migrate12,false],[13,migrate13,false],[14,migrate14,false],[15,migrate15,false]];
   for(const [version,fn,foreignKeysOff] of migrations){
     if(current>=version)continue;
     if(foreignKeysOff)db.run('PRAGMA foreign_keys=OFF;');
@@ -241,6 +251,21 @@ function flujo(db,label){
   assertEq(Number(db.exec('SELECT SUM(monto) FROM pagos WHERE venta_id='+vid)[0].values[0][0]),9000,label+' pagos');
 }
 
+function pedidosTest(db){
+  const cid=Number(db.exec('SELECT id FROM clientes LIMIT 1')[0]?.values?.[0]?.[0] ?? 0);
+  const pid=Number(db.exec('SELECT id FROM productos LIMIT 1')[0]?.values?.[0]?.[0] ?? 0);
+  if(!cid||!pid)throw new Error('pedidos: faltan cliente/producto base');
+  db.run("INSERT INTO pedidos(cliente_id,fecha_pedido,fecha_entrega,estado,total_estimado,pago_estado,created_at,updated_at) VALUES (?,'2026-09-24','2026-09-25','PENDIENTE',13000,'PENDIENTE',datetime('now'),datetime('now'));",[cid]);
+  const pedido=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
+  db.run("INSERT INTO pedido_items(pedido_id,producto_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total) VALUES (?,?,(SELECT nombre FROM productos WHERE id=?),1,13000,7000,13000);",[pedido,pid,pid]);
+  const item=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
+  db.run("INSERT INTO ventas(cliente_id,pedido_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,monto_pagado,operacion_id) VALUES (?,?,'Pedido',1,13000,7000,13000,6000,'2026-09-25','09:00','PAGADA',13000,?);",[cid,pedido,'pedido-test-'+pedido]);
+  assertEq(Number(db.exec("SELECT COUNT(*) FROM pedido_items WHERE pedido_id="+pedido)[0].values[0][0]),1,'pedido item');
+  assertEq(Number(db.exec("SELECT pedido_id FROM ventas WHERE operacion_id='pedido-test-"+pedido+"'")[0].values[0][0]),pedido,'pedido venta enlazada');
+  db.run("DELETE FROM ventas WHERE operacion_id='pedido-test-"+pedido+"';");
+  db.run("DELETE FROM pedido_items WHERE pedido_id="+pedido+";");
+  db.run("DELETE FROM pedidos WHERE id="+pedido+";");
+}
 function gastosTest(db){
   const cat=Number(db.exec("SELECT id FROM categorias_gasto WHERE nombre='Gas'")[0].values[0][0]);
   db.run("INSERT INTO gastos(fecha,monto,categoria_id,estado,periodo,created_at,updated_at) VALUES ('2026-09-24',15000,?,'pagado','2026-09',datetime('now'),datetime('now'));",[cat]);
@@ -401,7 +426,7 @@ async function runScenario(scenario) {
     case undefined: {
       const fresh=new SQL.Database(); initialize(fresh); initialize(fresh); flujo(fresh,'fresh');
       transactionalFailureTest(SQL);
-      versionMayorTest(SQL); gastosTest(fresh); anulacionesTest(fresh);
+      versionMayorTest(SQL); pedidosTest(fresh); gastosTest(fresh); anulacionesTest(fresh);
       const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
       const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
       const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
