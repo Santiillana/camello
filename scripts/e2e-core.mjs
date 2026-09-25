@@ -443,6 +443,8 @@ try {
     const clienteVenta = page.locator('select').first();
     const clienteVentaRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
     if (clienteVentaRow.length !== 1) throw new Error('E2E: Cliente E2E no existe antes de abrir ventas.');
+    const buscadorVenta = page.locator('input[placeholder="Nombre o mascota…"]').first();
+    await buscadorVenta.fill('Cliente E2E');
     await clienteVenta.locator(`option[value="${clienteVentaRow[0].id}"]`).waitFor({ state: 'attached', timeout: 60000 });
     await clienteVenta.selectOption(String(clienteVentaRow[0].id));
 

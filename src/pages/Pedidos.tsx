@@ -7,6 +7,8 @@ import { formatoMoneda, hoyISO } from '../utils/format';
 export default function Pedidos() {
   const [pedidos, setPedidos] = useState<PedidoConDetalle[]>([]);
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteConResumen | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [clienteId, setClienteId] = useState('');
   const [fechaEntrega, setFechaEntrega] = useState(hoyISO());
@@ -27,7 +29,7 @@ export default function Pedidos() {
     try {
       const [ps, cs, prods] = await Promise.all([
         database.listarPedidos(),
-        database.listarClientes({ soloActivos: true, limite: 100 }),
+        database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 }),
         database.listarProductos({}),
       ]);
       setPedidos(ps);
@@ -39,7 +41,7 @@ export default function Pedidos() {
     }
   }
 
-  useEffect(() => { void cargar(); }, []);
+  useEffect(() => { void cargar(); }, [busquedaCliente]);
 
   function agregarItem() {
     const pid = Number(productoId);
@@ -79,6 +81,8 @@ export default function Pedidos() {
       setItems([]);
       setNota('');
       setClienteId('');
+      setClienteSeleccionado(null);
+      setBusquedaCliente('');
       setProductoId('');
       await cargar();
     } catch (e: unknown) {
@@ -102,8 +106,17 @@ export default function Pedidos() {
         <p className="texto-vacio">Guarda los pedidos que vayan llegando y asígnalos después a la ruta del día.</p>
         <div className="grid-dos-columnas">
           <label>
+            Buscar cliente o mascota
+            <input value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} placeholder="Nombre o mascota…" autoComplete="off" />
+            <small className="detalle-cliente">La búsqueda se realiza en SQLite y no está limitada a la primera página.</small>
+          </label>
+          <label>
             Cliente
-            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+            <select value={clienteId} onChange={(e) => {
+              const value = e.target.value;
+              setClienteId(value);
+              setClienteSeleccionado(value ? clientes.find((cliente) => String(cliente.id) === value) ?? null : null);
+            }}>
               <option value="">Selecciona</option>
               {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nombre}</option>)}
             </select>

@@ -33,6 +33,7 @@ export default function NuevaVenta() {
     return typeof candidato === 'number' && Number.isInteger(candidato) ? candidato : undefined;
   })();
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteConResumen | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [rutaActiva, setRutaActiva] = useState<Ruta | null>(null);
   const [clienteId, setClienteId] = useState<number | ''>(clienteIdInicial ?? '');
@@ -69,29 +70,54 @@ export default function NuevaVenta() {
   });
 
   useEffect(() => {
+    let activo = true;
     Promise.all([
-      database.listarClientes({ soloActivos: true }),
+      database.listarClientes({ soloActivos: true, texto: '', limite: 50, offset: 0 }),
       database.listarProductos(),
       database.obtenerRutaActiva(),
-    ]).then(([cs, ps, ruta]) => {
+      clienteIdInicial ? database.obtenerCliente(clienteIdInicial) : Promise.resolve(null),
+    ]).then(([cs, ps, ruta, clienteInicial]) => {
+      if (!activo) return;
       setClientes(cs);
       setProductos(ps);
       setRutaActiva(ruta);
-      if (ps.length === 1) setProductoId(ps[0].id);
-      else if (ps[0]) setProductoId(ps[0].id);
-    }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
+      if (clienteInicial) {
+        setClienteSeleccionado(clienteInicial);
+        setClientes((actuales) => actuales.some((c) => c.id === clienteInicial.id) ? actuales : [clienteInicial, ...actuales]);
+      }
+      if (ps[0]) setProductoId(ps[0].id);
+    }).catch((e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); });
+    return () => { activo = false; };
+  }, [clienteIdInicial]);
+
+  useEffect(() => {
+    let activo = true;
+    const timer = window.setTimeout(() => {
+      database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 })
+        .then((cs) => {
+          if (!activo) return;
+          setClientes((actuales) => {
+            const seleccionado = clienteSeleccionado && !cs.some((c) => c.id === clienteSeleccionado.id) ? [clienteSeleccionado] : [];
+            return [...seleccionado, ...cs];
+          });
+        })
+        .catch((e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); });
+    }, 150);
+    return () => { activo = false; window.clearTimeout(timer); };
+  }, [busquedaCliente, clienteSeleccionado]);
+
+  useEffect(() => {
+    if (!clienteId || (clienteSeleccionado && clienteSeleccionado.id === clienteId)) return;
+    let activo = true;
+    database.obtenerCliente(Number(clienteId)).then((c) => {
+      if (activo && c) setClienteSeleccionado(c);
+    }).catch(() => undefined);
+    return () => { activo = false; };
+  }, [clienteId, clienteSeleccionado]);
 
   const producto = productos.find((p) => p.id === productoId);
-  const cliente = clientes.find((c) => c.id === clienteId);
-  const clientesFiltrados = useMemo(() => {
-    const texto = busquedaCliente.trim().toLowerCase();
-    if (!texto) return clientes;
-    return clientes.filter((c) =>
-      c.nombre.toLowerCase().includes(texto) ||
-      c.mascotas.some((m) => m.nombre.toLowerCase().includes(texto)),
-    );
-  }, [clientes, busquedaCliente]);
+  const cliente = clienteSeleccionado;
+  const clientesFiltrados = clientes;
 
   const total = producto ? producto.precio * cantidad : 0;
   const pagado = metodo === 'EFECTIVO' || metodo === 'TRANSFERENCIA_NEQUI'
@@ -110,8 +136,11 @@ export default function NuevaVenta() {
           textoBoton="Guardar y seleccionar"
           borradorClave="venta-nuevo-cliente"
           onGuardado={async (id) => {
-            const nuevos = await database.listarClientes({ soloActivos: true });
-            setClientes(nuevos);
+            const nuevo = await database.obtenerCliente(id);
+            if (nuevo) {
+              setClienteSeleccionado(nuevo);
+              setClientes((actuales) => [nuevo, ...actuales.filter((c) => c.id !== id)]);
+            }
             setClienteId(id);
             setBusquedaCliente('');
             setMostrarNuevoCliente(false);
@@ -122,11 +151,16 @@ export default function NuevaVenta() {
         <div className="formulario">
           <label>
             Buscar cliente o mascota
-            <input value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} placeholder="Nombre o mascota…" />
+            <input value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} placeholder="Nombre o mascota…" autoComplete="off" />
+            <small className="detalle-cliente">La búsqueda se realiza en SQLite. Escribe nombre, teléfono o mascota.</small>
           </label>
           <label>
             Cliente
-            <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
+            <select value={clienteId} onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : '';
+              setClienteId(id);
+              setClienteSeleccionado(id ? clientes.find((c) => c.id === id) ?? null : null);
+            }}>
               <option value="">Selecciona un cliente…</option>
               {clientesFiltrados.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
@@ -347,6 +381,13 @@ export default function NuevaVenta() {
             const datos = pendiente.datos;
             setClienteId(datos.clienteId);
             setBusquedaCliente(datos.busquedaCliente);
+            if (datos.clienteId) {
+              const restaurado = await database.obtenerCliente(Number(datos.clienteId));
+              if (restaurado) {
+                setClienteSeleccionado(restaurado);
+                setClientes((actuales) => [restaurado, ...actuales.filter((c) => c.id !== restaurado.id)]);
+              }
+            }
             setProductoId(datos.productoId);
             setCantidad(datos.cantidad);
             setMetodo(datos.metodo);
