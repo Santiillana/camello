@@ -1,8 +1,9 @@
+import { bytesToBase64, base64ToBytes } from './base64';
+
 const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 const ITERACIONES = 180000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-import { bytesToBase64, base64ToBytes } from './base64';
 
 type RespaldoCifrado = {
   camello_encrypted_backup_version?: unknown;
