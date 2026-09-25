@@ -272,7 +272,8 @@ async function crearRuta(page) {
   await siguiente(page);
   await page.getByLabel('Paquetes llevados').fill('5');
   await siguiente(page);
-  const checkbox = page.getByRole('checkbox', { name: /Registrar ubicación/ });
+  const checkbox = page.getByText('Registrar ubicación de inicio con GPS', { exact: true }).locator('..').locator('input[type="checkbox"]');
+  await checkbox.waitFor({ state: 'attached', timeout: 15000 });
   if (await checkbox.isChecked()) await checkbox.uncheck();
   await siguiente(page);
   await page.getByRole('button', { name: 'Iniciar ruta' }).click();
