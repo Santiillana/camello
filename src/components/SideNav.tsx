@@ -27,10 +27,19 @@ type Props = {
 
 export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpandido }: Props) {
   const [modulos,setModulos]=useState<typeof ITEMS>([]);
+  const [gastosPersonales,setGastosPersonales]=useState(false);
   useEffect(()=>{
     let activo=true;
-    Promise.all(listarModulos().map(async modulo=>({to:modulo.ruta,label:modulo.nombre,icon: 'M12 3C7 3 4 7 4 12s3 9 8 9 8-4 8-9-5-9-8-9Z',enabled:await database.obtenerModuloHabilitado(modulo.id)})))
-      .then(items=>{if(activo)setModulos(items.filter(item=>item.enabled).map(item=>({to:item.to,label:item.label,icon:item.icon})));})
+    Promise.all([
+      ...listarModulos().map(async modulo=>({to:modulo.ruta,label:modulo.nombre,icon: 'M12 3C7 3 4 7 4 12s3 9 8 9 8-4 8-9-5-9-8-9Z',enabled:await database.obtenerModuloHabilitado(modulo.id)})),
+      database.obtenerModuloHabilitado('gastos-personales').then(enabled=>({to:'/gastos-personales',label:'Gastos personales',icon:'M4 5h16v14H4zM8 9h8M8 13h5',enabled})),
+    ])
+      .then(items=>{
+        if(!activo)return;
+        const personal=items.find(item=>item.to==='/gastos-personales');
+        setGastosPersonales(Boolean(personal?.enabled));
+        setModulos(items.filter(item=>item.enabled && item.to!=='/gastos-personales').map(item=>({to:item.to,label:item.label,icon:item.icon})));
+      })
       .catch(()=>undefined);
     return()=>{activo=false;};
   },[]);
@@ -57,7 +66,7 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
         </div>
 
         <nav className="side-nav-lista" aria-label="Secciones de CAMELLO">
-          {[...ITEMS, ...modulos].map((item) => (
+          {[...ITEMS, ...(gastosPersonales ? [{ to: '/gastos-personales', label: 'Gastos personales', icon: 'M4 5h16v14H4zM8 9h8M8 13h5' }] : []), ...modulos].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
