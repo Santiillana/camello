@@ -29,7 +29,9 @@ async function detenerServidor() {
       if (process.platform === 'win32') server.kill('SIGKILL');
       else process.kill(-pid, 'SIGKILL');
     } catch (error) {
-      console.warn('E2E: no fue posible forzar la detención del servidor:', error);
+      if (error?.code !== 'ESRCH') {
+        console.warn('E2E: no fue posible forzar la detención del servidor:', error);
+      }
     }
   }
 }
