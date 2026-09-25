@@ -404,3 +404,18 @@ CAMELLO está listo cuando:
 - el APK DEBUG corresponde exactamente al HEAD validado.
 
 **No terminar agregando más cosas. Terminar haciendo que lo que ya existe funcione muy bien.**
+
+
+## Iteración autónoma de cierre
+
+Trabaja de forma autónoma sobre los hallazgos verificables. No te detengas ante el primer fallo ni entregues una versión intermedia como final.
+
+Ciclo obligatorio:
+
+**auditar → corregir → verificar → detectar nuevos fallos → corregir → volver a verificar → generar APK → validar artefacto → entregar.**
+
+Repite el ciclo hasta llegar a la mejor versión razonablemente verificable dentro del alcance definido en esta instrucción. No amplíes el alcance para seguir agregando funciones; la iteración tiene como finalidad mejorar estabilidad, confiabilidad, seguridad, claridad y funcionamiento de lo acordado.
+
+Cuando exista más de una solución técnicamente válida, utiliza la que mantenga el comportamiento existente con menor complejidad y menor riesgo de regresión.
+
+La APK DEBUG final debe provenir del mismo commit que haya superado las validaciones de cierre.
