@@ -653,11 +653,8 @@ try {
     if (Number(backupBase[0]?.n) < 1) throw new Error('E2E: la base no conserva clientes antes del respaldo.');
 
     await probarUbicacionWeb(page);
-    // Leaflet puede terminar una transición de zoom después de desmontar el mapa; no es un error funcional de CAMELLO.
-    const erroresReales = consoleErrors.filter((msg) => !msg.includes('Cannot read properties of undefined (reading \'_leaflet_pos\')'));
-
-    if (erroresReales.length) {
-      throw new Error('E2E encontró errores de consola:\n' + erroresReales.join('\n'));
+    if (consoleErrors.length) {
+      throw new Error('E2E encontró errores de consola:\n' + consoleErrors.join('\n'));
     }
 
     console.log('e2e-core: PASÓ — borrador/reload, cuatro métodos de venta, doble toque, ruta/cuadre, mapa, respaldo y navegación.');

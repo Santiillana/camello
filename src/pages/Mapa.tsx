@@ -185,7 +185,7 @@ export default function Mapa() {
 
   useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
-    const mapa = L.map(contenedorRef.current, { zoomControl: true }).setView(VILLAVICENCIO, 13);
+    const mapa = L.map(contenedorRef.current, { zoomControl: true, zoomAnimation: false }).setView(VILLAVICENCIO, 13);
     mapaRef.current = mapa;
 
     const calles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
