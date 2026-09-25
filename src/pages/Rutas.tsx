@@ -133,13 +133,16 @@ function FormNuevaRuta({
   const datosBorrador = { nombre, tipo, paquetes, usarGps, pedidosSeleccionados };
   useEffect(() => {
     let activo = true;
-    void database.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true })
-      .then((pedidos) => {
+    const cargarPedidosPendientes = async () => {
+      try {
+        await database.init();
+        const pedidos = await database.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true });
         if (activo) setPedidosDisponibles(pedidos);
-      })
-      .catch(() => {
+      } catch {
         if (activo) setPedidosDisponibles([]);
-      });
+      }
+    };
+    void cargarPedidosPendientes();
     return () => {
       activo = false;
     };
