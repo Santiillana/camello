@@ -116,10 +116,10 @@ public class CamelloStoragePlugin extends Plugin {
                 writer.write(contents);
             }
 
-            final JSObject result = new JSObject();
-            result.put("uri", created.toString());
-            result.put("filename", filename);
-            target.resolve(result);
+            final JSObject response = new JSObject();
+            response.put("uri", created.toString());
+            response.put("filename", filename);
+            target.resolve(response);
         } catch (Exception error) {
             target.reject("No se pudo guardar el archivo en la carpeta elegida.", error);
         }
