@@ -8,7 +8,10 @@ export default function Informes() {
   const [semana, setSemana] = useState<ResumenPeriodo | null>(null);
   const [mes, setMes] = useState<ResumenPeriodo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [desde,setDesde]=useState(inicioMesISO()); const [hasta,setHasta]=useState(hoyISO()); const [rango,setRango]=useState<ResultadoMes|null>(null);
+  const [desde,setDesde]=useState(inicioMesISO()); const [hasta,setHasta]=useState(hoyISO());
+  const [rango,setRango]=useState<ResultadoMes|null>(null);
+  const [rangoResumen,setRangoResumen]=useState<ResumenPeriodo|null>(null);
+  const [productosMes,setProductosMes]=useState<ResumenProductoPeriodo[]>([]);
 
   useEffect(() => {
     const fin = hoyISO();
@@ -96,7 +99,9 @@ export default function Informes() {
             {rangoResumen && <div><span>Productos diferentes</span><strong>{rangoResumen.productos_distintos ?? 0}</strong></div>}
             {rangoResumen && <div><span>Unidades / paquetes</span><strong>{rangoResumen.paquetes}</strong></div>}
             {rangoResumen && <div><span>Gastos de insumos</span><strong>{formatoMoneda(rangoResumen.compras_insumos ?? 0)}</strong></div>}
-            {rangoResumen && <div><span>Flujo de caja</span><strong>{formatoMoneda(rangoResumen.flujo_caja ?? rango.flujo_caja)}</strong></div>}
+            {rangoResumen && <div><span>Compras de insumos</span><strong>{formatoMoneda(rangoResumen.compras_insumos ?? 0)}</strong></div>}
+            {rangoResumen && <div><span>Gastos fijos</span><strong>{formatoMoneda(rangoResumen.gastos_fijos ?? 0)}</strong></div>}
+            {rangoResumen && <div><span>Retiros del dueño</span><strong>{formatoMoneda(rangoResumen.retiros_dueno ?? 0)}</strong></div>}
           </div>
         )}
       </section>

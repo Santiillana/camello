@@ -1024,7 +1024,8 @@ class Database {
       utilidad_bruta:utilidadBruta, gastos_operativos:op, utilidad_neta:utilidadBruta-op,
       margen_neto:Number(row.ventas??0)>0 ? ((utilidadBruta-op)/Number(row.ventas))*100 : 0,
       cobrado:Number(row.cobrado??0), gastos_pagados:Number(gr.pagados??0),
-      flujo_caja:Number(row.cobrado??0)-Number(gr.pagados??0), gastos_pendientes:Number(gr.pendientes??0)
+      flujo_caja:Number(row.cobrado??0)-Number(gr.pagados??0), gastos_pendientes:Number(gr.pendientes??0),
+      compras_insumos:Number(gr.compras_insumos??0), gastos_fijos:Number(gr.gastos_fijos??0), retiros_dueno:Number(gr.retiros_dueno??0)
     };
   }
 
@@ -1059,7 +1060,7 @@ class Database {
   }
 
   private async migrarVersion15(): Promise<void> {
-    await this.conn().execute(\`CREATE TABLE IF NOT EXISTS pedidos (
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS pedidos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       cliente_id INTEGER NOT NULL,
       fecha_pedido TEXT NOT NULL,
@@ -1075,8 +1076,8 @@ class Database {
       entregado_at TEXT,
       FOREIGN KEY (cliente_id) REFERENCES clientes(id),
       FOREIGN KEY (ruta_id) REFERENCES rutas(id)
-    );\`, false);
-    await this.conn().execute(\`CREATE TABLE IF NOT EXISTS pedido_items (
+    );`, false);
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS pedido_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pedido_id INTEGER NOT NULL,
       producto_id INTEGER,
@@ -1087,7 +1088,7 @@ class Database {
       total INTEGER NOT NULL CHECK (total >= 0),
       FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
       FOREIGN KEY (producto_id) REFERENCES productos(id)
-    );\`, false);
+    );`, false);
     const ventas = await this.columnasDeTabla('ventas');
     if (!ventas.has('pedido_id')) await this.conn().execute('ALTER TABLE ventas ADD COLUMN pedido_id INTEGER;', false);
     await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_pedidos_cliente ON pedidos(cliente_id);', false);
@@ -1951,8 +1952,8 @@ class Database {
     await this.conn().beginTransaction();
     try {
       const pedido = await this.conn().run(
-        \`INSERT INTO pedidos (cliente_id,fecha_pedido,fecha_entrega,estado,notas,total_estimado,pago_estado,created_at,updated_at)
-         VALUES (?,?,?,'PENDIENTE',?,?,'PENDIENTE',?,?);\`,
+        `INSERT INTO pedidos (cliente_id,fecha_pedido,fecha_entrega,estado,notas,total_estimado,pago_estado,created_at,updated_at)
+         VALUES (?,?,?,'PENDIENTE',?,?,'PENDIENTE',?,?);`,
         [data.cliente_id, fechaLocalISO(), data.fecha_entrega, data.notas?.trim() || null, total, ahora, ahora],
         false,
       );
@@ -1960,8 +1961,8 @@ class Database {
       if (!pedidoId) throw new Error('No se pudo crear el pedido.');
       for (const item of items) {
         await this.conn().run(
-          \`INSERT INTO pedido_items (pedido_id,producto_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total)
-           VALUES (?,?,?,?,?,?,?);\`,
+          `INSERT INTO pedido_items (pedido_id,producto_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total)
+           VALUES (?,?,?,?,?,?,?);`,
           [pedidoId,item.producto_id,item.producto_nombre,item.cantidad,item.precio,item.costo,item.total],
           false,
         );
@@ -1984,7 +1985,7 @@ class Database {
     const filtros: string[] = [];
     const params: unknown[] = [];
     if (opts.estados?.length) {
-      filtros.push(\`p.estado IN (\${opts.estados.map(() => '?').join(',')})\`);
+      filtros.push(`p.estado IN (\${opts.estados.map(() => '?').join(',')})`);
       params.push(...opts.estados);
     }
     if (opts.fechaEntrega) { filtros.push('p.fecha_entrega=?'); params.push(opts.fechaEntrega); }
@@ -1992,9 +1993,9 @@ class Database {
     if (opts.sinRuta) filtros.push('p.ruta_id IS NULL');
     const where = filtros.length ? ' WHERE ' + filtros.join(' AND ') : '';
     const base = await this.conn().query(
-      \`SELECT p.*, c.nombre AS cliente_nombre, c.telefono1 AS cliente_telefono
+      `SELECT p.*, c.nombre AS cliente_nombre, c.telefono1 AS cliente_telefono
        FROM pedidos p JOIN clientes c ON c.id=p.cliente_id\${where}
-       ORDER BY CASE WHEN p.estado='PENDIENTE' THEN 0 WHEN p.estado='ASIGNADO' THEN 1 ELSE 2 END, p.fecha_entrega ASC, p.id ASC;\`,
+       ORDER BY CASE WHEN p.estado='PENDIENTE' THEN 0 WHEN p.estado='ASIGNADO' THEN 1 ELSE 2 END, p.fecha_entrega ASC, p.id ASC;`,
       params,
     );
     const pedidos = (base.values ?? []).map((row) => ({
@@ -2008,7 +2009,7 @@ class Database {
     if (!pedidos.length) return [];
     const ids = pedidos.map((p) => Number(p.id));
     const itemsResult = await this.conn().query(
-      \`SELECT * FROM pedido_items WHERE pedido_id IN (\${ids.map(() => '?').join(',')}) ORDER BY pedido_id ASC, id ASC;\`,
+      `SELECT * FROM pedido_items WHERE pedido_id IN (\${ids.map(() => '?').join(',')}) ORDER BY pedido_id ASC, id ASC;`,
       ids,
     );
     const agrupados = new Map<number, import('../types').PedidoItem[]>();
@@ -2042,7 +2043,7 @@ class Database {
     try {
       for(let i=0;i<ids.length;i+=1) {
         await this.conn().run(
-          \`UPDATE pedidos SET ruta_id=?,orden_entrega=?,estado='ASIGNADO',updated_at=? WHERE id=? AND estado='PENDIENTE' AND ruta_id IS NULL;\`,
+          `UPDATE pedidos SET ruta_id=?,orden_entrega=?,estado='ASIGNADO',updated_at=? WHERE id=? AND estado='PENDIENTE' AND ruta_id IS NULL;`,
           [rutaId,i+1,new Date().toISOString(),ids[i]],false
         );
       }
@@ -2057,7 +2058,7 @@ class Database {
   async registrarEntregaPedido(pedidoId: number, metodoPago: 'EFECTIVO'|'TRANSFERENCIA_NEQUI'|'FIADO'): Promise<void> {
     if(!Number.isInteger(pedidoId)||pedidoId<=0) throw new Error('Pedido inválido.');
     const pedidoResult=await this.conn().query(
-      \`SELECT p.*,r.estado AS ruta_estado,r.tipo AS ruta_tipo FROM pedidos p JOIN rutas r ON r.id=p.ruta_id WHERE p.id=?;\`,
+      `SELECT p.*,r.estado AS ruta_estado,r.tipo AS ruta_tipo FROM pedidos p JOIN rutas r ON r.id=p.ruta_id WHERE p.id=?;`,
       [pedidoId],
     );
     const pedido=pedidoResult.values?.[0];
@@ -2081,8 +2082,8 @@ class Database {
         const utilidad=multiplicarDinero(precio-costo,cantidad,'La utilidad');
         const pagada=metodoPago!=='FIADO';
         await this.conn().run(
-          \`INSERT INTO ventas (cliente_id,ruta_id,pedido_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,fecha_pago,metodo_pago,monto_pagado,operacion_id,estado_registro)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'activa');\`,
+          `INSERT INTO ventas (cliente_id,ruta_id,pedido_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,fecha_pago,metodo_pago,monto_pagado,operacion_id,estado_registro)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'activa');`,
           [Number(pedido.cliente_id),Number(pedido.ruta_id),pedidoId,String(item.producto_nombre),cantidad,precio,costo,totalItem,utilidad,
             fechaLocalISO(ahora),horaLocalHHMM(ahora),pagada?'PAGADA':'PENDIENTE',pagada?fechaLocalISO(ahora):null,
             metodoPago,pagada?totalItem:0,operacionId],
@@ -2090,7 +2091,7 @@ class Database {
         );
       }
       await this.conn().run(
-        \`UPDATE pedidos SET estado='ENTREGADO',pago_estado=?,entregado_at=?,updated_at=? WHERE id=? AND estado='ASIGNADO';\`,
+        `UPDATE pedidos SET estado='ENTREGADO',pago_estado=?,entregado_at=?,updated_at=? WHERE id=? AND estado='ASIGNADO';`,
         [metodoPago==='FIADO'?'FIADO':'COBRADO',ahora.toISOString(),ahora.toISOString(),pedidoId],
         false,
       );
@@ -2106,9 +2107,9 @@ class Database {
     if(!Number.isInteger(pedidoId)||pedidoId<=0) throw new Error('Pedido inválido.');
     const notaLimpia=nota?.trim() ?? '';
     const r=await this.conn().run(
-      \`UPDATE pedidos SET estado='NO_ENTREGADO',
+      `UPDATE pedidos SET estado='NO_ENTREGADO',
        notas=CASE WHEN ? <> '' THEN TRIM(COALESCE(notas,'') || CASE WHEN COALESCE(notas,'')='' THEN '' ELSE ' | ' END || ?) ELSE notas END,
-       updated_at=? WHERE id=? AND estado='ASIGNADO';\`,
+       updated_at=? WHERE id=? AND estado='ASIGNADO';`,
       [notaLimpia,notaLimpia,new Date().toISOString(),pedidoId],
     );
     if(Number(r.changes?.changes ?? 0)===0) throw new Error('El pedido no estaba pendiente de entrega.');
@@ -2595,6 +2596,9 @@ class Database {
       utilidad_neta: utilidadBruta - gastosOperativos,
       flujo_caja: Number(row.pagado ?? 0) - Number(gr.pagados ?? 0),
       gastos_pendientes: Number(gr.pendientes ?? 0),
+      compras_insumos: Number(gr.compras_insumos ?? 0),
+      gastos_fijos: Number(gr.gastos_fijos ?? 0),
+      retiros_dueno: Number(gr.retiros_dueno ?? 0),
     };
   }
 

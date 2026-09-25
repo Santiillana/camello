@@ -373,6 +373,66 @@ try {
     if (rutaBase[0]?.estado !== 'FINALIZADA') throw new Error('E2E: la ruta no quedó finalizada en SQLite.');
     if (Number(rutaBase[0]?.paquetes_llevados) - Number(rutaBase[0]?.paquetes_sobrantes) < 0) throw new Error('E2E: cuadre de ruta inválido.');
 
+
+    // Gasto: comprobar explícitamente que "Ya pagué" queda seleccionable y persiste.
+    await page.goto('http://127.0.0.1:5173/#/gastos?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByRole('heading', { name: 'Nuevo gasto' }).waitFor();
+    await page.getByLabel('Monto').fill('5000');
+    await siguiente(page);
+    await page.getByLabel('Categoría').first().selectOption({ index: 1 });
+    await siguiente(page);
+    await siguiente(page);
+    await page.getByRole('button', { name: 'Ya pagué' }).click();
+    await siguiente(page);
+    for (let i = 0; i < 5; i += 1) {
+      const omitir = page.locator('.asistente-overlay').getByRole('button', { name: 'Omitir' });
+      if (await omitir.count()) await omitir.click();
+      else break;
+    }
+    await page.locator('.asistente-overlay').getByRole('button', { name: 'CONFIRMAR GASTO', exact: true }).click();
+    const gastoPagado = await sql(page, "SELECT estado,monto FROM gastos ORDER BY id DESC LIMIT 1;");
+    if (gastoPagado.length !== 1 || gastoPagado[0]?.estado !== 'pagado' || Number(gastoPagado[0]?.monto) !== 5000) {
+      throw new Error('E2E: "Ya pagué" no quedó persistido correctamente en gastos.');
+    }
+
+    // Pedidos -> ruta de entrega -> entrega cobrada.
+    const ids = await sql(page, "SELECT (SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1) cliente_id, (SELECT id FROM productos WHERE activo=1 ORDER BY id ASC LIMIT 1) producto_id;");
+    if (ids.length !== 1 || !ids[0]?.cliente_id || !ids[0]?.producto_id) throw new Error('E2E: no hay cliente/producto para probar pedidos.');
+    await page.goto('http://127.0.0.1:5173/#/pedidos', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByLabel('Cliente').selectOption(String(ids[0].cliente_id));
+    await page.getByLabel('Producto').selectOption(String(ids[0].producto_id));
+    await page.getByLabel('Cantidad').fill('2');
+    await page.getByRole('button', { name: 'Agregar producto' }).click();
+    await page.getByRole('button', { name: 'Guardar pedido' }).click();
+    const pedidoPendiente = await sql(page, "SELECT id,estado,ruta_id FROM pedidos ORDER BY id DESC LIMIT 1;");
+    if (pedidoPendiente.length !== 1 || pedidoPendiente[0]?.estado !== 'PENDIENTE' || pedidoPendiente[0]?.ruta_id != null) {
+      throw new Error('E2E: el pedido no quedó pendiente y sin ruta.');
+    }
+
+    await page.goto('http://127.0.0.1:5173/#/rutas?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByLabel('Nombre de la ruta').fill('Ruta pedidos E2E');
+    await siguiente(page);
+    await page.getByLabel('Tipo de recorrido').selectOption({ label: 'Entrega de pedidos' });
+    await siguiente(page);
+    await siguiente(page);
+    const pedidoCheckbox = page.locator('.lista-seleccion-clientes input[type="checkbox"]').first();
+    await pedidoCheckbox.waitFor({ state: 'visible', timeout: 15000 });
+    await pedidoCheckbox.check();
+    await siguiente(page);
+    const gpsRuta = page.getByRole('checkbox', { name: /Registrar ubicación de inicio/ });
+    if (await gpsRuta.isChecked()) await gpsRuta.uncheck();
+    await siguiente(page);
+    await page.getByRole('button', { name: 'Iniciar ruta' }).click();
+    await page.getByRole('heading', { name: 'Ruta pedidos E2E' }).waitFor();
+    await page.getByRole('button', { name: 'Cobrado efectivo' }).click();
+    const pedidoEntregado = await sql(page, "SELECT estado,pago_estado FROM pedidos WHERE id=(SELECT MAX(id) FROM pedidos);");
+    if (pedidoEntregado.length !== 1 || pedidoEntregado[0]?.estado !== 'ENTREGADO' || pedidoEntregado[0]?.pago_estado !== 'COBRADO') {
+      throw new Error('E2E: la entrega del pedido no quedó cobrada.');
+    }
+    await page.getByLabel('Paquetes sobrantes').fill('0');
+    await page.getByRole('button', { name: 'Cerrar ruta y cuadrar' }).click();
+    await page.getByText('Finalizada').waitFor();
+
     await page.goto('http://127.0.0.1:5173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const filtros = page.getByRole('button').filter({ hasText: /Filtro|Ubicación|Días|Ruta/ });
     if (await filtros.count() === 0) {

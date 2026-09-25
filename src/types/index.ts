@@ -324,4 +324,7 @@ export interface ResultadoMes {
   gastos_pagados: number;
   flujo_caja: number;
   gastos_pendientes: number;
+  compras_insumos?: number;
+  gastos_fijos?: number;
+  retiros_dueno?: number;
 }

@@ -2,7 +2,7 @@ name: Pruebas de pantalla CAMELLO
 
 on:
   push:
-    branches: ["fix/sqlite-wasm-web"]
+    branches: ["release/v1", "fix/sqlite-wasm-web"]
   pull_request:
     branches: ["**"]
   workflow_dispatch:

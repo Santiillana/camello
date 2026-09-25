@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { database } from '../db/database';
 import type { ClienteConResumen, PedidoConDetalle, Producto } from '../types';
 import { formatoMoneda, hoyISO } from '../utils/format';
@@ -20,6 +21,7 @@ export default function Pedidos() {
     () => pedidos.filter((pedido) => pedido.fecha_entrega === fechaEntrega && pedido.estado !== 'CANCELADO'),
     [pedidos, fechaEntrega],
   );
+  const pendientesSinRuta = pedidosDelDia.filter((pedido) => pedido.ruta_id == null && pedido.estado === 'PENDIENTE');
 
   async function cargar() {
     try {
@@ -154,7 +156,10 @@ export default function Pedidos() {
             <p className="texto-kicker">Planificación</p>
             <h2>Pedidos del {fechaEntrega}</h2>
           </div>
-          <span className="detalle-cliente">{pedidosDelDia.length} pedido(s)</span>
+          <div className="fila-botones">
+            <span className="detalle-cliente">{pedidosDelDia.length} pedido(s)</span>
+            {pendientesSinRuta.length > 0 && <Link to="/rutas?nuevo=1" className="boton-primario">Crear ruta de entrega</Link>}
+          </div>
         </div>
         {pedidosDelDia.length === 0 ? (
           <p className="texto-vacio">No hay pedidos para esta fecha.</p>

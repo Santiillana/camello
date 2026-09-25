@@ -43,7 +43,6 @@ function cargarFiltrosGuardados(): FiltrosMapa {
     if (!raw) return FILTROS_DEFAULT;
     const parsedUnknown: unknown = JSON.parse(raw);
     if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) return FILTROS_DEFAULT;
-    if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) return FILTROS_DEFAULT;
     const parsed: { estado?: unknown; texto?: unknown; rutaId?: unknown; minDias?: unknown; maxDias?: unknown; recompraVencida?: unknown } = {
       estado: 'estado' in parsedUnknown ? parsedUnknown.estado : undefined,
       texto: 'texto' in parsedUnknown ? parsedUnknown.texto : undefined,
@@ -78,11 +77,14 @@ export default function Mapa() {
   const [mostrarSeleccionClientes, setMostrarSeleccionClientes] = useState(false);
   const [pedidosRuta, setPedidosRuta] = useState<PedidoConDetalle[]>([]);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number; precision?: number } | null>(null);
+  const [callesCargando, setCallesCargando] = useState(true);
+  const [callesError, setCallesError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const capaMarcadoresRef = useRef<L.LayerGroup | null>(null);
   const capaRutaRef = useRef<L.LayerGroup | null>(null);
+  const capaCallesRef = useRef<L.TileLayer | null>(null);
 
   useEffect(() => {
     let activo = true;
@@ -186,20 +188,44 @@ export default function Mapa() {
     const mapa = L.map(contenedorRef.current, { zoomControl: true }).setView(VILLAVICENCIO, 13);
     mapaRef.current = mapa;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const calles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      detectRetina: true,
+      keepBuffer: 4,
+      updateWhenIdle: true,
       attribution: '© OpenStreetMap contributors',
-    }).addTo(mapa);
+    });
+    calles.on('load', () => {
+      setCallesCargando(false);
+      setCallesError(false);
+    });
+    calles.on('tileerror', () => {
+      setCallesCargando(false);
+      setCallesError(true);
+    });
+    calles.addTo(mapa);
+    capaCallesRef.current = calles;
 
     capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
     capaRutaRef.current = L.layerGroup().addTo(mapa);
-    window.setTimeout(() => mapa.invalidateSize(), 0);
+    const redimensionar = () => mapa.invalidateSize({ pan: false });
+    window.setTimeout(redimensionar, 0);
+    window.setTimeout(redimensionar, 250);
+    const observador = typeof ResizeObserver !== 'undefined' && contenedorRef.current
+      ? new ResizeObserver(redimensionar)
+      : null;
+    if (observador && contenedorRef.current) observador.observe(contenedorRef.current);
+    window.addEventListener('resize', redimensionar);
 
     return () => {
+      observador?.disconnect();
+      window.removeEventListener('resize', redimensionar);
       capaMarcadoresRef.current?.clearLayers();
       capaMarcadoresRef.current = null;
       capaRutaRef.current?.clearLayers();
       capaRutaRef.current = null;
+      capaCallesRef.current?.off();
+      capaCallesRef.current = null;
       mapa.remove();
       mapaRef.current = null;
     };
@@ -337,7 +363,16 @@ export default function Mapa() {
       </header>
 
       {error && <p className="texto-error">{error}</p>}
-      <p className="banner-info">Mapa con calles de OpenStreetMap. Los datos y filtros de clientes siguen almacenados localmente. En una ruta de entrega se dibuja el orden de las paradas; no es navegación giro a giro.</p>
+      <p className="banner-info">
+        {callesCargando ? 'Cargando calles del mapa…' : callesError ? 'No se pudieron cargar las calles. Los clientes y sus coordenadas siguen disponibles.' : 'Mapa con calles de OpenStreetMap.'}
+        {' '}Los datos y filtros de clientes siguen almacenados localmente. La línea de una ruta representa el orden de las paradas y no sustituye la navegación giro a giro.
+      </p>
+      {callesError && <button type="button" className="boton-secundario" onClick={() => {
+        setCallesError(false);
+        setCallesCargando(true);
+        capaCallesRef.current?.redraw();
+        mapaRef.current?.invalidateSize({ pan: false });
+      }}>Reintentar calles</button>}
       {miUbicacion && <p className="detalle-cliente">Mi ubicación: ±{miUbicacion.precision != null ? Math.round(miUbicacion.precision) + ' m' : 'precisión no disponible'}.</p>}
 
       <section className="tarjeta">

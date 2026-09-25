@@ -991,3 +991,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 12px;
   background: var(--color-fondo);
 }
+
+
+/* Robustez responsive final CAMELLO */
+html, body, #root { min-width: 0; }
+button, input, select, textarea { box-sizing: border-box; max-width: 100%; min-width: 0; }
+.tarjeta, .formulario-tarjeta, .asistente-tarjeta, .asistente-contenido,
+.pedido-entrega-card, .fila-cartera, .fila-venta, .tarjeta-cliente, .tarjeta-ruta { min-width: 0; }
+.tarjeta, .formulario-tarjeta, .asistente-tarjeta { overflow: hidden; }
+.fila-botones, .fila-acciones, .lado-derecho-cliente { min-width: 0; }
+.fila-botones > button, .fila-botones > a { min-height: 44px; }
+.boton-chip { white-space: normal; overflow-wrap: anywhere; text-align: center; }
+.asistente-tarjeta { width: min(100%, 680px); max-width: 100%; }
+.asistente-contenido { overflow-wrap: anywhere; }
+@media (max-width: 430px) {
+  .pantalla { width: 100%; max-width: 100%; padding-left: 8px; padding-right: 8px; gap: 12px; }
+  .tarjeta { padding: 14px; border-radius: 14px; }
+  .fila-titulo-boton { align-items: stretch; }
+  .grid-dos-columnas, .grid-stats, .accesos-rapidos { grid-template-columns: 1fr; }
+  .fila-botones > * { flex-basis: 100%; }
+  .stat-valor { font-size: 22px; }
+  .app-contenido { padding-right: 4px; }
+  .contenedor-mapa { height: min(66dvh, 560px); min-height: 320px; }
+}
