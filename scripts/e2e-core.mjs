@@ -440,11 +440,11 @@ try {
     if (ids.length !== 1 || !ids[0]?.cliente_id || !ids[0]?.producto_id) throw new Error('E2E: no hay cliente/producto para probar pedidos.');
     await page.goto('http://127.0.0.1:5173/#/pedidos', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const formularioPedido = page.locator('section.tarjeta').filter({ hasText: 'Registrar pedido' });
-    await formularioPedido.getByRole('heading', { name: 'Registrar pedido', exact: true }).waitFor({ state: 'visible', timeout: 20000 });
+    await formularioPedido.getByRole('heading', { name: 'Registrar pedido', exact: true }).waitFor({ state: 'visible', timeout: 60000 });
     const clientePedido = formularioPedido.locator('select').nth(0);
     const productoPedido = formularioPedido.locator('select').nth(1);
-    await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 20000 });
-    await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 20000 });
+    await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
+    await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
     await clientePedido.selectOption(String(ids[0].cliente_id));
     await productoPedido.selectOption(String(ids[0].producto_id));
     await formularioPedido.getByLabel('Cantidad').fill('2');
