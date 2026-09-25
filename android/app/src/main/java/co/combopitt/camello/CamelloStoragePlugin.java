@@ -4,8 +4,8 @@ import android.content.Intent;
 import android.net.Uri;
 import android.provider.DocumentsContract;
 
-import androidx.annotation.NonNull;
-
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -65,7 +65,10 @@ public class CamelloStoragePlugin extends Plugin {
         call.resolve();
     }
 
-    private void directoryPickerResult(PluginCall call, int resultCode, Intent data) {
+    @ActivityCallback
+    private void directoryPickerResult(PluginCall call, ActivityResult result) {
+        final int resultCode = result.getResultCode();
+        final Intent data = result.getData();
         if (pendingCall == null) return;
         final PluginCall target = pendingCall;
         final String filename = pendingFilename;
