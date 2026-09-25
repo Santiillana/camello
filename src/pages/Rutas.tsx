@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { database } from '../db/database';
-import type { RutaConResumen, TipoRuta } from '../types';
+import type { PedidoConDetalle, RutaConResumen, TipoRuta } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
 import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
 
-const TIPOS: TipoRuta[] = ['Puerta a puerta', 'Venta local móvil'];
+const TIPOS: TipoRuta[] = ['Puerta a puerta', 'Venta local móvil', 'Entrega de pedidos'];
 const ETIQUETA_ESTADO: Record<string, string> = {
   EN_CURSO: 'En curso',
   FINALIZADA: 'Finalizada',
@@ -15,7 +15,7 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 };
 
 function esTipoRuta(valor: string): TipoRuta {
-  return valor === 'Puerta a puerta' || valor === 'Venta local móvil' ? valor : 'Puerta a puerta';
+  return valor === 'Puerta a puerta' || valor === 'Venta local móvil' || valor === 'Entrega de pedidos' ? valor : 'Puerta a puerta';
 }
 
 export default function Rutas() {
@@ -128,7 +128,20 @@ function FormNuevaRuta({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasoInicial, setPasoInicial] = useState(0);
+  const [pedidosDisponibles, setPedidosDisponibles] = useState<PedidoConDetalle[]>([]);
+  const [pedidosSeleccionados, setPedidosSeleccionados] = useState<number[]>([]);
   const datosBorrador = { nombre, tipo, paquetes, usarGps };
+  useEffect(() => {
+    if (tipo !== 'Entrega de pedidos') {
+      setPedidosDisponibles([]);
+      setPedidosSeleccionados([]);
+      return;
+    }
+    void database.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true })
+      .then(setPedidosDisponibles)
+      .catch(() => setPedidosDisponibles([]));
+  }, [tipo]);
+
   const borrador = useBorrador<typeof datosBorrador>({
     tipo: 'ruta-nueva',
     clave: 'nueva',
@@ -153,8 +166,31 @@ function FormNuevaRuta({
     {
       id: 'paquetes',
       titulo: 'Paquetes llevados',
-      contenido: <label>Paquetes llevados<input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} inputMode="numeric" /></label>,
-      validar: () => Number.isInteger(paquetes) && paquetes > 0 ? null : 'La cantidad debe ser mayor que 0.',
+      contenido: tipo === 'Entrega de pedidos'
+        ? <div className="tarjeta-interna"><strong>{pedidosSeleccionados.reduce((total, id) => total + (pedidosDisponibles.find((pedido) => pedido.id === id)?.items.reduce((s, item) => s + item.cantidad, 0) ?? 0), 0)}</strong><span className="detalle-cliente">paquetes comprometidos</span></div>
+        : <label>Paquetes llevados<input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} inputMode="numeric" /></label>,
+      validar: () => tipo === 'Entrega de pedidos'
+        ? (pedidosSeleccionados.length > 0 ? null : 'Selecciona al menos un pedido para una ruta de entrega.')
+        : (Number.isInteger(paquetes) && paquetes > 0 ? null : 'La cantidad debe ser mayor que 0.'),
+    },
+    {
+      id: 'pedidos',
+      titulo: 'Pedidos a entregar',
+      contenido: tipo === 'Entrega de pedidos' ? (
+        <div className="selector-clientes-mapa">
+          <p className="detalle-cliente">Selecciona los pedidos que vas a entregar hoy. El orden será el de esta selección.</p>
+          <div className="lista-seleccion-clientes" role="group" aria-label="Pedidos disponibles">
+            {pedidosDisponibles.map((pedido) => (
+              <label key={pedido.id}>
+                <input type="checkbox" checked={pedidosSeleccionados.includes(pedido.id)} onChange={(e) => setPedidosSeleccionados((actual) => e.target.checked ? [...actual, pedido.id] : actual.filter((id) => id !== pedido.id))} />
+                <span>{pedido.cliente_nombre} · {formatoMoneda(pedido.total_estimado)} · {pedido.items.map((item) => item.producto_nombre + ' × ' + item.cantidad).join(', ')}</span>
+              </label>
+            ))}
+            {!pedidosDisponibles.length && <p className="texto-vacio">No hay pedidos pendientes sin ruta. Primero créalos en Pedidos.</p>}
+          </div>
+        </div>
+      ) : <p className="texto-vacio">Este paso se usa solo en una ruta de entrega.</p>,
+      validar: () => tipo === 'Entrega de pedidos' && pedidosSeleccionados.length === 0 ? 'Selecciona al menos un pedido para una ruta de entrega.' : null,
     },
     {
       id: 'gps',
@@ -173,7 +209,8 @@ function FormNuevaRuta({
       contenido: <div className="resumen-venta"><div className="lista-resumen">
         <div><span>Nombre</span><strong>{nombre}</strong></div>
         <div><span>Tipo</span><strong>{tipo}</strong></div>
-        <div><span>Paquetes</span><strong>{paquetes}</strong></div>
+        <div><span>Paquetes</span><strong>{tipo === 'Entrega de pedidos' ? pedidosSeleccionados.reduce((total, id) => total + (pedidosDisponibles.find((pedido) => pedido.id === id)?.items.reduce((s, item) => s + item.cantidad, 0) ?? 0), 0) : paquetes}</strong></div>
+        <div><span>Pedidos</span><strong>{tipo === 'Entrega de pedidos' ? pedidosSeleccionados.length : '—'}</strong></div>
         <div><span>GPS</span><strong>{usarGps ? 'Sí' : 'No'}</strong></div>
       </div></div>,
     },
@@ -204,10 +241,13 @@ function FormNuevaRuta({
       const id = await database.iniciarRuta({
         nombre: nombre.trim(),
         tipo,
-        paquetes_llevados: paquetes,
+        paquetes_llevados: tipo === 'Entrega de pedidos'
+          ? pedidosSeleccionados.reduce((total, id) => total + (pedidosDisponibles.find((pedido) => pedido.id === id)?.items.reduce((s, item) => s + item.cantidad, 0) ?? 0), 0)
+          : paquetes,
         lat_inicio: lat,
         lng_inicio: lng,
       });
+      if (tipo === 'Entrega de pedidos') await database.asignarPedidosARuta(id, pedidosSeleccionados);
       await borrador.limpiar();
       await onCreada(id);
     } catch (e: unknown) {
