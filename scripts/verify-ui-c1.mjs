@@ -70,7 +70,7 @@ try {
     const marca = await page.locator('.side-nav-marca').innerText();
     if (marca !== 'CAMELLO') throw new Error('B4: el nombre CAMELLO no se muestra completo.');
     await page.getByRole('button', { name: 'Abrir menú' }).click();
-    await page.getByRole('button', { name: 'Cerrar menú' }).click();
+    await page.locator('.side-nav .side-nav-toggle').getByRole('button', { name: 'Cerrar menú' }).click();
     console.log('ui-c1: comprobar +');
     const fab = page.getByRole('button', { name: 'Nueva acción' });
     if (await fab.count() !== 1) throw new Error('C1: falta el botón flotante +.');
