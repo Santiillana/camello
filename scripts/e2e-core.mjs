@@ -84,9 +84,19 @@ async function crearCliente(page) {
 
   await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).waitFor({ timeout: 60000 });
   await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.waitForFunction(
+    () => document.querySelector('input[aria-label="Nombre completo"]')?.value === 'Cliente E2E',
+    undefined,
+    { timeout: 30000 },
+  );
   await page.getByLabel('Nombre completo').inputValue().then((value) => {
     if (value !== 'Cliente E2E') throw new Error('El borrador no restauró el nombre.');
   });
+  await page.waitForFunction(
+    () => document.querySelector('input[aria-label="Teléfono 1"]')?.value === '3001234567',
+    undefined,
+    { timeout: 30000 },
+  );
   await page.getByLabel('Teléfono 1').inputValue().then((value) => {
     if (value !== '3001234567') throw new Error('El borrador no restauró el teléfono.');
   });
