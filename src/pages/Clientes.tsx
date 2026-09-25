@@ -21,7 +21,7 @@ export default function Clientes() {
   const [mostrarForm, setMostrarForm] = useState(params.get('nuevo') === '1');
   const [metricas, setMetricas] = useState<ResumenClientes>({
     activos: 0, conDeuda: 0, deudaTotal: 0, sinComprar: 0, nuevosMes: 0,
-    ticketPromedio: 0, frecuencia: 20, cumpleanos: 0, mejorMonto: [], mejorFrecuencia: [],
+    ticketPromedio: 0, frecuencia: 20, cumpleanos: 0, mejorMonto: [], mejorFrecuencia: [], mejorCantidad: [], sinRecompra: [],
   });
   const [hayMas, setHayMas] = useState(false);
   const [filtroMetrica, setFiltroMetrica] = useState<FiltroMetrica>('monto');
