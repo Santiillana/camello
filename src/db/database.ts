@@ -2414,7 +2414,11 @@ class Database {
               COALESCE(SUM(utilidad),0) as utilidad,
               COALESCE((SELECT SUM(p.monto) FROM pagos p WHERE p.fecha BETWEEN ? AND ? AND COALESCE(p.estado_registro,'activa')='activa'),0) as pagado,
               COALESCE(SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END),0) as pendiente,
-              COUNT(*) as numero_ventas
+              COUNT(*) as numero_ventas,
+              COUNT(DISTINCT cliente_id) as clientes_atendidos,
+              COUNT(DISTINCT producto_nombre) as productos_distintos,
+              SUM(CASE WHEN estado_pago='PAGADA' THEN 1 ELSE 0 END) as ventas_pagadas,
+              SUM(CASE WHEN estado_pago='PENDIENTE' THEN 1 ELSE 0 END) as ventas_pendientes
        FROM ventas WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa';`,
       [desde, hasta, desde, hasta]
     );
@@ -2464,6 +2468,10 @@ class Database {
       pendiente: Number(row.pendiente ?? 0),
       clientes_nuevos,
       numero_ventas,
+      clientes_atendidos: Number(row.clientes_atendidos ?? 0),
+      productos_distintos: Number(row.productos_distintos ?? 0),
+      ventas_pagadas: Number(row.ventas_pagadas ?? 0),
+      ventas_pendientes: Number(row.ventas_pendientes ?? 0),
       ticket_promedio: numero_ventas > 0 ? ventas / numero_ventas : 0,
       clientes_recurrentes: Number(recurrentes.values?.[0]?.n ?? 0),
       rutas_realizadas: Number(rutasRealizadas.values?.[0]?.n ?? 0),
@@ -2471,9 +2479,32 @@ class Database {
       clientes_por_contactar: Number(clientesPorContactar.values?.[0]?.n ?? 0),
       cartera_pendiente: Number(cartera.values?.[0]?.n ?? 0),
       gastos_operativos: gastosOperativos,
+      compras_insumos: Number(gr.compras_insumos ?? 0),
+      gastos_fijos: Number(gr.gastos_fijos ?? 0),
+      retiros_dueno: Number(gr.retiros_dueno ?? 0),
       utilidad_neta: utilidadBruta - gastosOperativos,
+      flujo_caja: Number(row.pagado ?? 0) - Number(gr.pagados ?? 0),
       gastos_pendientes: Number(gr.pendientes ?? 0),
     };
+  }
+
+  async resumenProductosPeriodo(desde: string, hasta: string): Promise<import('../types').ResumenProductoPeriodo[]> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) throw new Error('Rango de fechas inválido.');
+    const r = await this.conn().query(
+      `SELECT producto_nombre, COALESCE(SUM(cantidad),0) cantidad, COALESCE(SUM(total),0) ventas,
+              COALESCE(SUM(utilidad),0) utilidad, COUNT(DISTINCT cliente_id) clientes
+       FROM ventas
+       WHERE fecha BETWEEN ? AND ? AND COALESCE(estado_registro,'activa')='activa'
+       GROUP BY producto_nombre ORDER BY cantidad DESC, ventas DESC, producto_nombre ASC LIMIT 20;`,
+      [desde, hasta],
+    );
+    return (r.values ?? []).map((row) => ({
+      producto_nombre: String(row.producto_nombre ?? ''),
+      cantidad: Number(row.cantidad ?? 0),
+      ventas: Number(row.ventas ?? 0),
+      utilidad: Number(row.utilidad ?? 0),
+      clientes: Number(row.clientes ?? 0),
+    }));
   }
 
   async listarCartera(desde?: string, hasta?: string): Promise<CarteraItem[]> {
