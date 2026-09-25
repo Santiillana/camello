@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 15
+export const DB_VERSION = 16
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -160,6 +160,24 @@ export const SCHEMA_STATEMENTS: string[] = [
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     CHECK (monto > 0)
   );`,
+  `CREATE TABLE IF NOT EXISTS categorias_gastos_personales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL UNIQUE,
+    tipo TEXT NOT NULL CHECK (tipo IN ('fijo','variable')),
+    activa INTEGER NOT NULL DEFAULT 1
+  );`,
+  `CREATE TABLE IF NOT EXISTS gastos_personales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT NOT NULL,
+    monto INTEGER NOT NULL CHECK (monto > 0),
+    categoria_id INTEGER NOT NULL,
+    descripcion TEXT,
+    estado TEXT NOT NULL DEFAULT 'pagado' CHECK (estado IN ('pagado','pendiente')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (categoria_id) REFERENCES categorias_gastos_personales(id)
+  );`,
+
   `CREATE TABLE IF NOT EXISTS categorias_gasto (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL UNIQUE,
@@ -240,6 +258,9 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_pagos_cliente_fecha ON pagos(cliente_id, fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_pagos_venta ON pagos(venta_id);`,
   `CREATE INDEX IF NOT EXISTS idx_borradores_updated ON borradores(updated_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_personales_fecha ON gastos_personales(fecha);`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_personales_categoria ON gastos_personales(categoria_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_categorias_gastos_personales_activa ON categorias_gastos_personales(activa);`,
   `CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);`,
   `CREATE INDEX IF NOT EXISTS idx_gastos_periodo ON gastos(periodo);`,
   `CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria_id);`,
