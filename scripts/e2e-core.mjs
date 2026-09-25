@@ -512,10 +512,14 @@ try {
     await siguiente(page);
     await page.getByRole('button', { name: 'Iniciar ruta' }).click();
     await page.getByRole('heading', { name: 'Ruta pedidos E2E' }).waitFor();
-    await page.getByRole('button', { name: 'Cobrado efectivo' }).click();
+    await page.getByRole('button', { name: 'Entregado fiado' }).click();
     const pedidoEntregado = await sql(page, "SELECT estado,pago_estado FROM pedidos WHERE id=(SELECT MAX(id) FROM pedidos);");
-    if (pedidoEntregado.length !== 1 || pedidoEntregado[0]?.estado !== 'ENTREGADO' || pedidoEntregado[0]?.pago_estado !== 'COBRADO') {
-      throw new Error('E2E: la entrega del pedido no quedó cobrada.');
+    if (pedidoEntregado.length !== 1 || pedidoEntregado[0]?.estado !== 'ENTREGADO' || pedidoEntregado[0]?.pago_estado !== 'FIADO') {
+      throw new Error('E2E: la entrega del pedido fiado no quedó registrada.');
+    }
+    const ventaPedidoFiado = await sql(page, "SELECT estado_pago,metodo_pago,monto_pagado,pedido_id FROM ventas WHERE pedido_id=(SELECT MAX(id) FROM pedidos) ORDER BY id DESC LIMIT 1;");
+    if (ventaPedidoFiado.length !== 1 || ventaPedidoFiado[0]?.estado_pago !== 'PENDIENTE' || ventaPedidoFiado[0]?.metodo_pago !== 'FIADO' || Number(ventaPedidoFiado[0]?.monto_pagado) !== 0) {
+      throw new Error('E2E: la entrega fiada del pedido no generó la venta pendiente esperada.');
     }
     await page.getByLabel('Paquetes sobrantes').fill('0');
     await page.getByRole('button', { name: 'Cerrar ruta y cuadrar' }).click();
