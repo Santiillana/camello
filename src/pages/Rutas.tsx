@@ -133,20 +133,30 @@ function FormNuevaRuta({
   const datosBorrador = { nombre, tipo, paquetes, usarGps, pedidosSeleccionados };
   useEffect(() => {
     let activo = true;
+    if (tipo !== 'Entrega de pedidos') {
+      setPedidosSeleccionados([]);
+      return () => {
+        activo = false;
+      };
+    }
+
     const cargarPedidosPendientes = async () => {
       try {
         await database.init();
         const pedidos = await database.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true });
         if (activo) setPedidosDisponibles(pedidos);
-      } catch {
-        if (activo) setPedidosDisponibles([]);
+      } catch (e: unknown) {
+        if (!activo) return;
+        setPedidosDisponibles([]);
+        setError(e instanceof Error ? e.message : String(e));
       }
     };
+
     void cargarPedidosPendientes();
     return () => {
       activo = false;
     };
-  }, []);
+  }, [tipo]);
 
   const borrador = useBorrador<typeof datosBorrador>({
     tipo: 'ruta-nueva',
