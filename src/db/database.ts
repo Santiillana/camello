@@ -2803,7 +2803,7 @@ class Database {
     for (const row of result.values ?? []) {
       lines.push(columns.map((column) => quoteCsv(row[column])).join(','));
     }
-    return '\\uFEFF' + lines.join('\\r\\n') + '\\r\\n';
+    return '\uFEFF' + lines.join('\r\n') + '\r\n';
   }
 
   // RESPALDO
