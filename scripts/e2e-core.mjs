@@ -438,6 +438,8 @@ try {
       else break;
     }
     await page.locator('.asistente-overlay').getByRole('button', { name: 'CONFIRMAR GASTO', exact: true }).click();
+    await page.locator('.asistente-overlay').waitFor({ state: 'hidden', timeout: 15000 });
+    await page.waitForURL('http://127.0.0.1:5173/#/gastos', { timeout: 15000 });
     const gastoPagado = await sql(page, "SELECT estado,monto FROM gastos ORDER BY id DESC LIMIT 1;");
     if (gastoPagado.length !== 1 || gastoPagado[0]?.estado !== 'pagado' || Number(gastoPagado[0]?.monto) !== 5000) {
       throw new Error('E2E: "Ya pagué" no quedó persistido correctamente en gastos.');
@@ -462,26 +464,7 @@ try {
     const clientePedido = formularioPedido.locator('select').nth(0);
     const productoPedido = formularioPedido.locator('select').nth(1);
 
-    await page.waitForFunction(
-      (productoId) => {
-        const section = Array.from(document.querySelectorAll('section.tarjeta'))
-          .find((element) => element.textContent?.includes('Registrar pedido'));
-        const selects = section ? Array.from(section.querySelectorAll('select')) : [];
-        if (selects.length < 2) return false;
-        const clienteListo = Array.from(selects[0].options).some((option) => option.textContent?.trim() === 'Cliente E2E');
-        const productoListo = Array.from(selects[1].options).some((option) => option.value === String(productoId));
-        if (!clienteListo || !productoListo) return false;
-        const marca = 'data-e2e-pedidos-estable';
-        if (section.getAttribute(marca) !== '1') {
-          section.setAttribute(marca, '1');
-          return false;
-        }
-        return true;
-      },
-      ids[0].producto_id,
-      { timeout: 60000 },
-    );
-
+    await page.waitForURL('http://127.0.0.1:5173/#/pedidos', { timeout: 15000 });
     try {
       await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
       await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
