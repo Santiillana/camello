@@ -107,9 +107,8 @@ async function probarUbicacionDesdeFichaYScroll(page) {
   await omitir(page);
   await omitir(page);
   await omitir(page);
-  const guardarNuevo = page.getByRole('button', { name: 'Guardar cliente' });
-  if (await guardarNuevo.count()) await guardarNuevo.click();
-  else throw new Error('E2E: no se pudo finalizar la creación de Cliente Mapa E2E.');
+  await omitir(page);
+  await omitir(page);
   await page.getByRole('heading', { name: 'Cliente Mapa E2E' }).waitFor({ state: 'visible', timeout: 30000 });
   const idRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente Mapa E2E' ORDER BY id DESC LIMIT 1;");
   if (idRow.length !== 1 || Number(idRow[0]?.id) <= 100) throw new Error('E2E: el cliente de mapa no quedó fuera del primer bloque de 100.');
