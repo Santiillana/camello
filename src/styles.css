@@ -17,6 +17,12 @@
 
 * { box-sizing: border-box; }
 
+*, *::before, *::after { min-width: 0; }
+
+img, svg { max-width: 100%; }
+
+button, input, select, textarea { max-width: 100%; }
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -50,17 +56,27 @@ input, select {
 
 .app-contenido {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
-  padding-bottom: 84px;
+  padding: 0 8px 24px 76px;
 }
 
 .pantalla {
-  max-width: 640px;
+  width: min(100%, 760px);
+  max-width: 760px;
   margin: 0 auto;
-  padding: 18px 16px 8px;
+  padding: 18px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.pantalla > *, .tarjeta, .stat-card, .fila-producto, .fila-cartera, .fila-venta, .tarjeta-cliente, .tarjeta-ruta {
+  min-width: 0;
+}
+
+.pantalla h1, .pantalla h2, .pantalla h3, .pantalla p, .pantalla span, .pantalla strong, .pantalla a {
+  overflow-wrap: anywhere;
 }
 
 .pantalla-carga {
@@ -93,6 +109,7 @@ input, select {
 
 /* --- Navegación inferior --- */
 .bottom-nav {
+  display: none !important;
   position: fixed;
   bottom: 0; left: 0; right: 0;
   display: flex;
@@ -127,7 +144,7 @@ input, select {
 /* --- Tarjetas de estadísticas --- */
 .grid-stats {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .stat-card {
@@ -211,8 +228,8 @@ input, select {
 }
 .fila-checkbox { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .fila-checkbox input { width: auto; }
-.fila-botones { display: flex; gap: 10px; }
-.fila-botones > * { flex: 1; }
+.fila-botones { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.fila-botones > * { flex: 1 1 150px; min-width: 0; }
 .texto-separador { text-align: center; color: var(--color-texto-suave); font-size: 12px; margin: 0; }
 .resumen-total { font-size: 18px; font-weight: 700; text-align: right; }
 
@@ -231,7 +248,8 @@ input, select {
 }
 .lado-derecho-cliente { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 13px; }
 .detalle-cliente { font-size: 12px; color: var(--color-texto-suave); }
-.fila-titulo-boton { display: flex; justify-content: space-between; align-items: center; }
+.fila-titulo-boton { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.fila-titulo-boton > * { min-width: 0; }
 .fila-venta { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--color-borde); }
 
 .etiqueta-seguimiento { font-size: 11px; padding: 3px 8px; border-radius: 999px; font-weight: 700; }
@@ -355,10 +373,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .fila-cartera {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
+.fila-cartera > div:first-child { min-width: 0; flex: 1 1 180px; }
+.fila-cartera .lado-derecho-cliente { flex: 0 1 auto; max-width: 100%; }
 .fila-cartera > a {
   display: flex;
   flex-direction: column;
@@ -446,9 +467,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 8px;
 }
 @media (max-width: 430px) {
-  .grid-dos-columnas { grid-template-columns: 1fr; }
+  .app-contenido { padding-left: 70px; padding-right: 4px; }
+  .pantalla { padding-left: 8px; padding-right: 8px; gap: 14px; }
+  .grid-dos-columnas, .grid-stats, .accesos-rapidos { grid-template-columns: 1fr; }
+  .fila-botones > * { flex-basis: 100%; }
+  .fila-titulo-boton { align-items: stretch; }
+  .lado-derecho-cliente { align-items: flex-start; }
+  .tarjeta-cliente, .tarjeta-ruta { align-items: flex-start; flex-direction: column; }
   .pantalla-inicial { padding-left: 10px; padding-right: 10px; }
   .tarjeta-inicial { padding: 18px; }
+  .side-nav { width: 60px; }
+  .side-nav.expandido { width: min(242px, calc(100vw - 12px)); }
+  .side-nav-item { padding-left: 8px; padding-right: 8px; gap: 9px; }
 }
 
 
@@ -479,7 +509,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   line-height: 1;
   box-shadow: var(--sombra);
 }
-.app-menu-boton { display: none; }
+.app-menu-boton, .app-topbar-menu { display: none; }
 
 .side-nav-backdrop {
   position: fixed;
@@ -492,8 +522,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transition: opacity .18s ease;
 }
 .side-nav-backdrop.visible {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 0;
+  pointer-events: none;
 }
 .side-nav {
   position: fixed;
@@ -501,16 +531,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   top: 0;
   bottom: 0;
   left: 0;
-  width: 78px;
+  width: 64px;
   display: flex;
   flex-direction: column;
   background: var(--color-superficie);
   border-right: 1px solid var(--color-borde);
-  transform: translateX(-100%);
-  transition: transform .18s ease, width .18s ease;
+  transform: translateX(0);
+  transition: width .18s ease;
   box-shadow: 6px 0 24px rgba(17,17,17,0.05);
 }
-.side-nav.abierto { transform: translateX(0); }
+.side-nav.abierto { width: 64px; }
 .side-nav.expandido { width: 248px; }
 .side-nav-cabecera {
   min-height: 64px;
@@ -534,7 +564,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 10px;
   background: var(--color-superficie);
 }
-.side-nav-cerrar { display: inline-flex; }
+.side-nav-cerrar { display: none; }
 .side-nav-lista {
   display: flex;
   flex-direction: column;
@@ -573,7 +603,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .bottom-nav-actions {
   position: fixed;
   right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
   z-index: 25;
 }
 .bottom-nav-fab {
@@ -716,10 +746,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (min-width: 768px) {
   .app-topbar { display: none; }
-  .side-nav {
-    transform: translateX(0);
-    width: 72px;
-  }
+  .side-nav { width: 72px; }
   .side-nav.abierto { width: 72px; }
   .side-nav.expandido,
   .side-nav.abierto.expandido { width: 248px; }
@@ -731,9 +758,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .app-contenido {
     padding-left: 88px;
     padding-top: 0;
-    padding-bottom: 92px;
+    padding-bottom: 24px;
   }
-  .pantalla { max-width: 680px; }
+  .pantalla { max-width: 760px; }
   .bottom-nav {
     left: calc(50% + 44px);
     right: auto;
