@@ -130,7 +130,7 @@ function FormNuevaRuta({
   const [pasoInicial, setPasoInicial] = useState(0);
   const [pedidosDisponibles, setPedidosDisponibles] = useState<PedidoConDetalle[]>([]);
   const [pedidosSeleccionados, setPedidosSeleccionados] = useState<number[]>([]);
-  const datosBorrador = { nombre, tipo, paquetes, usarGps };
+  const datosBorrador = { nombre, tipo, paquetes, usarGps, pedidosSeleccionados };
   useEffect(() => {
     if (tipo !== 'Entrega de pedidos') {
       setPedidosDisponibles([]);
@@ -271,6 +271,7 @@ function FormNuevaRuta({
             setTipo(pendiente.datos.tipo);
             setPaquetes(pendiente.datos.paquetes);
             setUsarGps(pendiente.datos.usarGps);
+            setPedidosSeleccionados(pendiente.datos.pedidosSeleccionados ?? []);
             setPasoInicial(paso);
           }}
         />
