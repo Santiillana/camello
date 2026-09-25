@@ -392,7 +392,7 @@ async function probarEscalaClientes(page) {
   await page.goto('http://127.0.0.1:5173/#/pedidos', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const pedidoBuscador = page.getByPlaceholder('Nombre o mascota…').first();
   await pedidoBuscador.fill('Cliente Escala 1001');
-  const pedidoSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Cliente Escala 1001' }) }).first();
+  const pedidoSelect = page.locator('select').first();
   await pedidoSelect.locator('option').filter({ hasText: /^Cliente Escala 1001$/ }).waitFor({ state: 'attached', timeout: 30000 });
   await pedidoSelect.selectOption({ label: 'Cliente Escala 1001' });
 
