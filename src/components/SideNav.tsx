@@ -51,7 +51,7 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
         aria-label="Cerrar menú"
         onClick={onCerrar}
       />
-      <aside className={'side-nav' + (expandido ? ' expandido' : '')} aria-label="Navegación principal">
+      <aside className={'side-nav' + ((expandido || abierto) ? ' expandido' : '')} aria-label="Navegación principal">
         <div className="side-nav-cabecera">
           <strong className="side-nav-marca">CAMELLO</strong>
           <button
