@@ -273,7 +273,7 @@ async function crearRuta(page) {
   await page.getByLabel('Paquetes llevados').fill('5');
   await siguiente(page);
   await siguiente(page);
-  const checkbox = page.getByText('Registrar ubicación de inicio con GPS', { exact: true }).locator('..').locator('input[type="checkbox"]');
+  const checkbox = page.getByRole('checkbox', { name: 'Registrar ubicación de inicio con GPS' });
   await checkbox.waitFor({ state: 'attached', timeout: 15000 });
   if (await checkbox.isChecked()) await checkbox.uncheck();
   await siguiente(page);
