@@ -446,6 +446,8 @@ async function runScenario(scenario) {
     case '':
     case undefined: {
       const fresh=new SQL.Database(); initialize(fresh); initialize(fresh); flujo(fresh,'fresh');
+      assertEq(Number(fresh.exec("SELECT COUNT(*) FROM categorias_gasto;")[0].values[0][0]) >= 10 ? 1 : 0, 1, 'categorias gasto maestras');
+      assertEq(Number(fresh.exec("SELECT COUNT(*) FROM categorias_gastos_personales;")[0].values[0][0]) >= 8 ? 1 : 0, 1, 'categorias personales maestras');
       transactionalFailureTest(SQL);
       versionMayorTest(SQL); pedidosTest(fresh); personalExpensesTest(fresh); gastosTest(fresh); anulacionesTest(fresh);
       const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
