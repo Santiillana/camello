@@ -29,13 +29,6 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(texto: string): Uint8Array {
-  const binary = atob(texto);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 function base64ToBytes(text: string): Uint8Array | null {
   try {
     const binary = atob(text);
@@ -59,13 +52,7 @@ function toSqlParams(params: unknown[]): SqlValue[] {
 
 async function toBytes(value: StoredValue): Promise<Uint8Array | null> {
   if (value == null) return null;
-  if (typeof value === 'string') {
-    try {
-      return base64ToBytes(value);
-    } catch {
-      return null;
-    }
-  }
+  if (typeof value === 'string') return base64ToBytes(value);
   if (value instanceof Uint8Array) return new Uint8Array(value);
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   if (typeof Blob !== 'undefined' && value instanceof Blob) {
