@@ -291,7 +291,10 @@ function transactionalFailureTest(SQL){
   const after=db.export();
   if(!bytesEqual(before,after))throw new Error('Rollback real de v9 no dejó la BD exactamente como estaba.');
   if(userVersion(db)!==8)throw new Error('Rollback real cambió user_version.');
-  health(db,'rollback real v9');
+  const restoredBrokenFk = db.exec('PRAGMA foreign_key_check;')[0]?.values ?? [];
+  if (!restoredBrokenFk.some((row) => String(row[2] ?? '') === 'rutas_migracion_v8')) {
+    throw new Error('Rollback real de v9 no restauró la referencia dañada esperada del fixture.');
+  }
   db.close();
 }
 function versionMayorTest(SQL){
