@@ -482,8 +482,16 @@ try {
       { timeout: 60000 },
     );
 
-    await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
-    await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
+    try {
+      await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
+      await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
+    } catch (error) {
+      const diagnostico = await page.evaluate(() => ({
+        body: document.body.innerText.slice(0, 5000),
+        sqliteStage: document.documentElement.dataset.camelloSqliteStage || 'sin-etapa',
+      }));
+      throw new Error('E2E: opciones de pedidos no se hidrataron: ' + JSON.stringify(diagnostico) + ' causa=' + String(error));
+    }
     await clientePedido.selectOption(String(ids[0].cliente_id));
     await productoPedido.selectOption(String(ids[0].producto_id));
     await formularioPedido.getByLabel('Cantidad').fill('2');
