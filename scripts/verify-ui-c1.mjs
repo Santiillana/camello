@@ -5,7 +5,32 @@ const { chromium } = await import('playwright');
 
 const server = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1'], {
   stdio: ['ignore', 'pipe', 'pipe'],
+  detached: process.platform !== 'win32',
 });
+
+async function detenerServidor() {
+  const pid = server.pid;
+  if (pid == null || server.exitCode !== null) return;
+
+  try {
+    if (process.platform === 'win32') server.kill('SIGTERM');
+    else process.kill(-pid, 'SIGTERM');
+  } catch (error) {
+    console.warn('UI Smoke: no fue posible detener el grupo del servidor:', error);
+  }
+
+  const deadline = Date.now() + 3000;
+  while (server.exitCode === null && Date.now() < deadline) await sleep(100);
+
+  if (server.exitCode === null) {
+    try {
+      if (process.platform === 'win32') server.kill('SIGKILL');
+      else process.kill(-pid, 'SIGKILL');
+    } catch (error) {
+      console.warn('UI Smoke: no fue posible forzar la detención del servidor:', error);
+    }
+  }
+}
 
 let logs = '';
 server.stdout.on('data', (chunk) => { logs += chunk.toString(); });
@@ -71,5 +96,5 @@ try {
     await browser.close();
   }
 } finally {
-  server.kill('SIGKILL');
+  await detenerServidor();
 }
