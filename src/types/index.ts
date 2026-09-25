@@ -207,6 +207,14 @@ export interface RutaConResumen extends Ruta {
   utilidad_neta?: number;
 }
 
+export interface ResumenProductoPeriodo {
+  producto_nombre: string;
+  cantidad: number;
+  ventas: number;
+  utilidad: number;
+  clientes: number;
+}
+
 export interface ResumenPeriodo {
   ventas: number;
   costos: number;
@@ -214,6 +222,14 @@ export interface ResumenPeriodo {
   utilidad: number;
   pagado: number;
   pendiente: number;
+  clientes_atendidos?: number;
+  productos_distintos?: number;
+  ventas_pagadas?: number;
+  ventas_pendientes?: number;
+  compras_insumos?: number;
+  gastos_fijos?: number;
+  retiros_dueno?: number;
+  flujo_caja?: number;
   clientes_nuevos: number;
   clientes_recurrentes?: number;
   numero_ventas?: number;
