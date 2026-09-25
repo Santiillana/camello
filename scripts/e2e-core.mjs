@@ -75,6 +75,9 @@ async function crearCliente(page) {
   }
   const borradorPersistido = await sql(page, "SELECT json,paso FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo' LIMIT 1;");
   if (borradorPersistido.length !== 1) throw new Error('El borrador no se persistió en SQLite antes de recargar.');
+  if (Number(borradorPersistido[0]?.paso) !== 1) {
+    throw new Error('El borrador persistió un paso inesperado: ' + JSON.stringify(borradorPersistido));
+  }
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
