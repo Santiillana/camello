@@ -21,6 +21,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   const pasoRef = useRef(paso);
   const listoRef = useRef(false);
   const decididoRef = useRef(false);
+  const finalizadoRef = useRef(false);
   const timerRef = useRef<number | null>(null);
   const [pendiente, setPendiente] = useState<BorradorPendiente<T> | null>(null);
   const [listo, setListo] = useState(false);
@@ -33,6 +34,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   useEffect(() => {
     let cancelado = false;
     if (!activo) return undefined;
+    finalizadoRef.current = false;
     void database.obtenerBorrador<T>(tipo, clave).then((existente) => {
       if (cancelado) return;
       setPendiente(existente);
@@ -46,7 +48,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   }, [activo, tipo, clave]);
 
   useEffect(() => {
-    if (!activo || !listo || !listoRef.current || !decididoRef.current) return undefined;
+    if (!activo || finalizadoRef.current || !listo || !listoRef.current || !decididoRef.current) return undefined;
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current).catch(() => undefined);
@@ -60,7 +62,7 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
     if (!activo) return undefined;
 
     const guardarAhora = () => {
-      if (!listoRef.current) return;
+      if (!listoRef.current || finalizadoRef.current) return;
       void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current).catch(() => undefined);
     };
 
@@ -106,11 +108,16 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   }
 
   async function guardarAhora(): Promise<void> {
-    if (!activo || !listoRef.current) return;
+    if (!activo || finalizadoRef.current || !listoRef.current) return;
     await database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current);
   }
 
   async function limpiar(): Promise<void> {
+    finalizadoRef.current = true;
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     await database.eliminarBorrador(tipo, clave);
     setPendiente(null);
     listoRef.current = true;
