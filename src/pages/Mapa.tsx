@@ -16,6 +16,7 @@ type FiltrosMapa = {
   texto: string;
   estado: Filtro;
   rutaId: string;
+  rutaTipo: '' | 'Puerta a puerta' | 'Entrega de pedidos' | 'Venta local móvil';
   minDias: string;
   maxDias: string;
   recompraVencida: boolean;
@@ -25,6 +26,7 @@ const FILTROS_DEFAULT: FiltrosMapa = {
   texto: '',
   estado: 'todos',
   rutaId: '',
+  rutaTipo: '',
   minDias: '',
   maxDias: '',
   recompraVencida: false,
@@ -43,10 +45,11 @@ function cargarFiltrosGuardados(): FiltrosMapa {
     if (!raw) return FILTROS_DEFAULT;
     const parsedUnknown: unknown = JSON.parse(raw);
     if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) return FILTROS_DEFAULT;
-    const parsed: { estado?: unknown; texto?: unknown; rutaId?: unknown; minDias?: unknown; maxDias?: unknown; recompraVencida?: unknown } = {
+    const parsed: { estado?: unknown; texto?: unknown; rutaId?: unknown; rutaTipo?: unknown; minDias?: unknown; maxDias?: unknown; recompraVencida?: unknown } = {
       estado: 'estado' in parsedUnknown ? parsedUnknown.estado : undefined,
       texto: 'texto' in parsedUnknown ? parsedUnknown.texto : undefined,
       rutaId: 'rutaId' in parsedUnknown ? parsedUnknown.rutaId : undefined,
+      rutaTipo: 'rutaTipo' in parsedUnknown ? parsedUnknown.rutaTipo : undefined,
       minDias: 'minDias' in parsedUnknown ? parsedUnknown.minDias : undefined,
       maxDias: 'maxDias' in parsedUnknown ? parsedUnknown.maxDias : undefined,
       recompraVencida: 'recompraVencida' in parsedUnknown ? parsedUnknown.recompraVencida : undefined,
@@ -59,6 +62,7 @@ function cargarFiltrosGuardados(): FiltrosMapa {
       texto: typeof parsed.texto === 'string' ? parsed.texto : '',
       estado: filtroEstado,
       rutaId: typeof parsed.rutaId === 'string' ? parsed.rutaId : '',
+      rutaTipo: parsed.rutaTipo === 'Puerta a puerta' || parsed.rutaTipo === 'Entrega de pedidos' || parsed.rutaTipo === 'Venta local móvil' ? parsed.rutaTipo : '',
       minDias: typeof parsed.minDias === 'string' ? parsed.minDias : '',
       maxDias: typeof parsed.maxDias === 'string' ? parsed.maxDias : '',
       recompraVencida: parsed.recompraVencida === true,
@@ -152,6 +156,8 @@ export default function Mapa() {
     () => clientes.filter((c) => c.lat != null && c.lng != null),
     [clientes],
   );
+
+  const rutasFiltradas = useMemo(() => filtros.rutaTipo ? rutas.filter(r => r.tipo === filtros.rutaTipo && r.estado !== 'CANCELADA') : rutas.filter(r => r.estado !== 'CANCELADA'), [rutas, filtros.rutaTipo]);
 
   const clientesFiltrados = useMemo(() => {
     const texto = filtros.texto.trim().toLowerCase();
@@ -387,9 +393,15 @@ export default function Mapa() {
             Ruta
             <select value={filtros.rutaId} onChange={(e) => setFiltros((v) => ({ ...v, rutaId: e.target.value }))}>
               <option value="">Todas las rutas</option>
-              {rutas.filter((r) => r.estado !== 'CANCELADA').map((r) => (
+              {rutasFiltradas.map((r) => (
                 <option key={r.id} value={r.id}>{r.nombre || r.tipo} · {r.fecha}</option>
               ))}
+            </select>
+          </label>
+          <label>
+            Tipo de recorrido
+            <select value={filtros.rutaTipo} onChange={(e) => setFiltros(v => ({ ...v, rutaTipo: e.target.value as FiltrosMapa['rutaTipo'], rutaId: '' }))}>
+              <option value="">Todos</option><option value="Entrega de pedidos">Ruta de entrega de pedidos</option><option value="Puerta a puerta">Ruta puerta a puerta</option><option value="Venta local móvil">Punto de venta local móvil</option>
             </select>
           </label>
         </div>
