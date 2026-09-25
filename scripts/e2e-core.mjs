@@ -439,9 +439,10 @@ try {
     const ids = await sql(page, "SELECT (SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1) cliente_id, (SELECT id FROM productos WHERE activo=1 ORDER BY id ASC LIMIT 1) producto_id;");
     if (ids.length !== 1 || !ids[0]?.cliente_id || !ids[0]?.producto_id) throw new Error('E2E: no hay cliente/producto para probar pedidos.');
     await page.goto('http://127.0.0.1:5173/#/pedidos', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.getByLabel('Cliente').selectOption(String(ids[0].cliente_id));
-    await page.getByLabel('Producto').selectOption(String(ids[0].producto_id));
-    await page.getByLabel('Cantidad').fill('2');
+    const formularioPedido = page.locator('section.tarjeta').filter({ hasText: 'Registrar pedido' });
+    await formularioPedido.getByLabel('Cliente').selectOption(String(ids[0].cliente_id));
+    await formularioPedido.getByLabel('Producto').selectOption(String(ids[0].producto_id));
+    await formularioPedido.getByLabel('Cantidad').fill('2');
     await page.getByRole('button', { name: 'Agregar producto' }).click();
     await page.getByRole('button', { name: 'Guardar pedido' }).click();
     const pedidoPendiente = await sql(page, "SELECT id,estado,ruta_id FROM pedidos ORDER BY id DESC LIMIT 1;");
