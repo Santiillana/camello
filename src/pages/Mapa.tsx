@@ -75,7 +75,6 @@ export default function Mapa() {
   const [filtros, setFiltros] = useState<FiltrosMapa>(cargarFiltrosGuardados);
   const [clientesRuta, setClientesRuta] = useState<Set<number> | null>(null);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number; precision?: number } | null>(null);
-  const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
