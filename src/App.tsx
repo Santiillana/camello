@@ -236,6 +236,11 @@ export default function App() {
 
     inicializarBaseDeDatosConTimeout()
       .then(async () => {
+        if (import.meta.env.VITE_E2E === '1') {
+          window.__CAMELLO_TEST_SQL__ = async (sql, params = []) => {
+            return database.connForTesting(sql, params);
+          };
+        }
         await database.verificarSalud();
         const ultimaSalud = localStorage.getItem('camello.ultimaSaludBd');
         if (!ultimaSalud || Date.now() - Number(ultimaSalud) >= 7 * 24 * 60 * 60 * 1000) {
@@ -245,12 +250,6 @@ export default function App() {
         await inicializarModulos(database);
         const seguridad = await database.obtenerSeguridadPin();
         if (activo) { setSeguridadPin({habilitado:seguridad.habilitado,lock_minutos:seguridad.lock_minutos}); setDesbloqueado(!seguridad.habilitado); }
-        if (import.meta.env.VITE_E2E === '1') {
-          window.__CAMELLO_TEST_SQL__ = async (sql, params = []) => {
-            const r = await database.connForTesting(sql, params);
-            return r;
-          };
-        }
         const resultado = await database.obtenerConfiguracion();
         if (import.meta.env.VITE_E2E === '1' && !resultado.negocio_nombre) {
           await database.guardarConfiguracionInicial(
