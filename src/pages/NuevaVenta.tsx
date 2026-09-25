@@ -83,7 +83,7 @@ export default function NuevaVenta() {
       setRutaActiva(ruta);
       if (clienteInicial) {
         setClienteSeleccionado(clienteInicial);
-        setClientes((actuales) => actuales.some((c) => c.id === clienteInicial.id) ? actuales : [clienteInicial, ...actuales]);
+        setClientes([clienteInicial, ...cs.filter((c) => c.id !== clienteInicial.id)]);
       }
       if (ps[0]) setProductoId(ps[0].id);
     }).catch((e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); });

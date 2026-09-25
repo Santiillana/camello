@@ -25,23 +25,33 @@ export default function Pedidos() {
   );
   const pendientesSinRuta = pedidosDelDia.filter((pedido) => pedido.ruta_id == null && pedido.estado === 'PENDIENTE');
 
-  async function cargar() {
+  async function cargarPedidos() {
     try {
-      const [ps, cs, prods] = await Promise.all([
-        database.listarPedidos(),
-        database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 }),
-        database.listarProductos({}),
-      ]);
-      setPedidos(ps);
-      setClientes(cs);
-      setProductos(prods.filter((producto) => producto.activo === 1));
+      setPedidos(await database.listarPedidos());
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  useEffect(() => { void cargar(); }, [busquedaCliente]);
+  async function cargarClientes() {
+    try {
+      const resultado = await database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 });
+      setClientes((actuales) => {
+        const seleccionado = clienteSeleccionado && !resultado.some((c) => c.id === clienteSeleccionado.id) ? [clienteSeleccionado] : [];
+        return [...seleccionado, ...resultado];
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  useEffect(() => { void cargarPedidos(); }, []);
+  useEffect(() => { void cargarClientes(); }, [busquedaCliente]);
+  useEffect(() => {
+    void database.listarProductos({}).then((prods) => setProductos(prods.filter((producto) => producto.activo === 1)))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
 
   function agregarItem() {
     const pid = Number(productoId);
