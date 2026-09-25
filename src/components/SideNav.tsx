@@ -53,16 +53,6 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
           >
             {expandido ? '‹' : '›'}
           </button>
-          {expandido && (
-            <button
-              type="button"
-              className="side-nav-cerrar"
-              aria-label="Cerrar menú"
-              onClick={onCerrar}
-            >
-              ×
-            </button>
-          )}
         </div>
 
         <nav className="side-nav-lista" aria-label="Secciones de CAMELLO">
