@@ -461,9 +461,9 @@ try {
     await page.getByLabel('Tipo de recorrido').selectOption({ label: 'Entrega de pedidos' });
     await siguiente(page);
     await siguiente(page);
-    const pedidoCheckbox = page.locator('.lista-seleccion-clientes input[type="checkbox"]').first();
-    await pedidoCheckbox.waitFor({ state: 'visible', timeout: 15000 });
-    await pedidoCheckbox.check();
+    const pedidoOpcion = page.locator('.lista-seleccion-clientes label').first();
+    await pedidoOpcion.waitFor({ state: 'visible', timeout: 15000 });
+    await pedidoOpcion.click();
     await siguiente(page);
     const gpsRuta = page.getByRole('checkbox', { name: /Registrar ubicación de inicio/ });
     if (await gpsRuta.isChecked()) await gpsRuta.uncheck();
