@@ -371,6 +371,35 @@ async function cerrarRuta(page, sobrantes) {
   await page.getByText('Diferencia').locator('..').getByText('0').waitFor().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
 }
 
+async function probarEscalaClientes(page) {
+  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1100) INSERT INTO clientes (nombre,telefono1,fecha_registro,estado) SELECT 'Cliente Escala ' || printf('%04d', n), '320100' || printf('%04d', n), date('now'),'activo' FROM nums;");
+  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1100) INSERT INTO mascotas (cliente_id,nombre,estado) SELECT (SELECT id FROM clientes WHERE nombre='Cliente Escala ' || printf('%04d', n) LIMIT 1), 'Mascota Escala ' || printf('%04d', n),'activo' FROM nums;");
+  
+  await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  const buscadorClientes = page.getByPlaceholder('Buscar por cliente o mascota…');
+  await buscadorClientes.fill('Cliente Escala 1001');
+  await page.getByRole('link', { name: /Cliente Escala 1001/ }).waitFor({ state: 'visible', timeout: 30000 });
+  await buscadorClientes.fill('Mascota Escala 1001');
+  await page.getByRole('link', { name: /Cliente Escala 1001/ }).waitFor({ state: 'visible', timeout: 30000 });
+
+  await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  const ventaBuscador = page.getByPlaceholder('Nombre o mascota…').first();
+  await ventaBuscador.fill('Cliente Escala 1001');
+  const ventaSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Cliente Escala 1001' }) }).first();
+  await ventaSelect.locator('option').filter({ hasText: /^Cliente Escala 1001$/ }).waitFor({ state: 'attached', timeout: 30000 });
+  await ventaSelect.selectOption({ label: 'Cliente Escala 1001' });
+
+  await page.goto('http://127.0.0.1:5173/#/pedidos', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  const pedidoBuscador = page.getByPlaceholder('Nombre o mascota…').first();
+  await pedidoBuscador.fill('Cliente Escala 1001');
+  const pedidoSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Cliente Escala 1001' }) }).first();
+  await pedidoSelect.locator('option').filter({ hasText: /^Cliente Escala 1001$/ }).waitFor({ state: 'attached', timeout: 30000 });
+  await pedidoSelect.selectOption({ label: 'Cliente Escala 1001' });
+
+  const conteo = await sql(page, "SELECT COUNT(*) AS n FROM clientes WHERE nombre LIKE 'Cliente Escala %' AND estado='activo';");
+  if (Number(conteo[0]?.n) !== 1100) throw new Error('E2E: la carga de escala no creó 1100 clientes activos.');
+}
+
 async function probarExportacionClientes(page) {
   await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('heading', { name: 'Respaldo', exact: true }).waitFor({ timeout: 20000 });
@@ -431,6 +460,7 @@ try {
     page.on('pageerror', (err) => consoleErrors.push((err.stack || String(err))));
 
     await crearCliente(page);
+    await probarEscalaClientes(page);
     await probarDescartarBorrador(page);
     await probarUbicacionDesdeFichaYScroll(page);
 
