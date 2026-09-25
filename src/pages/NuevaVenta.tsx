@@ -227,14 +227,6 @@ export default function NuevaVenta() {
             <div><span>Pagado ahora</span><strong>{formatoMoneda(Math.max(0, pagado))}</strong></div>
             <div><span>Pendiente</span><strong>{formatoMoneda(pendiente)}</strong></div>
           </div>
-          <button
-            type="button"
-            className="boton-primario boton-grande"
-            disabled={guardando || !clienteId || !producto}
-            onClick={() => void guardar()}
-          >
-            {guardando ? 'Registrando…' : 'CONFIRMAR VENTA'}
-          </button>
         </div>
       ),
       validar: () => total > 0 ? null : 'El total de la venta debe ser mayor que 0.',
@@ -246,7 +238,9 @@ export default function NuevaVenta() {
     setGuardando(true);
     setError(null);
     if (!operacionIdRef.current) {
-      operacionIdRef.current = crypto.randomUUID();
+      operacionIdRef.current = typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'venta-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     }
 
     try {
@@ -277,6 +271,7 @@ export default function NuevaVenta() {
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
+      throw e;
     } finally {
       setGuardando(false);
     }
