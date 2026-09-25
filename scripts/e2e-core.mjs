@@ -416,7 +416,7 @@ try {
     await page.getByRole('heading', { name: 'Nuevo gasto' }).waitFor();
     await page.getByLabel('Monto').fill('5000');
     await siguiente(page);
-    const categoriaGasto = page.getByLabel('Categoría').first();
+    const categoriaGasto = page.locator('.asistente-overlay').getByLabel('Categoría');
     await categoriaGasto.locator('option', { hasText: 'Gas' }).waitFor({ state: 'attached', timeout: 15000 });
     await categoriaGasto.selectOption({ label: 'Gas · variable' });
     await siguiente(page);
