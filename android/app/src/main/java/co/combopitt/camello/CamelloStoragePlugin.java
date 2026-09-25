@@ -30,6 +30,7 @@ public class CamelloStoragePlugin extends Plugin {
     public void saveBackup(PluginCall call) {
         final String filename = call.getString("filename");
         final String data = call.getString("data");
+        final String mimeType = call.getString("mimeType", "application/json");
 
         if (filename == null || filename.trim().isEmpty()) {
             call.reject("Nombre de archivo inválido.");
@@ -50,18 +51,21 @@ public class CamelloStoragePlugin extends Plugin {
         pendingCall = call;
         pendingFilename = filename.trim();
         pendingData = data;
+        pendingMimeType = mimeType == null || mimeType.trim().isEmpty() ? "application/octet-stream" : mimeType.trim();
         startActivityForResult(call, intent, "directoryPickerResult");
     }
 
     private PluginCall pendingCall;
     private String pendingFilename;
     private String pendingData;
+    private String pendingMimeType;
 
     @PluginMethod(returnType = PluginMethod.RETURN_NONE)
     public void clearPending(PluginCall call) {
         pendingCall = null;
         pendingFilename = null;
         pendingData = null;
+        pendingMimeType = null;
         call.resolve();
     }
 
@@ -73,9 +77,11 @@ public class CamelloStoragePlugin extends Plugin {
         final PluginCall target = pendingCall;
         final String filename = pendingFilename;
         final String contents = pendingData;
+        final String mimeType = pendingMimeType == null ? "application/octet-stream" : pendingMimeType;
         pendingCall = null;
         pendingFilename = null;
         pendingData = null;
+        pendingMimeType = null;
 
         if (resultCode != android.app.Activity.RESULT_OK || data == null || data.getData() == null) {
             target.reject("Selección de carpeta cancelada.");
@@ -96,7 +102,7 @@ public class CamelloStoragePlugin extends Plugin {
             final Uri created = DocumentsContract.createDocument(
                 getContext().getContentResolver(),
                 fileUri,
-                "application/json",
+                mimeType,
                 filename
             );
             if (created == null) {
