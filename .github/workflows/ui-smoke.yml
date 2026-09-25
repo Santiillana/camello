@@ -24,6 +24,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx playwright@1.55.0 install --with-deps chromium
-      - run: npm install --no-save --no-package-lock playwright@1.55.0
-      - run: VITE_UI_SMOKE=1 node scripts/verify-ui-c1.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: timeout --signal=TERM --kill-after=30s 8m node scripts/verify-ui-c1.mjs
