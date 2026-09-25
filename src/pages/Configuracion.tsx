@@ -42,6 +42,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
   const [recurrentes, setRecurrentes] = useState<Awaited<ReturnType<typeof database.listarGastosRecurrentes>>>([]);
   const [nuevoGastoCat, setNuevoGastoCat] = useState<{nombre:string;tipo:TipoCategoriaGasto;naturaleza:NaturalezaGasto;presupuesto:string}>({nombre:'',tipo:'variable',naturaleza:'operativo',presupuesto:''});
   const [nuevoFijo, setNuevoFijo] = useState({categoria:'',nombre:'',monto:'',dia:'1'});
+  const [gastosPersonalesActivo, setGastosPersonalesActivo] = useState(true);
 
   async function cargar() {
     try {
@@ -57,6 +58,7 @@ export default function Configuracion({ onConfigChanged }: Props) {
       setColor(cfg.color_acento);
       setMensajeRecordatorio(cfg.mensaje_recordatorio ?? 'Hola {nombre}, ¿cómo están? Ya podría ser momento de su próxima compra en COMBOPITT.');
       const seg=await database.obtenerSeguridadPin(); setPinMinutos(seg.lock_minutos);
+      setGastosPersonalesActivo(await database.obtenerModuloHabilitado('gastos-personales'));
       setPrivacidadHabilitada(cfg.privacidad_habilitada !== false);
       setPrivacidadTexto(cfg.privacidad_texto ?? '');
       setResponsableDatos(cfg.responsable_datos ?? '');
@@ -293,6 +295,23 @@ export default function Configuracion({ onConfigChanged }: Props) {
         <button className="boton-primario" onClick={async()=>{await database.crearGastoRecurrente({categoria_id:Number(nuevoFijo.categoria),nombre:nuevoFijo.nombre,monto_estimado:Number(nuevoFijo.monto),dia_vencimiento:Number(nuevoFijo.dia)});setNuevoFijo({categoria:'',nombre:'',monto:'',dia:'1'});await cargar();}}>Agregar gasto fijo</button>
         <ul className="lista-resumen">{recurrentes.map(r=><li key={r.id}><span>{r.nombre} · {formatoMoneda(r.monto_estimado)} · día {r.dia_vencimiento}</span><button className="boton-texto peligro-texto" disabled={!r.activo} onClick={()=>void database.archivarGastoRecurrente(r.id).then(cargar)}>Archivar</button></li>)}</ul>
       </section>
+      <section className="tarjeta">
+        <div className="fila-titulo-boton">
+          <div>
+            <h2>Gastos personales</h2>
+            <p className="texto-vacio">Módulo independiente de la contabilidad de la empresa. Sus gastos no entran en utilidad, costos, cartera ni flujo de caja del negocio.</p>
+          </div>
+          <label className="fila-checkbox">
+            <input type="checkbox" checked={gastosPersonalesActivo} onChange={async (e) => {
+              const activo=e.target.checked;
+              setGastosPersonalesActivo(activo);
+              await database.guardarModuloHabilitado('gastos-personales', activo);
+            }} />
+            Activado
+          </label>
+        </div>
+      </section>
+
       <section className="tarjeta">
         <h2>Módulos</h2>
         <p className="texto-vacio">Los módulos son independientes del núcleo. Desactivarlos conserva sus datos hasta que elijas borrarlos.</p>
