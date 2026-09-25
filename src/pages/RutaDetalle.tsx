@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { database } from '../db/database';
-import type { RutaConResumen, Venta } from '../types';
+import type { PedidoConDetalle, RutaConResumen, Venta } from '../types';
 import { formatoFecha, formatoMoneda } from '../utils/format';
 
 export default function RutaDetalle() {
@@ -10,6 +10,8 @@ export default function RutaDetalle() {
   const navigate = useNavigate();
   const [ruta, setRuta] = useState<RutaConResumen | null>(null);
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoConDetalle[]>([]);
+  const [procesandoPedido, setProcesandoPedido] = useState<number | null>(null);
   const [sobrantes, setSobrantes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
@@ -20,13 +22,15 @@ export default function RutaDetalle() {
       return;
     }
     try {
-      const [rutas, vs] = await Promise.all([
+      const [rutas, vs, ps] = await Promise.all([
         database.listarRutas(),
         database.listarVentasPorRuta(rutaId),
+        database.listarPedidos({ rutaId }),
       ]);
       const r = rutas.find((x) => x.id === rutaId) ?? null;
       setRuta(r);
       setVentas(vs);
+      setPedidos(ps);
       if (r) setSobrantes(String(r.paquetes_sobrantes ?? Math.max(r.paquetes_llevados - r.vendidos, 0)));
       if (!r) setError('No se encontró la ruta.');
     } catch (e: unknown) {
@@ -84,6 +88,7 @@ export default function RutaDetalle() {
   const vendidos = ruta.vendidos;
   const disponibles = Math.max(ruta.paquetes_llevados - vendidos, 0);
   const diferencia = ruta.paquetes_llevados - vendidos - Number(sobrantes || 0);
+  const pendientesEntrega = ruta.tipo === 'Entrega de pedidos' && pedidos.some((pedido) => pedido.estado === 'ASIGNADO');
 
   return (
     <div className="pantalla">
@@ -121,6 +126,39 @@ export default function RutaDetalle() {
         </Link>
       )}
 
+      {ruta.tipo === 'Entrega de pedidos' && (
+        <section className="tarjeta">
+          <div className="fila-titulo-boton">
+            <div>
+              <p className="texto-kicker">Entrega de pedidos</p>
+              <h2>Paradas de hoy</h2>
+            </div>
+            <span className="detalle-cliente">{pedidos.filter((p) => p.estado === 'ENTREGADO').length} entregados · {pedidos.filter((p) => p.estado === 'ASIGNADO').length} pendientes</span>
+          </div>
+          {pedidos.length === 0 ? <p className="texto-vacio">No hay pedidos asignados a esta ruta.</p> : (
+            <ol className="lista-seleccion-clientes">
+              {pedidos.map((pedido) => (
+                <li key={pedido.id} className="pedido-entrega-card">
+                  <div>
+                    <strong>{pedido.orden_entrega ?? '—'}. {pedido.cliente_nombre}</strong>
+                    <span>{pedido.items.map((item) => item.producto_nombre + ' × ' + item.cantidad).join(', ')}</span>
+                    <span>{formatoMoneda(pedido.total_estimado)} · {pedido.estado === 'ASIGNADO' ? 'Pendiente' : pedido.estado === 'ENTREGADO' ? (pedido.pago_estado === 'FIADO' ? 'Fiado' : 'Cobrado') : 'No entregado'}</span>
+                  </div>
+                  {enCurso && pedido.estado === 'ASIGNADO' && (
+                    <div className="fila-botones">
+                      <button type="button" className="boton-chip" disabled={procesandoPedido===pedido.id} onClick={async()=>{setProcesandoPedido(pedido.id);try{await database.registrarEntregaPedido(pedido.id,'EFECTIVO');await cargar();}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setProcesandoPedido(null);}}}>Cobrado efectivo</button>
+                      <button type="button" className="boton-chip" disabled={procesandoPedido===pedido.id} onClick={async()=>{setProcesandoPedido(pedido.id);try{await database.registrarEntregaPedido(pedido.id,'TRANSFERENCIA_NEQUI');await cargar();}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setProcesandoPedido(null);}}}>Cobrado transferencia</button>
+                      <button type="button" className="boton-chip" disabled={procesandoPedido===pedido.id} onClick={async()=>{setProcesandoPedido(pedido.id);try{await database.registrarEntregaPedido(pedido.id,'FIADO');await cargar();}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setProcesandoPedido(null);}}}>Entregado fiado</button>
+                      <button type="button" className="boton-texto peligro-texto" disabled={procesandoPedido===pedido.id} onClick={async()=>{const nota=window.prompt('Motivo o nota de no entrega','');setProcesandoPedido(pedido.id);try{await database.marcarPedidoNoEntregado(pedido.id,nota||undefined);await cargar();}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setProcesandoPedido(null);}}}>No entregado</button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )};
+
       <section className="tarjeta">
         <div className="fila-titulo-boton">
           <div>
@@ -152,9 +190,9 @@ export default function RutaDetalle() {
             <button
               className="boton-peligro"
               onClick={() => void finalizar()}
-              disabled={procesando || diferencia !== 0}
+              disabled={procesando || diferencia !== 0 || pendientesEntrega}
             >
-              {procesando ? 'Finalizando…' : 'Cerrar ruta y cuadrar'}
+              {procesando ? 'Finalizando…' : pendientesEntrega ? 'Resuelve los pedidos antes de cerrar' : 'Cerrar ruta y cuadrar'}
             </button>
           </>
         )}
