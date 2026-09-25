@@ -143,7 +143,7 @@ function FormNuevaRuta({
     const cargarPedidosPendientes = async () => {
       try {
         await database.init();
-        const pedidos = await database.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true });
+        const pedidos = (await database.listarPedidos({ sinRuta: true })).filter((pedido) => pedido.estado === 'PENDIENTE');
         if (activo) setPedidosDisponibles(pedidos);
       } catch (e: unknown) {
         if (!activo) return;
