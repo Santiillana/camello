@@ -24,8 +24,11 @@ async function esperarServidor(url, timeoutMs = 30000) {
 }
 
 async function configurarPrimeraVez(page) {
-  const inicial = page.getByRole('heading', { name: 'Vamos a preparar tu espacio de trabajo' });
-  if (!(await inicial.isVisible().catch(() => false))) return;
+  const primerH1 = page.locator('h1').first();
+  await primerH1.waitFor({ state: 'visible', timeout: 15000 });
+  const titulo = await primerH1.innerText();
+
+  if (titulo !== 'Vamos a preparar tu espacio de trabajo') return;
 
   await page.getByLabel('Nombre del negocio').fill('Negocio UI C1');
   await page.getByLabel('Nombre de quien lleva la app').fill('Usuario UI C1');

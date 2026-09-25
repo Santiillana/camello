@@ -82,35 +82,100 @@ function migrate8(db) {
   if (Number(db.exec('SELECT COUNT(*) FROM rutas;')[0].values[0][0]) !== snap.length) throw new Error('v8: cambió el número de rutas.');
 }
 function migrate9(db, run = db.run.bind(db)) {
-  const refs = db.exec("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';")[0]?.values ?? [];
+  const refs = db.exec(
+    "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion_%' ESCAPE '\\';"
+  )[0]?.values ?? [];
   if (!refs.length) return;
+
   const refsMap = new Map();
-  const rx=/\\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\\b/g;
+  const regex = /\\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\\b/g;
+
   for (const row of refs) {
-    for (const match of String(row[3] ?? '').match(rx) ?? []) refsMap.set(match,match.split('_migracion_')[0]);
-    if (String(row[1]).includes('_migracion_')) refsMap.set(String(row[1]),String(row[1]).split('_migracion_')[0]);
-  }
-  for (const row of refs.filter(r => String(r[0]) === 'table' && !String(r[1]).includes('_migracion_') && [...refsMap.keys()].some(t => String(r[3]).includes(t)))) {
-      const name=String(row[1]), create=CURRENT_SCHEMA.find(s=>s.trimStart().startsWith('CREATE TABLE IF NOT EXISTS '+name+' '));
-      if(!create) throw new Error('v9: no hay esquema canónico para '+name);
-      const oldCols=[...columnNames(db,name)], temp=name+'_reparacion_v9';
-      run('DROP TABLE IF EXISTS '+temp);
-      run(create.replace('CREATE TABLE IF NOT EXISTS '+name,'CREATE TABLE '+temp));
-      const common=oldCols.filter(col=>columnNames(db,temp).has(col)); if(!common.length) throw new Error('v9: sin columnas comunes para '+name);
-      const list=common.map(col=>'"'+col.replace(/"/g,'""')+'"').join(',');
-      run('INSERT INTO '+temp+'('+list+') SELECT '+list+' FROM '+name);
-      run('DROP TABLE '+name);
-      run(create);
-      run('INSERT INTO '+name+'('+list+') SELECT '+list+' FROM '+temp);
-      run('DROP TABLE '+temp);
+    const sql = String(row[3] ?? '');
+    for (const match of sql.match(regex) ?? []) {
+      refsMap.set(match, match.split('_migracion_')[0]);
     }
-    for(const row of refs.filter(r=>String(r[0])==='table'&&String(r[1]).includes('_migracion_')){
-      const canonical=refsMap.get(String(row[1])); if(!canonical)continue;
-      const exists=Number(db.exec("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"+canonical.replace(/'/g,"''")+"'")[0].values[0][0]??0);
-      if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
+    const name = String(row[1] ?? '');
+    if (name.includes('_migracion_')) {
+      refsMap.set(name, name.split('_migracion_')[0]);
+    }
   }
-  health(db,'v9');
+
+  const affected = refs.filter((row) => {
+    const type = String(row[0] ?? '');
+    const name = String(row[1] ?? '');
+    const sql = String(row[3] ?? '');
+    return type === 'table'
+      && !name.includes('_migracion_')
+      && [...refsMap.keys()].some((temporary) => sql.includes(temporary));
+  });
+
+  for (const row of affected) {
+    const name = String(row[1]);
+    const create = CURRENT_SCHEMA.find((statement) =>
+      statement.trimStart().startsWith('CREATE TABLE IF NOT EXISTS ' + name + ' ')
+    );
+    if (!create) throw new Error('v9: no hay esquema canónico para ' + name);
+
+    const originalColumns = [...columnNames(db, name)];
+    const temporary = name + '_reparacion_v9';
+    await_like_noop();
+
+    run('DROP TABLE IF EXISTS ' + temporary);
+    run(create.replace('CREATE TABLE IF NOT EXISTS ' + name, 'CREATE TABLE ' + temporary));
+
+    const temporaryColumns = columnNames(db, temporary);
+    const common = originalColumns.filter((column) => temporaryColumns.has(column));
+    if (!common.length) throw new Error('v9: sin columnas comunes para ' + name);
+
+    const list = common.map((column) => '"' + column.replace(/"/g, '""') + '"').join(',');
+    run('INSERT INTO ' + temporary + '(' + list + ') SELECT ' + list + ' FROM ' + name);
+    run('DROP TABLE ' + name);
+    run(create);
+    run('INSERT INTO ' + name + '(' + list + ') SELECT ' + list + ' FROM ' + temporary);
+    run('DROP TABLE ' + temporary);
+  }
+
+  for (const row of refs.filter((entry) =>
+    String(entry[0]) === 'table' && String(entry[1]).includes('_migracion_')
+  )) {
+    const name = String(row[1]);
+    const canonical = refsMap.get(name);
+    if (!canonical) continue;
+
+    const escapedCanonical = canonical.replace(/'/g, "''");
+    const exists = Number(
+      db.exec(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='" + escapedCanonical + "';"
+      )[0]?.values?.[0]?.[0] ?? 0
+    );
+
+    if (!exists) continue;
+
+    const count = Number(
+      db.exec('SELECT COUNT(*) FROM ' + name + ';')[0]?.values?.[0]?.[0] ?? 0
+    );
+    if (count === 0) {
+      run('DROP TABLE ' + name);
+    } else {
+      throw new Error('v9: tabla temporal con datos ' + name);
+    }
+  }
+
+  const remaining = db.exec(
+    "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion_%' ESCAPE '\\';"
+  )[0]?.values ?? [];
+  if (remaining.length) {
+    throw new Error('v9: quedaron referencias a _migracion_: ' + JSON.stringify(remaining));
+  }
+
+  health(db, 'v9');
 }
+
+function await_like_noop() {
+  // Separador intencional para mantener cada paso de reconstrucción independiente y legible.
+}
+
 function migrate10(db){ db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS borradores')) ?? ''); }
 function migrate11(db){ for(const s of CURRENT_SCHEMA.filter(s=>/^(CREATE TABLE IF NOT EXISTS (categorias_gasto|gastos|gastos_recurrentes)|CREATE INDEX IF NOT EXISTS idx_(gastos|recurrentes))/.test(s.trim())))db.run(s); for(const [n,t,na,o] of [['Arriendo','fijo','operativo',1],['Servicios','fijo','operativo',2],['Gas','variable','operativo',3],['Transporte/Gasolina','variable','operativo',4],['Empaques','variable','operativo',5],['Publicidad','variable','operativo',6],['Mantenimiento','variable','operativo',7],['Otros','variable','operativo',8],['Compra de materia prima','variable','compra_insumos',9],['Retiro del dueño','variable','retiro_dueno',10]])db.run('INSERT INTO categorias_gasto(nombre,tipo,naturaleza,orden) VALUES (?,?,?,?) ON CONFLICT(nombre) DO NOTHING',[n,t,na,o]); }
 function migrate12(db){ for(const [t,c,ddl] of [['ventas','estado_registro',"estado_registro TEXT NOT NULL DEFAULT 'activa'"],['ventas','motivo_anulacion','motivo_anulacion TEXT'],['ventas','anulada_at','anulada_at TEXT'],['pagos','estado_registro',"estado_registro TEXT NOT NULL DEFAULT 'activa'"],['pagos','motivo_anulacion','motivo_anulacion TEXT'],['pagos','anulada_at','anulada_at TEXT'],['gastos','motivo_anulacion','motivo_anulacion TEXT'],['gastos','anulado_at','anulado_at TEXT']])addColumn(db,t,c,ddl); }
