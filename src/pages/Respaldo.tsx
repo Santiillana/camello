@@ -3,6 +3,7 @@ import { database } from '../db/database';
 import { calcularChecksum, descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
 import { listarRespaldosAutomaticos, type BackupItem } from '../utils/respaldoAutomatico';
 import { cifrarRespaldo, descifrarRespaldo } from '../utils/respaldoCifrado';
+import { camelloStorage, puedeGuardarEnCarpetaCompartida } from '../utils/almacenamientoNativo';
 
 type MetaRespaldo = {
   exported_at: string;
@@ -78,6 +79,27 @@ export default function Respaldo() {
       setMensaje('✓ Respaldo generado, verificado y descargado.');
     } catch (e: unknown) {
       setError('No se pudo generar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function guardarEnCarpeta() {
+    setExportando(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarRespaldo();
+      const fecha = new Date().toISOString().replaceAll(':','-').slice(0,19);
+      const result = await camelloStorage.saveBackup({
+        filename: 'camello-respaldo-' + fecha + '.json',
+        data: json,
+      });
+      respaldoRef.current = json;
+      setMensaje('Respaldo guardado en la carpeta que elegiste. Esa carpeta queda fuera del almacenamiento privado de CAMELLO.');
+      void result;
+    } catch (e: unknown) {
+      setError('No se pudo guardar el respaldo en la carpeta elegida: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setExportando(false);
     }
@@ -214,6 +236,7 @@ export default function Respaldo() {
           </button>
           <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Descargar sin cifrar</button>
           <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
+          {puedeGuardarEnCarpetaCompartida() && <button className="boton-secundario" onClick={() => void guardarEnCarpeta()} disabled={exportando || importando || limpiando}>Guardar en carpeta…</button>}
         </div>
         {ultimo && (
           <div className="lista-resumen">
