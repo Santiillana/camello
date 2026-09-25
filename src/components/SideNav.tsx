@@ -6,6 +6,7 @@ import { database } from '../db/database';
 const ITEMS = [
   { to: '/', label: 'Inicio', icon: 'M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-4v-6h-7v6h-4A1.5 1.5 0 0 1 3 19.5v-9Z', end: true },
   { to: '/venta-nueva', label: 'Ventas', icon: 'M5 3h10l4 4v14H5V3Zm9 0v5h5M8 12h8M8 16h6' },
+  { to: '/pedidos', label: 'Pedidos', icon: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h4' },
   { to: '/clientes', label: 'Clientes', icon: 'M7 20a5 5 0 0 1 10 0M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z' },
   { to: '/rutas', label: 'Rutas', icon: 'M5 19h4V5H5v14Zm6 0h4V9h-4v10Zm6 0h2v-6h-2v6ZM3 21h18' },
   { to: '/cartera', label: 'Cartera', icon: 'M4 7h16v12H4V7Zm0 3h16M8 15h4' },
