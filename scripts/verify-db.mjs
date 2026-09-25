@@ -88,7 +88,7 @@ function migrate9(db, run = db.run.bind(db)) {
   if (!refs.length) return;
 
   const refsMap = new Map();
-  const regex = /\\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\\b/g;
+  const regex = /\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\b/g;
 
   for (const row of refs) {
     const sql = String(row[3] ?? '');
