@@ -93,6 +93,7 @@ async function crearCliente(page) {
   if (nombreRestaurado !== 'Cliente E2E') throw new Error('El borrador no restauró el nombre.');
 
   await siguiente(page);
+  await siguiente(page);
   for (let i = 0; i < 5; i += 1) await omitir(page);
   const guardarCliente = page.getByRole('button', { name: 'Guardar cliente' });
   if (await guardarCliente.count()) await guardarCliente.click();
