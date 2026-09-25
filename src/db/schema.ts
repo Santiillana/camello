@@ -4,7 +4,7 @@
 // si el producto cambia de precio después.
 
 export const DB_NAME = 'camello';
-export const DB_VERSION = 14
+export const DB_VERSION = 15
 
 export const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS clientes (
@@ -49,6 +49,39 @@ export const SCHEMA_STATEMENTS: string[] = [
     activo INTEGER NOT NULL DEFAULT 1
   );`,
 
+  \`CREATE TABLE IF NOT EXISTS pedidos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER NOT NULL,
+    fecha_pedido TEXT NOT NULL,
+    fecha_entrega TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE','ASIGNADO','ENTREGADO','NO_ENTREGADO','CANCELADO')),
+    ruta_id INTEGER,
+    orden_entrega INTEGER,
+    notas TEXT,
+    total_estimado INTEGER NOT NULL DEFAULT 0 CHECK (total_estimado >= 0),
+    pago_estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (pago_estado IN ('PENDIENTE','COBRADO','FIADO')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    entregado_at TEXT,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+    FOREIGN KEY (ruta_id) REFERENCES rutas(id)
+  \`,
+
+
+  \`CREATE TABLE IF NOT EXISTS pedido_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER NOT NULL,
+    producto_id INTEGER,
+    producto_nombre TEXT NOT NULL,
+    cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+    precio_aplicado INTEGER NOT NULL CHECK (precio_aplicado >= 0),
+    costo_aplicado INTEGER NOT NULL CHECK (costo_aplicado >= 0),
+    total INTEGER NOT NULL CHECK (total >= 0),
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
+    FOREIGN KEY (producto_id) REFERENCES productos(id)
+  \`,
+
+
   `CREATE TABLE IF NOT EXISTS rutas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL DEFAULT '',
@@ -86,8 +119,10 @@ export const SCHEMA_STATEMENTS: string[] = [
     estado_registro TEXT NOT NULL DEFAULT 'activa' CHECK (estado_registro IN ('activa','anulada')),
     motivo_anulacion TEXT,
     anulada_at TEXT,
+    pedido_id INTEGER,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (ruta_id) REFERENCES rutas(id),
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
     CHECK (monto_pagado >= 0 AND monto_pagado <= total)
   );`,
 
@@ -189,6 +224,11 @@ export const SCHEMA_STATEMENTS: string[] = [
     UNIQUE(tipo, clave)
   );`,
 
+  `CREATE INDEX IF NOT EXISTS idx_pedidos_cliente ON pedidos(cliente_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_entrega ON pedidos(fecha_entrega);`,
+  `CREATE INDEX IF NOT EXISTS idx_pedidos_ruta ON pedidos(ruta_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_items_pedido ON pedido_items(pedido_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_ventas_pedido ON ventas(pedido_id);`,
   `CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);`,
   `CREATE INDEX IF NOT EXISTS idx_ventas_ruta ON ventas(ruta_id);`,
   `CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);`,
