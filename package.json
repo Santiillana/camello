@@ -10,7 +10,7 @@
     "prebuild": "node scripts/copy-sql-wasm.mjs",
     "postinstall": "node scripts/copy-sql-wasm.mjs",
     "lint": "oxlint src vite.config.ts capacitor.config.ts scripts",
-    "verify": "npm run typecheck && npm run lint && npm run verify:vitest && npm run verify:e2e && npm run verify:db && npm run verify:modulos && npm run verify:security && npm run verify:ubicacion && npm run benchmark:db && npm run benchmark:scale",
+    "verify": "npm run typecheck && npm run lint && npm run verify:vitest && npm run verify:db && npm run verify:modulos && npm run verify:security && npm run verify:ubicacion && npm run benchmark:db && npm run benchmark:scale && npm run verify:e2e",
     "preview": "vite preview",
     "verify:db": "node --experimental-strip-types scripts/verify-db.mjs",
     "benchmark:db": "node scripts/benchmark-db.mjs",
