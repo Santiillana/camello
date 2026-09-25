@@ -279,6 +279,9 @@ export default function Respaldo() {
         <p>
           La información de CAMELLO vive localmente en este teléfono. El respaldo cifrado es la opción recomendada; un respaldo sin cifrar contiene datos personales de clientes.
         </p>
+        <p className="texto-alerta">
+          ⚠️ El respaldo automático interno protege contra errores dentro de CAMELLO, pero NO protege contra la pérdida, robo o daño físico del teléfono. Para protegerte ante esos casos, usa la exportación o backup externo y conserva el archivo fuera del dispositivo.
+        </p>
       </section>
 
       <section className="tarjeta">
