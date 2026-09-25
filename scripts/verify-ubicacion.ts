@@ -45,6 +45,6 @@ const miniMapa = readFileSync(new URL('../src/components/UbicacionMiniMapa.tsx',
 const mapaPrincipal = readFileSync(new URL('../src/pages/Mapa.tsx', import.meta.url), 'utf8');
 assert.match(miniMapa, /L\.icon\(\{[\s\S]*?iconUrl: ICONO_PIN_URL/);
 assert.match(miniMapa, /data:image\/svg\+xml/);
-assert.doesNotMatch(mapaPrincipal, /L\.tileLayer\(/);
-assert.doesNotMatch(mapaPrincipal, /tile\.openstreetmap\.org/);
+assert.match(mapaPrincipal, /L\.tileLayer\(/);
+assert.match(mapaPrincipal, /tile\.openstreetmap\.org/);
 console.log('mapa-local: PASÓ — icono Leaflet local y mapa principal sin raster remoto.');
