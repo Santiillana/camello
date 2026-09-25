@@ -185,6 +185,7 @@ class Database {
     if (Capacitor.getPlatform() === 'web') marcarEtapaSqlite('webstore');
     marcarEtapaSqlite('schema');
     await this.prepararEsquema();
+    await this.asegurarDatosMaestros();
     marcarEtapaSqlite('health');
     await this.verificarSalud();
     marcarEtapaSqlite('seed');
@@ -1368,6 +1369,44 @@ class Database {
     if (Capacitor.getPlatform() === 'web') {
       if (this.webDb) await this.webDb.persist();
       return;
+    }
+  }
+
+  private async asegurarDatosMaestros(): Promise<void> {
+    const db = this.conn();
+    for (const [nombre, tipo, naturaleza, orden] of [
+      ['Arriendo', 'fijo', 'operativo', 1],
+      ['Servicios', 'fijo', 'operativo', 2],
+      ['Gas', 'variable', 'operativo', 3],
+      ['Transporte/Gasolina', 'variable', 'operativo', 4],
+      ['Empaques', 'variable', 'operativo', 5],
+      ['Publicidad', 'variable', 'operativo', 6],
+      ['Mantenimiento', 'variable', 'operativo', 7],
+      ['Otros', 'variable', 'operativo', 8],
+      ['Compra de materia prima', 'variable', 'compra_insumos', 9],
+      ['Retiro del dueño', 'variable', 'retiro_dueno', 10],
+    ] as const) {
+      await db.run(
+        'INSERT INTO categorias_gasto (nombre, tipo, naturaleza, orden) VALUES (?, ?, ?, ?) ON CONFLICT(nombre) DO NOTHING;',
+        [nombre, tipo, naturaleza, orden],
+        false,
+      );
+    }
+    for (const [nombre, tipo] of [
+      ['Alimentación', 'variable'],
+      ['Transporte', 'variable'],
+      ['Vivienda', 'fijo'],
+      ['Servicios', 'variable'],
+      ['Salud', 'variable'],
+      ['Educación', 'variable'],
+      ['Ocio', 'variable'],
+      ['Otros', 'variable'],
+    ] as const) {
+      await db.run(
+        'INSERT INTO categorias_gastos_personales (nombre, tipo) VALUES (?, ?) ON CONFLICT(nombre) DO NOTHING;',
+        [nombre, tipo],
+        false,
+      );
     }
   }
 
