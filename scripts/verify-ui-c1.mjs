@@ -76,8 +76,8 @@ try {
     const fab = page.getByRole('button', { name: 'Nueva acción' });
     if (await fab.count() !== 1) throw new Error('C1: falta el botón flotante +.');
     await fab.click();
-    if (await page.getByRole('menu').getByRole('button', { name: /Nueva venta/ }).count() !== 1) throw new Error('C1: falta Nueva venta en el +.');
-    if (await page.getByRole('menu').getByRole('button', { name: /Nueva ruta/ }).count() !== 1) throw new Error('C1: falta Nueva ruta en el +.');
+    if (await page.getByRole('menu').getByRole('menuitem', { name: /Nueva venta/ }).count() !== 1) throw new Error('C1: falta Nueva venta en el +.');
+    if (await page.getByRole('menu').getByRole('menuitem', { name: /Nueva ruta/ }).count() !== 1) throw new Error('C1: falta Nueva ruta en el +.');
 
     await page.setViewportSize({ width: 360, height: 800 });
     const contenidoMovil = page.locator('.app-contenido');
