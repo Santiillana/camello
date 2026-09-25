@@ -74,7 +74,7 @@ export default function UbicacionSelector({ lat, lng, precision_m, fuente, fecha
       if (posicion) actualizar(posicion, 'Ubicación ajustada con el pin.');
     });
     mapa.on('click', (evento) => actualizar(evento.latlng, 'Ubicación ajustada tocando el mapa.'));
-    return () => { mapa.remove(); mapaRef.current = null; marcadorRef.current = null; };
+    return () => { mapa.stop(); mapa.remove(); mapaRef.current = null; marcadorRef.current = null; };
   }, []);
 
   useEffect(() => {
