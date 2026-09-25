@@ -444,7 +444,7 @@ try {
     const clientePedido = formularioPedido.locator('select').nth(0);
     const productoPedido = formularioPedido.locator('select').nth(1);
     await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 20000 });
-    await productoPedido.locator('option').filter({ hasText: /Galletas carnívoras/ }).waitFor({ state: 'attached', timeout: 20000 });
+    await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 20000 });
     await clientePedido.selectOption(String(ids[0].cliente_id));
     await productoPedido.selectOption(String(ids[0].producto_id));
     await formularioPedido.getByLabel('Cantidad').fill('2');
