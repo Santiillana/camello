@@ -36,6 +36,9 @@ jobs:
       - name: Verificar proyecto web
         run: timeout --signal=TERM --kill-after=30s 15m npm run verify
 
+      - name: Construir assets web
+        run: npm run build
+
       - name: Sincronizar Capacitor
         run: npx cap sync android
 
