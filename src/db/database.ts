@@ -1994,7 +1994,7 @@ class Database {
     const where = filtros.length ? ' WHERE ' + filtros.join(' AND ') : '';
     const base = await this.conn().query(
       `SELECT p.*, c.nombre AS cliente_nombre, c.telefono1 AS cliente_telefono
-       FROM pedidos p JOIN clientes c ON c.id=p.cliente_id\${where}
+       FROM pedidos p JOIN clientes c ON c.id=p.cliente_id${where}
        ORDER BY CASE WHEN p.estado='PENDIENTE' THEN 0 WHEN p.estado='ASIGNADO' THEN 1 ELSE 2 END, p.fecha_entrega ASC, p.id ASC;`,
       params,
     );
@@ -2009,7 +2009,7 @@ class Database {
     if (!pedidos.length) return [];
     const ids = pedidos.map((p) => Number(p.id));
     const itemsResult = await this.conn().query(
-      `SELECT * FROM pedido_items WHERE pedido_id IN (\${ids.map(() => '?').join(',')}) ORDER BY pedido_id ASC, id ASC;`,
+      `SELECT * FROM pedido_items WHERE pedido_id IN (${ids.map(() => '?').join(',')}) ORDER BY pedido_id ASC, id ASC;`,
       ids,
     );
     const agrupados = new Map<number, import('../types').PedidoItem[]>();
@@ -2596,9 +2596,6 @@ class Database {
       utilidad_neta: utilidadBruta - gastosOperativos,
       flujo_caja: Number(row.pagado ?? 0) - Number(gr.pagados ?? 0),
       gastos_pendientes: Number(gr.pendientes ?? 0),
-      compras_insumos: Number(gr.compras_insumos ?? 0),
-      gastos_fijos: Number(gr.gastos_fijos ?? 0),
-      retiros_dueno: Number(gr.retiros_dueno ?? 0),
     };
   }
 
