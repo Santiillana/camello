@@ -2793,8 +2793,13 @@ class Database {
   }
 
   async exportarClientesCsv(): Promise<string> {
-    const result = await this.conn().query('SELECT * FROM clientes ORDER BY id ASC;');
-    const columns = result.columns ?? [];
+    const [columnsResult, result] = await Promise.all([
+      this.conn().query('PRAGMA table_info(clientes);'),
+      this.conn().query('SELECT * FROM clientes ORDER BY id ASC;'),
+    ]);
+    const columns = (columnsResult.values ?? [])
+      .map((row) => String(row.name ?? ''))
+      .filter(Boolean);
     const quoteCsv = (value: unknown): string => {
       const text = value == null ? '' : String(value);
       return '"' + text.replace(/"/g, '""') + '"';
