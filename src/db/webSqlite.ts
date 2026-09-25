@@ -36,6 +36,18 @@ function base64ToBytes(texto: string): Uint8Array {
   return bytes;
 }
 
+function base64ToBytes(text: string): Uint8Array | null {
+  try {
+    const binary = atob(text);
+    if (binary.length < 15 || binary.slice(0, 15) !== 'SQLite format 3') return null;
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
 function toSqlParams(params: unknown[]): SqlValue[] {
   return params.map((value) => {
     if (value == null) return null;
