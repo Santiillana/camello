@@ -25,4 +25,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: VITE_E2E=1 node scripts/e2e-core.mjs
+      - run: timeout --signal=TERM --kill-after=30s 12m node scripts/e2e-core.mjs
