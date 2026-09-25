@@ -23,19 +23,6 @@ async function esperarServidor(url, timeoutMs = 30000) {
   throw new Error('Vite no inició a tiempo.\n' + logs);
 }
 
-async function configurarPrimeraVez(page) {
-  const primerH1 = page.locator('h1').first();
-  await primerH1.waitFor({ state: 'visible', timeout: 15000 });
-  const titulo = await primerH1.innerText();
-
-  if (titulo !== 'Vamos a preparar tu espacio de trabajo') return;
-
-  await page.getByLabel('Nombre del negocio').fill('Negocio UI C1');
-  await page.getByLabel('Nombre de quien lleva la app').fill('Usuario UI C1');
-  await page.getByRole('button', { name: 'Entrar a CAMELLO' }).click();
-  await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor({ state: 'visible', timeout: 15000 });
-}
-
 try {
   await esperarServidor('http://127.0.0.1:5173');
 

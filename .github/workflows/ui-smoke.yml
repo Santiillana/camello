@@ -25,4 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: timeout --signal=TERM --kill-after=30s 8m node scripts/verify-ui-c1.mjs
+      - name: Ejecutar smoke UI
+        env:
+          VITE_UI_SMOKE: "1"
+        run: timeout --signal=TERM --kill-after=30s 8m node scripts/verify-ui-c1.mjs
