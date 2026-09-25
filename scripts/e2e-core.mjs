@@ -443,8 +443,20 @@ try {
     await formularioPedido.getByRole('heading', { name: 'Registrar pedido', exact: true }).waitFor({ state: 'visible', timeout: 60000 });
     const clientePedido = formularioPedido.locator('select').nth(0);
     const productoPedido = formularioPedido.locator('select').nth(1);
-    await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
-    await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
+    try {
+      await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
+      await productoPedido.locator(`option[value="\${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
+    } catch (error) {
+      const diagnostico = {
+        url: page.url(),
+        errores: await page.locator('.texto-error,[role="alert"]').allTextContents().catch(() => []),
+        clienteOpciones: await clientePedido.locator('option').allTextContents().catch(() => []),
+        productoOpciones: await productoPedido.locator('option').allTextContents().catch(() => []),
+        sqlCliente: await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;").catch(() => []),
+        sqlProducto: await sql(page, "SELECT id,nombre,activo FROM productos WHERE activo=1 ORDER BY id ASC LIMIT 5;").catch(() => []),
+      };
+      throw new Error('E2E: formulario de pedidos no hidrató opciones: ' + JSON.stringify(diagnostico) + ' causa=' + String(error));
+    }
     await clientePedido.selectOption(String(ids[0].cliente_id));
     await productoPedido.selectOption(String(ids[0].producto_id));
     await formularioPedido.getByLabel('Cantidad').fill('2');
