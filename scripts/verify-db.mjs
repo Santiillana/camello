@@ -81,11 +81,11 @@ function migrate8(db) {
     db.run('DROP TABLE rutas_reconstruccion_v8;');
   if (Number(db.exec('SELECT COUNT(*) FROM rutas;')[0].values[0][0]) !== snap.length) throw new Error('v8: cambió el número de rutas.');
 }
-function migrate9(db) {
+function migrate9(db, run = db.run.bind(db)) {
   const refs = db.exec("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL AND sql LIKE '%\\_migracion\\_%' ESCAPE '\\';")[0]?.values ?? [];
   if (!refs.length) return;
   const refsMap = new Map();
-  const rx=/\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\b/g;
+  const rx=/\\b([A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*)\\b/g;
   for (const row of refs) {
     for (const match of String(row[3] ?? '').match(rx) ?? []) refsMap.set(match,match.split('_migracion_')[0]);
     if (String(row[1]).includes('_migracion_')) refsMap.set(String(row[1]),String(row[1]).split('_migracion_')[0]);
@@ -94,15 +94,20 @@ function migrate9(db) {
       const name=String(row[1]), create=CURRENT_SCHEMA.find(s=>s.trimStart().startsWith('CREATE TABLE IF NOT EXISTS '+name+' '));
       if(!create) throw new Error('v9: no hay esquema canónico para '+name);
       const oldCols=[...columnNames(db,name)], temp=name+'_reparacion_v9';
-      db.run('DROP TABLE IF EXISTS '+temp); db.run(create.replace('CREATE TABLE IF NOT EXISTS '+name,'CREATE TABLE '+temp));
+      run('DROP TABLE IF EXISTS '+temp);
+      run(create.replace('CREATE TABLE IF NOT EXISTS '+name,'CREATE TABLE '+temp));
       const common=oldCols.filter(col=>columnNames(db,temp).has(col)); if(!common.length) throw new Error('v9: sin columnas comunes para '+name);
       const list=common.map(col=>'"'+col.replace(/"/g,'""')+'"').join(',');
-      db.run('INSERT INTO '+temp+'('+list+') SELECT '+list+' FROM '+name); db.run('DROP TABLE '+name); db.run(create); db.run('INSERT INTO '+name+'('+list+') SELECT '+list+' FROM '+temp); db.run('DROP TABLE '+temp);
+      run('INSERT INTO '+temp+'('+list+') SELECT '+list+' FROM '+name);
+      run('DROP TABLE '+name);
+      run(create);
+      run('INSERT INTO '+name+'('+list+') SELECT '+list+' FROM '+temp);
+      run('DROP TABLE '+temp);
     }
-    for(const row of refs.filter(r=>String(r[0])==='table'&&String(r[1]).includes('_migracion_'))){
+    for(const row of refs.filter(r=>String(r[0])==='table'&&String(r[1]).includes('_migracion_')){
       const canonical=refsMap.get(String(row[1])); if(!canonical)continue;
       const exists=Number(db.exec("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"+canonical.replace(/'/g,"''")+"'")[0].values[0][0]??0);
-      if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)db.run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
+      if(exists){const count=Number(db.exec('SELECT COUNT(*) FROM '+row[1])[0].values[0][0]??0); if(count===0)run('DROP TABLE '+row[1]); else throw new Error('v9: tabla temporal con datos '+row[1]);}
   }
   health(db,'v9');
 }
@@ -200,27 +205,35 @@ function anulacionesTest(db){
 function bytesEqual(a,b){if(a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;}
 
 function transactionalFailureTest(SQL){
-  const db=fixture(SQL,'schema-v7.sql');
-  initialize(db);
-  const before=db.export();
+  const db=fixture(SQL,'schema-v8-damaged.sql');
+  db.run('PRAGMA user_version=8;');
   db.run('PRAGMA foreign_keys=OFF;');
+  const before=db.export();
+  let llamadas=0;
+  const originalRun=db.run.bind(db);
+  const failingRun=(sql,params)=>{
+    llamadas += 1;
+    if(llamadas===3) throw new Error('fallo de migración inyectado a mitad de v9');
+    return originalRun(sql,params);
+  };
   try {
     db.run('BEGIN;');
-    db.run('CREATE TABLE transaccion_temporal (id INTEGER PRIMARY KEY, valor TEXT);');
-    db.run("INSERT INTO transaccion_temporal VALUES (1,'debe desaparecer');");
-    db.run("UPDATE clientes SET nombre='CORRUPCION_SIMULADA' WHERE id=1;");
-    throw new Error('fallo de migración simulado');
-  } catch {
-    db.run('ROLLBACK;');
+    migrate9(db,failingRun);
+    db.run('PRAGMA user_version=9;');
+    db.run('COMMIT;');
+    throw new Error('La migración v9 no falló con la inyección mid-migration.');
+  } catch(error) {
+    try { db.run('ROLLBACK;'); } catch { /* El rollback del fixture es parte de la prueba de recuperación. */ }
+    if(!String(error?.message??error).includes('inyectado'))throw error;
   } finally {
     db.run('PRAGMA foreign_keys=ON;');
   }
   const after=db.export();
-  if(!bytesEqual(before,after))throw new Error('Rollback transaccional no dejó la BD exactamente como estaba.');
-  health(db,'rollback simulado');
+  if(!bytesEqual(before,after))throw new Error('Rollback real de v9 no dejó la BD exactamente como estaba.');
+  if(userVersion(db)!==8)throw new Error('Rollback real cambió user_version.');
+  health(db,'rollback real v9');
   db.close();
 }
-
 function versionMayorTest(SQL){
   const db=new SQL.Database();
   applySchema(db);
@@ -335,7 +348,7 @@ async function runScenario(scenario) {
       const beforeD=resumen(dañada); initialize(dañada); same(beforeD,resumen(dañada),'damaged'); flujo(dañada,'damaged');
       for(const db of [fresh,v1,v2,v7,dañada]){health(db,'final');db.close();}
       console.log('verify-db: OK');
-      console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',idempotencia:'PASÓ',version_mayor:'PASÓ',rollback_transaccional_simulado:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
+      console.log(JSON.stringify({version:DB_VERSION,normalizacion:'PASÓ',base_nueva:'PASÓ',idempotencia:'PASÓ',version_mayor:'PASÓ',rollback_transaccional_real:'PASÓ',v1:'PASÓ',v2:'PASÓ',v7:'PASÓ',v8_dañada:'PASÓ',flujo_venta_ruta_pagos_cuadre:'PASÓ',gastos:'PASÓ',anulaciones:'PASÓ',foreign_key_check:'PASÓ',integrity_check:'PASÓ',ddl_migracion_temporal:'PASÓ'},null,2));
       break;
     }
     default:
