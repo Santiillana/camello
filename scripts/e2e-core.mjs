@@ -417,7 +417,7 @@ try {
     await page.getByLabel('Monto').fill('5000');
     await siguiente(page);
     const categoriaGasto = page.locator('.asistente-overlay').getByLabel('Categoría');
-    await categoriaGasto.locator('option', { hasText: 'Gas' }).waitFor({ state: 'attached', timeout: 15000 });
+    await categoriaGasto.locator('option').filter({ hasText: /^Gas · variable$/ }).waitFor({ state: 'attached', timeout: 15000 });
     await categoriaGasto.selectOption({ label: 'Gas · variable' });
     await siguiente(page);
     await siguiente(page);
