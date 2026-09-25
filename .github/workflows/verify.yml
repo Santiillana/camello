@@ -23,10 +23,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Instalar y verificar dependencias
+        run: npm ci
       - name: Instalar dependencias del navegador para E2E
         run: npx playwright install --with-deps chromium
-      - name: Instalar y verificar en clon limpio
-        run: npm ci && npm run verify
+      - name: Ejecutar Verify
+        run: npm run verify
 
   modulo-sin-carpeta:
     runs-on: ubuntu-24.04
