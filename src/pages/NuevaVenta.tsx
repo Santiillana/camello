@@ -33,6 +33,7 @@ export default function NuevaVenta() {
     return typeof candidato === 'number' && Number.isInteger(candidato) ? candidato : undefined;
   })();
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
+  const clientesSolicitudRef = useRef(0);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteConResumen | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [rutaActiva, setRutaActiva] = useState<Ruta | null>(null);
@@ -71,6 +72,7 @@ export default function NuevaVenta() {
 
   useEffect(() => {
     let activo = true;
+    const solicitud = ++clientesSolicitudRef.current;
     Promise.all([
       database.listarClientes({ soloActivos: true, texto: '', limite: 50, offset: 0 }),
       database.listarProductos(),
@@ -78,13 +80,15 @@ export default function NuevaVenta() {
       clienteIdInicial ? database.obtenerCliente(clienteIdInicial) : Promise.resolve(null),
     ]).then(([cs, ps, ruta, clienteInicial]) => {
       if (!activo) return;
-      setClientes(cs);
+      if (solicitud === clientesSolicitudRef.current) {
+        setClientes(cs);
+        if (clienteInicial) {
+          setClienteSeleccionado(clienteInicial);
+          setClientes([clienteInicial, ...cs.filter((c) => c.id !== clienteInicial.id)]);
+        }
+      }
       setProductos(ps);
       setRutaActiva(ruta);
-      if (clienteInicial) {
-        setClienteSeleccionado(clienteInicial);
-        setClientes([clienteInicial, ...cs.filter((c) => c.id !== clienteInicial.id)]);
-      }
       if (ps[0]) setProductoId(ps[0].id);
     }).catch((e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); });
     return () => { activo = false; };
@@ -93,15 +97,16 @@ export default function NuevaVenta() {
   useEffect(() => {
     let activo = true;
     const timer = window.setTimeout(() => {
+      const solicitud = ++clientesSolicitudRef.current;
       database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 })
         .then((cs) => {
-          if (!activo) return;
+          if (!activo || solicitud !== clientesSolicitudRef.current) return;
           setClientes(() => {
             const seleccionado = clienteSeleccionado && !cs.some((c) => c.id === clienteSeleccionado.id) ? [clienteSeleccionado] : [];
             return [...seleccionado, ...cs];
           });
         })
-        .catch((e: unknown) => { if (activo) setError(e instanceof Error ? e.message : String(e)); });
+        .catch((e: unknown) => { if (activo && solicitud === clientesSolicitudRef.current) setError(e instanceof Error ? e.message : String(e)); });
     }, 150);
     return () => { activo = false; window.clearTimeout(timer); };
   }, [busquedaCliente, clienteSeleccionado]);
