@@ -11,7 +11,6 @@ export default function GastosPersonales(){
   const [fecha,setFecha]=useState(hoyISO());
   const [monto,setMonto]=useState('');
   const [categoriaId,setCategoriaId]=useState('');
-  const [tipo,setTipo]=useState<'fijo'|'variable'>('variable');
   const [descripcion,setDescripcion]=useState('');
   const [estado,setEstado]=useState<'pagado'|'pendiente'>('pagado');
   const [mostrarCategoria,setMostrarCategoria]=useState(false);
