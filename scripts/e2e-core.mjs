@@ -71,6 +71,30 @@ async function omitir(page) {
   await dialog.locator('.asistente-tarjeta > button.boton-texto').click();
 }
 
+async function probarDescartarBorrador(page) {
+  await sql(page, "DELETE FROM borradores;");
+  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.getByRole('heading', { name: 'Nuevo cliente' }).waitFor({ state: 'visible', timeout: 30000 });
+  await page.getByLabel('Nombre completo').fill('Borrador descartado E2E');
+  await siguiente(page);
+  await page.getByLabel('Teléfono 1').fill('3009876543');
+  await sleep(600);
+  const creado = await sql(page, "SELECT COUNT(*) AS n FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo';");
+  if (Number(creado[0]?.n) !== 1) throw new Error('E2E: no se creó el borrador de prueba.');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const pendiente = page.getByRole('heading', { name: 'Tienes un formulario sin terminar' });
+  await pendiente.waitFor({ state: 'visible', timeout: 30000 });
+  await page.getByRole('button', { name: 'Descartar' }).click();
+  await sleep(700);
+  const despuesDeDescartar = await sql(page, "SELECT COUNT(*) AS n FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo';");
+  if (Number(despuesDeDescartar[0]?.n) !== 0) throw new Error('E2E: el borrador reapareció después de descartarlo.');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  if (await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).count()) {
+    throw new Error('E2E: el borrador descartado volvió a aparecer tras recargar.');
+  }
+  await page.getByRole('heading', { name: 'Nuevo cliente' }).waitFor({ state: 'visible', timeout: 30000 });
+}
+
 async function crearCliente(page) {
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForFunction(
@@ -345,6 +369,7 @@ try {
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
     await crearCliente(page);
+    await probarDescartarBorrador(page);
 
     // Precalentar la ruta lazy de pedidos antes de ejecutar el flujo intensivo.
     // Esto evita que la primera transformación del módulo ocurra al final de la suite,
