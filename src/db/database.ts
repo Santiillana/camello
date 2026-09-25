@@ -1616,7 +1616,128 @@ class Database {
     const clientes = (r.values ?? []) as Cliente[];
     return this.enriquecerClientes(clientes);
   }
+  async resumenClientes(): Promise<import('../types').ResumenClientes> {
+    const hoy = fechaLocalISO();
+    const inicioMes = hoy.slice(0, 7) + '-01';
 
+    const agregados = await this.conn().query(
+      `WITH ventas_cliente AS (
+         SELECT cliente_id, MAX(fecha) AS ultima_compra,
+                SUM(total) AS total_comprado,
+                SUM(CASE WHEN total > COALESCE(monto_pagado,0) THEN total - COALESCE(monto_pagado,0) ELSE 0 END) AS pendiente,
+                COUNT(*) AS numero_compras
+         FROM ventas
+         WHERE COALESCE(estado_registro,'activa')='activa'
+         GROUP BY cliente_id
+       ),
+       ritmos_ventas AS (
+         SELECT cliente_id, ROUND(AVG(julianday(fecha) - julianday(anterior))) AS ritmo
+         FROM (
+           SELECT cliente_id, fecha,
+                  LAG(fecha) OVER (PARTITION BY cliente_id ORDER BY fecha, hora, id) AS anterior
+           FROM ventas
+           WHERE COALESCE(estado_registro,'activa')='activa'
+         ) ordenadas
+         WHERE anterior IS NOT NULL
+         GROUP BY cliente_id
+       ),
+       clientes_metricas AS (
+         SELECT c.id, c.fecha_registro,
+                COALESCE(vc.total_comprado,0) AS total_comprado,
+                COALESCE(vc.pendiente,0) AS pendiente,
+                COALESCE(vc.numero_compras,0) AS numero_compras,
+                vc.ultima_compra,
+                CASE
+                  WHEN s.modo='manual' AND s.dias IS NOT NULL THEN MAX(1, CAST(s.dias AS INTEGER))
+                  ELSE COALESCE(rv.ritmo,20)
+                END AS ritmo_dias
+         FROM clientes c
+         LEFT JOIN ventas_cliente vc ON vc.cliente_id=c.id
+         LEFT JOIN ritmos_ventas rv ON rv.cliente_id=c.id
+         LEFT JOIN seguimiento_clientes s ON s.cliente_id=c.id
+         WHERE c.estado='activo'
+       )
+       SELECT COUNT(*) AS activos,
+              SUM(CASE WHEN pendiente > 0 THEN 1 ELSE 0 END) AS con_deuda,
+              COALESCE(SUM(pendiente),0) AS deuda_total,
+              SUM(CASE WHEN ultima_compra IS NOT NULL AND julianday(?) - julianday(ultima_compra) > 20 THEN 1 ELSE 0 END) AS sin_comprar,
+              SUM(CASE WHEN fecha_registro BETWEEN ? AND ? THEN 1 ELSE 0 END) AS nuevos_mes,
+              CASE WHEN SUM(numero_compras) > 0 THEN SUM(total_comprado) * 1.0 / SUM(numero_compras) ELSE 0 END AS ticket_promedio,
+              COALESCE(AVG(CASE WHEN numero_compras >= 2 THEN ritmo_dias END),20) AS frecuencia
+       FROM clientes_metricas;`,
+      [hoy, inicioMes, hoy],
+    );
+
+    const mejoresMonto = await this.conn().query(
+      `SELECT c.id, c.nombre, COALESCE(SUM(v.total),0) AS total_comprado
+       FROM clientes c
+       LEFT JOIN ventas v ON v.cliente_id=c.id AND COALESCE(v.estado_registro,'activa')='activa'
+       WHERE c.estado='activo'
+       GROUP BY c.id, c.nombre, c.nombre_normalizado
+       ORDER BY total_comprado DESC, c.nombre_normalizado ASC, c.id ASC
+       LIMIT 3;`
+    );
+
+    const mejoresFrecuencia = await this.conn().query(
+      `WITH ventas_ordenadas AS (
+         SELECT cliente_id, fecha,
+                LAG(fecha) OVER (PARTITION BY cliente_id ORDER BY fecha, hora, id) AS anterior
+         FROM ventas
+         WHERE COALESCE(estado_registro,'activa')='activa'
+       ),
+       ritmos AS (
+         SELECT cliente_id, ROUND(AVG(julianday(fecha) - julianday(anterior))) AS ritmo_dias,
+                COUNT(*) + 1 AS numero_compras
+         FROM ventas_ordenadas
+         WHERE anterior IS NOT NULL
+         GROUP BY cliente_id
+       )
+       SELECT c.id, c.nombre,
+              CASE
+                WHEN s.modo='manual' AND s.dias IS NOT NULL THEN MAX(1, CAST(s.dias AS INTEGER))
+                ELSE COALESCE(r.ritmo_dias,20)
+              END AS ritmo_dias
+       FROM clientes c
+       JOIN ritmos r ON r.cliente_id=c.id
+       LEFT JOIN seguimiento_clientes s ON s.cliente_id=c.id
+       WHERE c.estado='activo' AND r.numero_compras >= 2
+       ORDER BY ritmo_dias ASC, c.nombre_normalizado ASC, c.id ASC
+       LIMIT 3;`
+    );
+
+    const cumpleanos = await this.conn().query(
+      `SELECT
+         (SELECT COUNT(*) FROM clientes
+          WHERE estado='activo' AND cumple_dia IS NOT NULL AND cumple_mes IS NOT NULL)
+         +
+         (SELECT COUNT(*) FROM mascotas m
+          JOIN clientes c ON c.id=m.cliente_id
+          WHERE c.estado='activo' AND m.estado='activo'
+            AND m.cumple_dia IS NOT NULL AND m.cumple_mes IS NOT NULL) AS cumpleanos;`
+    );
+
+    const row = agregados.values?.[0] ?? {};
+    return {
+      activos: Number(row.activos ?? 0),
+      conDeuda: Number(row.con_deuda ?? 0),
+      deudaTotal: Number(row.deuda_total ?? 0),
+      sinComprar: Number(row.sin_comprar ?? 0),
+      nuevosMes: Number(row.nuevos_mes ?? 0),
+      ticketPromedio: Number(row.ticket_promedio ?? 0),
+      frecuencia: Number(row.frecuencia ?? 20),
+      cumpleanos: Number(cumpleanos.values?.[0]?.cumpleanos ?? 0),
+      mejorMonto: (mejoresMonto.values ?? []).map((item) => ({
+        id: Number(item.id),
+        nombre: String(item.nombre),
+        total_comprado: Number(item.total_comprado ?? 0),
+      })),
+      mejorFrecuencia: (mejoresFrecuencia.values ?? []).map((item) => ({
+        id: Number(item.id),
+        nombre: String(item.nombre),
+        ritmo_dias: Math.max(1, Number(item.ritmo_dias ?? 20)),
+      })),
+    };
+  }
   async obtenerCliente(id: number): Promise<ClienteConResumen | null> {
     const r = await this.conn().query('SELECT * FROM clientes WHERE id = ?;', [id]);
     const c = r.values?.[0] as Cliente | undefined;

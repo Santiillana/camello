@@ -186,6 +186,18 @@ export interface ClienteConResumen extends Cliente {
   recordar_hasta?: string | null;
 }
 
+export interface ResumenClientes {
+  activos: number;
+  conDeuda: number;
+  deudaTotal: number;
+  sinComprar: number;
+  nuevosMes: number;
+  ticketPromedio: number;
+  frecuencia: number;
+  cumpleanos: number;
+  mejorMonto: Array<{ id: number; nombre: string; total_comprado: number }>;
+  mejorFrecuencia: Array<{ id: number; nombre: string; ritmo_dias: number }>;
+}
 export interface RutaConResumen extends Ruta {
   vendidos: number;
   disponibles: number;

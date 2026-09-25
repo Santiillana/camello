@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import ClienteForm from '../components/ClienteForm';
 import { database } from '../db/database';
-import type { ClienteConResumen } from '../types';
-import { formatoMoneda, hoyISO, inicioMesISO } from '../utils/format';
+import type { ClienteConResumen, ResumenClientes } from '../types';
+import { formatoMoneda } from '../utils/format';
 
 const ETIQUETA_SEGUIMIENTO: Record<string, string> = {
   ACTIVO: 'Activo',
@@ -11,89 +11,83 @@ const ETIQUETA_SEGUIMIENTO: Record<string, string> = {
   INACTIVO: 'Inactivo',
 };
 
-function normalizarBusqueda(valor: string): string {
-  return valor
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const PAGE_SIZE = 50;
 
 export default function Clientes() {
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [params] = useSearchParams();
   const [mostrarForm, setMostrarForm] = useState(params.get('nuevo') === '1');
+  const [metricas, setMetricas] = useState<ResumenClientes>({
+    activos: 0, conDeuda: 0, deudaTotal: 0, sinComprar: 0, nuevosMes: 0,
+    ticketPromedio: 0, frecuencia: 20, cumpleanos: 0, mejorMonto: [], mejorFrecuencia: [],
+  });
+  const [hayMas, setHayMas] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const solicitudClientesRef = useRef(0);
 
-  async function cargar() {
+  const cargarClientes = useCallback(async (offset: number, agregar: boolean) => {
+    const solicitud = ++solicitudClientesRef.current;
+    if (agregar) setCargandoMas(true);
+    else setCargando(true);
     try {
-      const todos = await database.listarClientes({ soloActivos: true });
-      setClientes(todos);
+      const loteCompleto = await database.listarClientes({
+        soloActivos: true,
+        texto: busqueda,
+        limite: PAGE_SIZE + 1,
+        offset,
+      });
+      if (solicitud !== solicitudClientesRef.current) return;
+      const lote = loteCompleto.slice(0, PAGE_SIZE);
+      setClientes((actual) => agregar ? [...actual, ...lote] : lote);
+      setHayMas(loteCompleto.length > PAGE_SIZE);
+      setError(null);
+    } catch (e: unknown) {
+      if (solicitud !== solicitudClientesRef.current) return;
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (solicitud !== solicitudClientesRef.current) return;
+      if (agregar) setCargandoMas(false);
+      else setCargando(false);
+    }
+  }, [busqueda]);
+
+  const cargarMetricas = useCallback(async () => {
+    try {
+      const resumen = await database.resumenClientes();
+      setMetricas(resumen);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }, []);
+
+  useEffect(() => {
+    setClientes([]);
+    setHayMas(false);
+    void cargarClientes(0, false);
+  }, [busqueda, cargarClientes]);
+
+  useEffect(() => {
+    void cargarMetricas();
+  }, [cargarMetricas]);
+
+  async function recargarDespuesDeGuardar() {
+    await Promise.all([cargarClientes(0, false), cargarMetricas()]);
   }
-
-  useEffect(() => { void cargar(); }, []);
-
-  const filtrados = useMemo(() => {
-    const texto = normalizarBusqueda(busqueda);
-    if (!texto) return clientes;
-    return clientes.filter((c) => {
-      const base = [
-        c.nombre,
-        c.telefono1 ?? '',
-        c.telefono2 ?? '',
-        ...c.mascotas.map((m) => m.nombre),
-      ].join(' ');
-      return normalizarBusqueda(base).includes(texto);
-    });
-  }, [clientes, busqueda]);
-
-  const metricas = useMemo(() => {
-    const inicioMes = inicioMesISO();
-    const activos = clientes.length;
-    const conDeuda = clientes.filter((c) => c.pendiente > 0).length;
-    const sinComprar = clientes.filter((c) => c.dias_desde_ultima_compra != null && c.dias_desde_ultima_compra > 20).length;
-    const nuevosMes = clientes.filter((c) => c.fecha_registro >= inicioMes && c.fecha_registro <= hoyISO()).length;
-    const totalVendido = clientes.reduce((sum, c) => sum + c.total_comprado, 0);
-    const totalCompras = clientes.reduce((sum, c) => sum + c.numero_compras, 0);
-    const ticketPromedio = totalCompras > 0 ? totalVendido / totalCompras : 0;
-    const frecuencia = clientes.filter((c) => c.numero_compras >= 2).reduce((sum, c) => sum + c.ritmo_dias, 0);
-    const frecuenciaCount = clientes.filter((c) => c.numero_compras >= 2).length;
-    const mejorMonto = [...clientes].sort((a, b) => b.total_comprado - a.total_comprado).slice(0, 3);
-    const mejorFrecuencia = [...clientes].sort((a, b) => a.ritmo_dias - b.ritmo_dias).slice(0, 3);
-    const cumpleanos = clientes.filter((c) => c.cumple_dia && c.cumple_mes).length +
-      clientes.reduce((sum, c) => sum + c.mascotas.filter((m) => m.cumple_dia && m.cumple_mes).length, 0);
-    return {
-      activos,
-      conDeuda,
-      sinComprar,
-      nuevosMes,
-      ticketPromedio,
-      frecuencia: frecuenciaCount > 0 ? frecuencia / frecuenciaCount : 20,
-      mejorMonto,
-      mejorFrecuencia,
-      cumpleanos,
-    };
-  }, [clientes]);
 
   return (
     <div className="pantalla">
       <header className="encabezado">
         <h1>Clientes</h1>
-        <button
-          className="boton-secundario"
-          onClick={() => {
-            const siguiente = !mostrarForm;
-            setMostrarForm(siguiente);
-            navigate(siguiente ? '/clientes?nuevo=1' : '/clientes');
-          }}
-        >
+        <button className="boton-secundario" onClick={() => {
+          const siguiente = !mostrarForm;
+          setMostrarForm(siguiente);
+          navigate(siguiente ? '/clientes?nuevo=1' : '/clientes');
+        }}>
           {mostrarForm ? 'Cancelar' : '+ Nuevo cliente'}
         </button>
       </header>
@@ -105,81 +99,68 @@ export default function Clientes() {
           textoBoton="Guardar cliente"
           onGuardado={(id) => {
             setMostrarForm(false);
-            void cargar();
+            void recargarDespuesDeGuardar();
             navigate(`/clientes/${id}`);
           }}
-          onCancelar={() => {
-            setMostrarForm(false);
-            navigate('/clientes');
-          }}
+          onCancelar={() => { setMostrarForm(false); navigate('/clientes'); }}
         />
       )}
 
       <section className="tarjeta">
         <div className="fila-titulo-boton">
-          <div>
-            <p className="texto-kicker">Métricas</p>
-            <h2>Resumen de clientes</h2>
-          </div>
+          <div><p className="texto-kicker">Métricas</p><h2>Resumen de clientes</h2></div>
         </div>
         <div className="grid-stats">
           <div className="stat-card"><span className="stat-valor">{metricas.activos}</span><span className="stat-etiqueta">Activos</span></div>
           <div className="stat-card"><span className="stat-valor">{metricas.conDeuda}</span><span className="stat-etiqueta">Con deuda</span></div>
+          <div className="stat-card"><span className="stat-valor">{formatoMoneda(metricas.deudaTotal)}</span><span className="stat-etiqueta">Deuda total</span></div>
           <div className="stat-card"><span className="stat-valor">{metricas.sinComprar}</span><span className="stat-etiqueta">Sin comprar +20 días</span></div>
           <div className="stat-card"><span className="stat-valor">{metricas.nuevosMes}</span><span className="stat-etiqueta">Nuevos del mes</span></div>
           <div className="stat-card"><span className="stat-valor">{formatoMoneda(metricas.ticketPromedio)}</span><span className="stat-etiqueta">Ticket promedio</span></div>
           <div className="stat-card"><span className="stat-valor">{Math.round(metricas.frecuencia)} d</span><span className="stat-etiqueta">Frecuencia media</span></div>
         </div>
-
         <div className="metricas-listas">
-          <div>
-            <strong>Mejores clientes por monto</strong>
-            <ul>
-              {metricas.mejorMonto.map((c) => <li key={c.id}><span>{c.nombre}</span><strong>{formatoMoneda(c.total_comprado)}</strong></li>)}
-            </ul>
-          </div>
-          <div>
-            <strong>Clientes con ritmo de compra más frecuente</strong>
-            <ul>
-              {metricas.mejorFrecuencia.map((c) => <li key={c.id}><span>{c.nombre}</span><strong>cada {c.ritmo_dias} días</strong></li>)}
-            </ul>
-          </div>
-          <div>
-            <strong>Próximos cumpleaños registrados</strong>
+          <div><strong>Mejores clientes por monto</strong><ul>
+            {metricas.mejorMonto.map((c) => <li key={c.id}><span>{c.nombre}</span><strong>{formatoMoneda(c.total_comprado)}</strong></li>)}
+          </ul></div>
+          <div><strong>Clientes con ritmo de compra más frecuente</strong><ul>
+            {metricas.mejorFrecuencia.map((c) => <li key={c.id}><span>{c.nombre}</span><strong>cada {c.ritmo_dias} días</strong></li>)}
+          </ul></div>
+          <div><strong>Cumpleaños registrados</strong>
             <p className="texto-vacio">{metricas.cumpleanos} cumpleaños con día y mes guardados.</p>
           </div>
         </div>
       </section>
 
-      <input
-        className="campo-busqueda"
-        placeholder="Buscar por cliente o mascota…"
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
-      />
+      <input className="campo-busqueda" placeholder="Buscar por cliente o mascota…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
 
-      <ul className="lista-clientes">
-        {filtrados.map((c) => (
-          <li key={c.id}>
-            <Link to={`/clientes/${c.id}`} className="tarjeta-cliente">
-              <div>
-                <strong>{c.nombre}</strong>
-                <div className="detalle-cliente">
-                  {c.mascotas.length > 0 && <span>{c.mascotas.map((m) => m.nombre).join(', ')} · </span>}
-                  {c.ultima_compra ? `Última compra: ${c.ultima_compra}` : 'Sin compras aún'}
-                </div>
-              </div>
-              <div className="lado-derecho-cliente">
-                {c.pendiente > 0 && <span className="etiqueta-pendiente">{formatoMoneda(c.pendiente)}</span>}
-                <span className={'etiqueta-seguimiento ' + c.seguimiento.toLowerCase()}>
-                  {ETIQUETA_SEGUIMIENTO[c.seguimiento]}
-                </span>
-              </div>
-            </Link>
-          </li>
-        ))}
-        {filtrados.length === 0 && !error && <p className="texto-vacio">No hay clientes que coincidan con la búsqueda.</p>}
-      </ul>
+      {cargando && clientes.length === 0 ? <p className="texto-vacio">Cargando clientes…</p> : (
+        <>
+          <ul className="lista-clientes">
+            {clientes.map((c) => (
+              <li key={c.id}>
+                <Link to={`/clientes/${c.id}`} className="tarjeta-cliente">
+                  <div><strong>{c.nombre}</strong><div className="detalle-cliente">
+                    {c.mascotas.length > 0 && <span>{c.mascotas.map((m) => m.nombre).join(', ')} · </span>}
+                    {c.ultima_compra ? `Última compra: ${c.ultima_compra}` : 'Sin compras aún'}
+                  </div></div>
+                  <div className="lado-derecho-cliente">
+                    {c.pendiente > 0 && <span className="etiqueta-pendiente">{formatoMoneda(c.pendiente)}</span>}
+                    <span className={'etiqueta-seguimiento ' + c.seguimiento.toLowerCase()}>{ETIQUETA_SEGUIMIENTO[c.seguimiento]}</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+            {clientes.length === 0 && !error && <p className="texto-vacio">No hay clientes que coincidan con la búsqueda.</p>}
+          </ul>
+          {hayMas && <div className="fila-titulo-boton">
+            <span className="detalle-cliente">Mostrando {clientes.length} cliente(s)</span>
+            <button type="button" className="boton-secundario" disabled={cargandoMas} onClick={() => void cargarClientes(clientes.length, true)}>
+              {cargandoMas ? 'Cargando…' : 'Cargar más'}
+            </button>
+          </div>}
+        </>
+      )}
     </div>
   );
 }
