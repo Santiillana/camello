@@ -42,20 +42,6 @@ jobs:
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
           accept-android-sdk-licenses: "true"
 
-      - name: Detectar secretos de firma
-        env:
-          KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
-        run: |
-          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
-            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
-          else
-            echo "Faltan secretos de firma: CAMELLO_RELEASE_KEYSTORE_B64, CAMELLO_KEYSTORE_PASSWORD, CAMELLO_KEY_ALIAS y CAMELLO_KEY_PASSWORD."
-            exit 1
-          fi
-
       - name: Compilar APK debug fallback
         run: |
           VERSION_NAME=$(node -p "require('./package.json').version")
@@ -75,6 +61,21 @@ jobs:
             CAMELLO-debug-v*.apk.sha256
           if-no-files-found: error
           retention-days: 7
+
+      - name: Detectar secretos de firma
+        env:
+          KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+            echo "Secretos de firma disponibles; se continuará con el APK release."
+          else
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "Secretos de firma de release no disponibles; se conservará el APK debug."
+          fi
 
       - name: Materializar keystore temporal
         if: env.SIGNING_READY == 'true'
