@@ -75,7 +75,7 @@ export default function Mapa() {
   const [filtros, setFiltros] = useState<FiltrosMapa>(cargarFiltrosGuardados);
   const [clientesRuta, setClientesRuta] = useState<Set<number> | null>(null);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number; precision?: number } | null>(null);
-  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
@@ -106,17 +106,6 @@ export default function Mapa() {
       // La persistencia de filtros es opcional y nunca bloquea el mapa.
     }
   }, [filtros]);
-
-  useEffect(() => {
-    const online = () => setOffline(false);
-    const offlineHandler = () => setOffline(true);
-    window.addEventListener('online', online);
-    window.addEventListener('offline', offlineHandler);
-    return () => {
-      window.removeEventListener('online', online);
-      window.removeEventListener('offline', offlineHandler);
-    };
-  }, []);
 
   useEffect(() => {
     let activo = true;
@@ -185,10 +174,6 @@ export default function Mapa() {
     if (!contenedorRef.current || mapaRef.current) return;
     const mapa = L.map(contenedorRef.current).setView(VILLAVICENCIO, 13);
     mapaRef.current = mapa;
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; colaboradores de OpenStreetMap',
-    }).addTo(mapa);
 
     capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
 
@@ -303,7 +288,7 @@ export default function Mapa() {
       </header>
 
       {error && <p className="texto-error">{error}</p>}
-      {offline && <p className="banner-info">Sin internet: mapa base no disponible; los pines guardados siguen disponibles.</p>}
+      <p className="banner-info">Mapa vectorial local: los pines y filtros funcionan sin depender de un servicio de mapas remoto.</p>
       {miUbicacion && <p className="detalle-cliente">Mi ubicación: ±{miUbicacion.precision != null ? Math.round(miUbicacion.precision) + ' m' : 'precisión no disponible'}.</p>}
 
       <section className="tarjeta">
@@ -364,7 +349,7 @@ export default function Mapa() {
         ))}
       </div>
 
-      <div ref={contenedorRef} className="contenedor-mapa" />
+      <div ref={contenedorRef} className="contenedor-mapa mapa-vectorial-local" />
 
       <div className="leyenda-mapa">
         <span>● Activo</span>
