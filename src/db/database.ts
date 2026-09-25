@@ -2578,15 +2578,19 @@ class Database {
 
     const gastos = await this.conn().query(
       `SELECT
-         COALESCE(SUM(CASE WHEN c.naturaleza='operativo' AND g.estado <> 'anulado' THEN g.monto ELSE 0 END),0) operativo,
+         COALESCE(SUM(CASE WHEN c.naturaleza='operativo' AND g.estado <> 'anulado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) operativo,
+         COALESCE(SUM(CASE WHEN c.naturaleza='compra_insumos' AND g.estado <> 'anulado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) compras_insumos,
+         COALESCE(SUM(CASE WHEN c.naturaleza='operativo' AND c.tipo='fijo' AND g.estado <> 'anulado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) gastos_fijos,
+         COALESCE(SUM(CASE WHEN c.naturaleza='retiro_dueno' AND g.estado <> 'anulado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) retiros_dueno,
          COALESCE(SUM(CASE WHEN g.estado='pendiente' AND g.archivado=0 THEN g.monto ELSE 0 END),0) pendientes,
          COALESCE(SUM(CASE WHEN g.estado='pagado' AND g.archivado=0 THEN g.monto ELSE 0 END),0) pagados
        FROM gastos g JOIN categorias_gasto c ON c.id=g.categoria_id
-       WHERE g.periodo >= substr(?,1,7) AND g.fecha BETWEEN ? AND ?;`,
-      [hasta, desde, hasta],
+       WHERE g.fecha BETWEEN ? AND ?;`,
+      [desde, hasta],
     );
     const gr = gastos.values?.[0] ?? {};
     const gastosOperativos = Number(gr.operativo ?? 0);
+    const gastosPagados = Number(gr.pagados ?? 0);
     const utilidadBruta = Number(row.ventas ?? 0) - Number(row.costos ?? 0);
     return {
       ventas,
@@ -2612,7 +2616,7 @@ class Database {
       gastos_fijos: Number(gr.gastos_fijos ?? 0),
       retiros_dueno: Number(gr.retiros_dueno ?? 0),
       utilidad_neta: utilidadBruta - gastosOperativos,
-      flujo_caja: Number(row.pagado ?? 0) - Number(gr.pagados ?? 0),
+      flujo_caja: Number(row.pagado ?? 0) - gastosPagados,
       gastos_pendientes: Number(gr.pendientes ?? 0),
     };
   }
