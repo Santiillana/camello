@@ -21,6 +21,7 @@ const Rutas = lazy(() => import('./pages/Rutas'));
 const RutaDetalle = lazy(() => import('./pages/RutaDetalle'));
 const Mapa = lazy(() => import('./pages/Mapa'));
 const Informes = lazy(() => import('./pages/Informes'));
+const Pedidos = lazy(() => import('./pages/Pedidos'));
 const Cartera = lazy(() => import('./pages/Cartera'));
 const Respaldo = lazy(() => import('./pages/Respaldo'));
 const Recordatorios = lazy(() => import('./pages/Recordatorios'));
@@ -157,6 +158,7 @@ function NavegacionShell({ config, onConfigChanged }: { config: ConfiguracionApp
             <Route path="/rutas/:id" element={<RutaDetalle />} />
             <Route path="/mapa" element={<Mapa />} />
             <Route path="/informes" element={<Informes />} />
+            <Route path="/pedidos" element={<Pedidos />} />
             <Route path="/cartera" element={<Cartera />} />
             <Route path="/recordatorios" element={<Recordatorios />} />
             <Route path="/gastos" element={<Gastos />} />
