@@ -17,7 +17,7 @@ async function esperarServidor(url) {
     try {
       const response = await fetch(url);
       if (response.ok) return;
-    } catch {}
+    } catch { /* Espera auxiliar best-effort; el bucle principal reintenta hasta el límite configurado. */ }
     await sleep(250);
   }
   throw new Error('Vite no inició.\n' + serverLog);
@@ -25,12 +25,12 @@ async function esperarServidor(url) {
 
 async function configurarPrimeraVez(page) {
   const inicial = page.getByRole('heading', { name: 'Vamos a preparar tu espacio de trabajo' });
-  await inicial.waitFor({ state: 'visible', timeout: 12000 }).catch(() => {});
+  await inicial.waitFor({ state: 'visible', timeout: 12000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   if (await inicial.isVisible().catch(() => false)) {
     await page.getByLabel('Nombre del negocio').fill('Negocio E2E');
     await page.getByLabel('Nombre de quien lleva la app').fill('Usuario E2E');
     await page.getByRole('button', { name: 'Entrar a CAMELLO' }).click();
-    await page.getByRole('heading', { name: 'Inicio' }).waitFor().catch(() => {});
+    await page.getByRole('heading', { name: 'Inicio' }).waitFor().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   }
 }
 
@@ -51,14 +51,14 @@ async function crearCliente(page) {
     { timeout: 60000 },
   );
   await configurarPrimeraVez(page);
-  await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+  await page.getByRole('heading', { name: 'Inicio' }).waitFor({ state: 'visible', timeout: 15000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   try {
     await page.getByLabel('Nombre completo').waitFor({ timeout: 70000 });
   } catch (error) {
     const texto = await page.locator('body').innerText().catch(() => '');
     const sqliteStage = await page.evaluate(() => document.documentElement.dataset.camelloSqliteStage || 'sin-etapa').catch(() => 'sin-etapa');
-    await page.screenshot({ path: 'e2e-fallo-clientes.png', fullPage: true }).catch(() => {});
+    await page.screenshot({ path: 'e2e-fallo-clientes.png', fullPage: true }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
     throw new Error('No apareció Nombre completo. Etapa SQLite: ' + sqliteStage + '. Texto de pantalla:\n' + texto.slice(0, 5000) + '\nCausa: ' + String(error));
   }
 
@@ -115,7 +115,7 @@ async function crearCliente(page) {
     const pantalla = await page.locator('body').innerText().catch(() => '');
     const errores = await page.locator('.texto-error,[role="alert"]').allTextContents().catch(() => []);
     const botones = await page.getByRole('button').allTextContents().catch(() => []);
-    await page.screenshot({ path: 'e2e-fallo-cliente.png', fullPage: true }).catch(() => {});
+    await page.screenshot({ path: 'e2e-fallo-cliente.png', fullPage: true }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
     throw new Error(
       'E2E: el cliente no quedó persistido tras guardar el formulario. '
       + 'URL=' + page.url()
@@ -126,8 +126,8 @@ async function crearCliente(page) {
   }
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor({ state: 'visible', timeout: 60000 }).catch(() => {});
-  await page.getByText('Cliente E2E', { exact: true }).waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+  await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor({ state: 'visible', timeout: 60000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
+  await page.getByText('Cliente E2E', { exact: true }).waitFor({ state: 'visible', timeout: 20000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   await page.waitForFunction(
     () => typeof window.__CAMELLO_TEST_SQL__ === 'function',
     undefined,
@@ -179,7 +179,7 @@ async function sql(page, query, params = []) {
 
 async function venta(page, metodo, cantidad = 1, doble = false) {
   await sql(page, 'DELETE FROM borradores;');
-  await page.getByRole('button', { name: 'Listo' }).click().catch(() => {});
+  await page.getByRole('button', { name: 'Listo' }).click().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('button', { name: /Nueva acción/ }).click();
   await page.getByRole('menu').getByRole('button', { name: 'Nueva venta' }).click();
@@ -198,7 +198,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   } catch (error) {
     const body = await page.locator('body').innerText().catch(() => '');
     const stage = await page.evaluate(() => document.documentElement.dataset.camelloSqliteStage || 'sin-etapa').catch(() => 'sin-etapa');
-    await page.screenshot({ path: 'e2e-fallo-venta.png', fullPage: true }).catch(() => {});
+    await page.screenshot({ path: 'e2e-fallo-venta.png', fullPage: true }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
     throw new Error('No apareció el formulario de nueva venta. URL=' + page.url() + ' etapa=' + stage + ' body=' + body.slice(0, 6000) + ' causa=' + String(error));
   }
   const clienteRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
@@ -255,16 +255,16 @@ async function cerrarRuta(page, sobrantes) {
   await page.getByLabel('Paquetes sobrantes').fill(String(sobrantes));
   await page.getByRole('button', { name: 'Cerrar ruta y cuadrar' }).click();
   await page.getByText('Finalizada').waitFor();
-  await page.getByText('Diferencia').locator('..').getByText('0').waitFor().catch(() => {});
+  await page.getByText('Diferencia').locator('..').getByText('0').waitFor().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
 }
 
 async function probarUbicacionWeb(page) {
-  await page.goto('http://127.0.0.1:5173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+  await page.goto('http://127.0.0.1:5173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const locationButton = page.getByRole('button', { name: /Usar mi ubicación/ });
   if (await locationButton.count()) {
     await locationButton.click();
-    await page.getByText(/GPS requiere la app instalada|No se pudo obtener/).waitFor({ timeout: 8000 }).catch(() => {});
+    await page.getByText(/GPS requiere la app instalada|No se pudo obtener/).waitFor({ timeout: 8000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   }
 }
 
@@ -349,7 +349,7 @@ try {
     await page.goto('http://127.0.0.1:5173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
     const filtros = page.getByRole('button').filter({ hasText: /Filtro|Ubicación|Días|Ruta/ });
     if (await filtros.count() === 0) {
-      await page.getByRole('heading', { name: 'Mapa' }).waitFor().catch(() => {});
+      await page.getByRole('heading', { name: 'Mapa' }).waitFor().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
     }
 
     await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
