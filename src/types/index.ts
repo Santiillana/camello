@@ -142,6 +142,16 @@ export interface PedidoConDetalle extends Pedido {
   items: PedidoItem[];
 }
 
+export interface ResumenPedidosPeriodo {
+  pedidos: number;
+  entregados: number;
+  pendientes: number;
+  cancelados: number;
+  total: number;
+  cobrado: number;
+  fiado: number;
+}
+
 export interface Venta {
   id: number;
   cliente_id: number;
