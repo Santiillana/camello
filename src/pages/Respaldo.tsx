@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { database } from '../db/database';
-import { calcularChecksum, descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
+import { calcularChecksum, descargarArchivoTexto, descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
 import { listarRespaldosAutomaticos, type BackupItem } from '../utils/respaldoAutomatico';
 import { cifrarRespaldo, descifrarRespaldo } from '../utils/respaldoCifrado';
 import { camelloStorage, puedeGuardarEnCarpetaCompartida } from '../utils/almacenamientoNativo';
@@ -48,6 +48,7 @@ export default function Respaldo() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [exportandoClientes, setExportandoClientes] = useState(false);
   const [importando, setImportando] = useState(false);
   const [limpiando, setLimpiando] = useState(false);
   const [meta, setMeta] = useState<MetaRespaldo | null>(null);
@@ -102,6 +103,58 @@ export default function Respaldo() {
       setError('No se pudo guardar el respaldo en la carpeta elegida: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setExportando(false);
+    }
+  }
+
+  async function exportarClientesJson() {
+    setExportandoClientes(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarClientes();
+      const fecha = new Date().toISOString().slice(0, 10);
+      descargarArchivoTexto(json, 'camello-clientes-completo-' + fecha + '.json', 'application/json;charset=utf-8');
+      setMensaje('Exportación completa de clientes generada en JSON. Conserva este archivo como copia portable de los datos.');
+    } catch (e: unknown) {
+      setError('No se pudo exportar la base de clientes: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportandoClientes(false);
+    }
+  }
+
+  async function guardarClientesJsonEnCarpeta() {
+    setExportandoClientes(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarClientes();
+      const fecha = new Date().toISOString().replaceAll(':', '-').slice(0, 19);
+      await camelloStorage.saveBackup({
+        filename: 'camello-clientes-completo-' + fecha + '.json',
+        data: json,
+        mimeType: 'application/json',
+      });
+      setMensaje('Exportación completa de clientes guardada en la carpeta elegida.');
+    } catch (e: unknown) {
+      setError('No se pudo guardar la exportación de clientes: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportandoClientes(false);
+    }
+  }
+
+  async function exportarClientesCsv() {
+    setExportandoClientes(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const csv = await database.exportarClientesCsv();
+      const fecha = new Date().toISOString().slice(0, 10);
+      descargarArchivoTexto(csv, 'camello-clientes-' + fecha + '.csv', 'text/csv;charset=utf-8');
+      setMensaje('CSV de clientes generado para Excel, Google Sheets y otras herramientas.');
+    } catch (e: unknown) {
+      setError('No se pudo generar el CSV de clientes: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportandoClientes(false);
     }
   }
 
@@ -231,7 +284,7 @@ export default function Respaldo() {
       <section className="tarjeta">
         <h2>Exportar</h2>
         <div className="fila-botones">
-          <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || importando || limpiando}>
+          <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || exportandoClientes || importando || limpiando}>
             {exportando ? 'Generando…' : '⬇️ Descargar respaldo cifrado (recomendado)'}
           </button>
           <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Descargar sin cifrar</button>
@@ -245,6 +298,25 @@ export default function Respaldo() {
             <div><span>Checksum</span><strong className="texto-pequeno">{ultimo.checksum}</strong></div>
           </div>
         )}
+      </section>
+
+      <section className="tarjeta">
+        <h2>Clientes: exportación completa</h2>
+        <p className="texto-vacio">El JSON es la exportación maestra: conserva clientes, mascotas, fotos, seguimiento, ventas, pagos, pedidos, artículos y rutas referenciadas sin depender de cómo se vea la aplicación.</p>
+        <div className="fila-botones">
+          <button className="boton-primario" onClick={() => void exportarClientesJson()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            {exportandoClientes ? 'Generando…' : 'Descargar clientes completos (JSON)'}
+          </button>
+          <button className="boton-secundario" onClick={() => void exportarClientesCsv()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            CSV para Excel
+          </button>
+          {puedeGuardarEnCarpetaCompartida() && (
+            <button className="boton-secundario" onClick={() => void guardarClientesJsonEnCarpeta()} disabled={exportando || exportandoClientes || importando || limpiando}>
+              Guardar JSON en carpeta…
+            </button>
+          )}
+        </div>
+        <p className="detalle-cliente">JSON = copia completa y portable. CSV = tabla sencilla de clientes para herramientas de oficina. La exportación nunca modifica la base de datos.</p>
       </section>
 
       <section className="tarjeta">
