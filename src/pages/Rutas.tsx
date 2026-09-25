@@ -198,7 +198,7 @@ function FormNuevaRuta({
         ? <div className="tarjeta-interna"><strong>{pedidosSeleccionados.reduce((total, id) => total + (pedidosDisponibles.find((pedido) => pedido.id === id)?.items.reduce((s, item) => s + item.cantidad, 0) ?? 0), 0)}</strong><span className="detalle-cliente">paquetes comprometidos</span></div>
         : <label>Paquetes llevados<input type="number" min={1} step={1} value={paquetes} onChange={(e) => setPaquetes(Number(e.target.value))} inputMode="numeric" /></label>,
       validar: () => tipo === 'Entrega de pedidos'
-        ? (pedidosSeleccionados.length > 0 ? null : 'Selecciona al menos un pedido para una ruta de entrega.')
+        ? null
         : (Number.isInteger(paquetes) && paquetes > 0 ? null : 'La cantidad debe ser mayor que 0.'),
     },
     {
