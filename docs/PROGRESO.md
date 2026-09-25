@@ -1,22 +1,35 @@
-# PROGRESO CAMELLO
+# PROGRESO CAMELLO v1.0.0
 
-Rama: `fix/sqlite-wasm-web` · PR #4 · base `main`
-No se ha hecho merge a `main`.
+Rama: `release/v1`
+Base funcional: `fix/sqlite-wasm-web`
+PR #5 / `fix/jeep-sqlite-wasm`: fuera de alcance, no se modifica.
 
-HEAD: `fa8ba50b64e13b97d1a151c9e6c5fb7b73c16eba`
-Única etiqueta de fase existente: `fase-0-ok`. No se crean etiquetas posteriores sin gate verde observado.
+HEAD de trabajo verificado al actualizar este documento: `a54cbe29a54b6f8f6f4df9e0408f406393358535`.
 
 ## Estado por bloques
-- R: corregido; gate posterior bloqueado.
-- F0: PASÓ históricamente; `fase-0-ok`.
-- C1-C9: implementados; gates finales bloqueados.
-- B0-B5: implementados; E2E final bloqueado.
-- G: implementado; gate final bloqueado.
-- S: implementado en lo automatizable; gate final bloqueado.
-- C: implementado; SQLCipher pendiente.
-- U1: implementado.
-- M: implementado y aislado.
-- Z: auditoría/documentación completadas hasta el límite de infraestructura.
 
-## Honestidad
-Ninguna corrida `failure` sin steps se cuenta como PASÓ. Ningún APK final se declara descargable sin Artifact real del HEAD.
+- TypeScript estricto: configurado en ambos tsconfig.
+- SQLite/migraciones: endurecido con transacciones individuales, rollback y verificación automatizada.
+- ErrorBoundary raíz: implementado y con prueba de error deliberado en Vitest.
+- Leaflet: icono local en `UbicacionMiniMapa`; `Mapa.tsx` usa `circleMarker`.
+- Vitest y E2E: integrados en `npm run verify`.
+- CI: los workflows contienen pasos reales y `release/v1` ejecuta Verify/E2E/APK por push.
+- Supply chain: `npm audit --audit-level=high` queda como paso explícito de CI.
+- Documentación: reconciliada con las limitaciones reales de la infraestructura.
+
+## Evidencia todavía requerida
+
+Los criterios que necesitan recursos externos no se marcan como cumplidos sin evidencia real:
+
+- ejecución completa de `npm ci && npm run verify` en una máquina local del dueño;
+- instalación y prueba funcional del APK en un teléfono físico;
+- prueba visual de 1000 clientes en teléfono;
+- generación y verificación de APK release firmado;
+- custodia del keystore en dos ubicaciones fuera de Git;
+- protección administrativa de `main`.
+
+La evidencia disponible en GitHub Actions y el resultado del PR se usarán para cerrar todo lo que sí pueda demostrarse de forma reproducible.
+
+## Regla de honestidad
+
+No se considera PASÓ ningún criterio solo porque el código parezca correcto o porque una ejecución anterior haya sido verde. Cada afirmación final debe corresponder a una ejecución, artefacto o configuración verificable del estado final de `release/v1`.
