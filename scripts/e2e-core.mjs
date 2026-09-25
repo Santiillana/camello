@@ -226,7 +226,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   }
   await siguiente(page);
 
-  const confirm = page.getByRole('dialog', { name: 'Nueva venta' }).getByRole('button', { name: 'CONFIRMAR VENTA', exact: true });
+  const confirm = page.locator('.asistente-overlay').getByRole('button', { name: 'CONFIRMAR VENTA', exact: true });
   if (doble) await confirm.dblclick();
   else await confirm.click();
 
