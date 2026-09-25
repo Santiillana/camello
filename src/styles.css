@@ -831,7 +831,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .side-nav-cerrar { display: inline-flex; }
   .side-nav-item { justify-content: center; }
   .side-nav.expandido .side-nav-item { justify-content: flex-start; }
-  .side-nav-backdrop.visible { display: block; z-index: 70; }
+  .side-nav-backdrop.visible { display: block; z-index: 79; }
 }
 
 /* --- C2 ubicación y fotos --- */
