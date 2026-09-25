@@ -965,3 +965,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .pantalla-error { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; background: var(--fondo, #f7f7f5); }
 .pantalla-error .tarjeta { width: min(100%, 42rem); }
 .pantalla-error pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+
+.pedido-entrega-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+}
+.pedido-entrega-card > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tarjeta-interna {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed var(--color-borde);
+  border-radius: 12px;
+  background: var(--color-fondo);
+}
