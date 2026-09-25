@@ -615,6 +615,30 @@ try {
       throw new Error('E2E: el pedido no quedó pendiente y sin ruta.');
     }
 
+    // Un pedido pendiente también puede entregarse fuera de una ruta.
+    await page.getByRole('button', { name: 'Entregar', exact: true }).click();
+    await page.getByRole('button', { name: 'Fiado', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirmar entrega', exact: true }).click();
+    const pedidoSinRutaEntregado = await sql(page, "SELECT estado,pago_estado,ruta_id FROM pedidos WHERE id=(SELECT MAX(id) FROM pedidos);");
+    if (pedidoSinRutaEntregado.length !== 1 || pedidoSinRutaEntregado[0]?.estado !== 'ENTREGADO' || pedidoSinRutaEntregado[0]?.pago_estado !== 'FIADO' || pedidoSinRutaEntregado[0]?.ruta_id != null) {
+      throw new Error('E2E: el pedido no se pudo entregar fuera de una ruta.');
+    }
+    const ventaPedidoSinRuta = await sql(page, "SELECT estado_pago,metodo_pago,monto_pagado,pedido_id FROM ventas WHERE pedido_id=(SELECT MAX(id) FROM pedidos) ORDER BY id DESC LIMIT 1;");
+    if (ventaPedidoSinRuta.length !== 1 || ventaPedidoSinRuta[0]?.estado_pago !== 'PENDIENTE' || ventaPedidoSinRuta[0]?.metodo_pago !== 'FIADO' || Number(ventaPedidoSinRuta[0]?.monto_pagado) !== 0) {
+      throw new Error('E2E: la entrega fiada sin ruta no generó la venta pendiente esperada.');
+    }
+
+    // Crear un segundo pedido para cubrir el flujo de ruta después de probar entrega sin ruta.
+    await clientePedido.selectOption(String(ids[0].cliente_id));
+    await productoPedido.selectOption(String(ids[0].producto_id));
+    await formularioPedido.getByLabel('Cantidad').fill('1');
+    await page.getByRole('button', { name: 'Agregar producto' }).click();
+    await page.getByRole('button', { name: 'Guardar pedido' }).click();
+    const pedidoParaRuta = await sql(page, "SELECT id,estado,ruta_id FROM pedidos ORDER BY id DESC LIMIT 1;");
+    if (pedidoParaRuta.length !== 1 || pedidoParaRuta[0]?.estado !== 'PENDIENTE' || pedidoParaRuta[0]?.ruta_id != null) {
+      throw new Error('E2E: el segundo pedido no quedó pendiente para la ruta.');
+    }
+
     await page.goto('http://127.0.0.1:5173/#/rutas?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.getByLabel('Nombre de la ruta').fill('Ruta pedidos E2E');
     await siguiente(page);
