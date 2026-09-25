@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { database } from '../db/database';
 import type { ClienteConResumen, PedidoConDetalle, Producto } from '../types';
@@ -18,6 +18,7 @@ export default function Pedidos() {
   const [items, setItems] = useState<Array<{ producto_id: number; cantidad: number }>>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const clientesSolicitudRef = useRef(0);
   const [entregaPedidoId, setEntregaPedidoId] = useState<number | null>(null);
   const [metodoEntrega, setMetodoEntrega] = useState<'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO'>('EFECTIVO');
   const [reagendarPedidoId, setReagendarPedidoId] = useState<number | null>(null);
@@ -53,14 +54,16 @@ export default function Pedidos() {
   }
 
   async function cargarClientes() {
+    const solicitud = ++clientesSolicitudRef.current;
     try {
       const resultado = await database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 });
+      if (solicitud !== clientesSolicitudRef.current) return;
       setClientes(() => {
         const seleccionado = clienteSeleccionado && !resultado.some((c) => c.id === clienteSeleccionado.id) ? [clienteSeleccionado] : [];
         return [...seleccionado, ...resultado];
       });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (solicitud === clientesSolicitudRef.current) setError(e instanceof Error ? e.message : String(e));
     }
   }
 
