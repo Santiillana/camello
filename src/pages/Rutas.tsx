@@ -132,15 +132,18 @@ function FormNuevaRuta({
   const [pedidosSeleccionados, setPedidosSeleccionados] = useState<number[]>([]);
   const datosBorrador = { nombre, tipo, paquetes, usarGps, pedidosSeleccionados };
   useEffect(() => {
-    if (tipo !== 'Entrega de pedidos') {
-      setPedidosDisponibles([]);
-      setPedidosSeleccionados([]);
-      return;
-    }
+    let activo = true;
     void database.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true })
-      .then(setPedidosDisponibles)
-      .catch(() => setPedidosDisponibles([]));
-  }, [tipo]);
+      .then((pedidos) => {
+        if (activo) setPedidosDisponibles(pedidos);
+      })
+      .catch(() => {
+        if (activo) setPedidosDisponibles([]);
+      });
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   const borrador = useBorrador<typeof datosBorrador>({
     tipo: 'ruta-nueva',
