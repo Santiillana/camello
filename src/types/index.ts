@@ -207,6 +207,8 @@ export interface ResumenClientes {
   cumpleanos: number;
   mejorMonto: Array<{ id: number; nombre: string; total_comprado: number }>;
   mejorFrecuencia: Array<{ id: number; nombre: string; ritmo_dias: number }>;
+  mejorCantidad: Array<{ id: number; nombre: string; cantidad: number }>;
+  sinRecompra: Array<{ id: number; nombre: string; ultima_compra: string | null }>;
 }
 export interface RutaConResumen extends Ruta {
   vendidos: number;
