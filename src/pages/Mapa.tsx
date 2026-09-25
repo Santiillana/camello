@@ -74,6 +74,8 @@ export default function Mapa() {
   const [rutas, setRutas] = useState<RutaConResumen[]>([]);
   const [filtros, setFiltros] = useState<FiltrosMapa>(cargarFiltrosGuardados);
   const [clientesRuta, setClientesRuta] = useState<Set<number> | null>(null);
+  const [clientesSeleccionados, setClientesSeleccionados] = useState<Set<number>>(new Set());
+  const [mostrarSeleccionClientes, setMostrarSeleccionClientes] = useState(false);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number; precision?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
@@ -159,6 +161,7 @@ export default function Mapa() {
       if (filtros.estado === 'pendientes' && c.pendiente <= 0) return false;
       if (filtros.estado !== 'todos' && filtros.estado !== 'pendientes' && c.seguimiento !== filtros.estado) return false;
       if (clientesRuta && !clientesRuta.has(c.id)) return false;
+      if (clientesSeleccionados.size > 0 && !clientesSeleccionados.has(c.id)) return false;
 
       const dias = c.dias_desde_ultima_compra;
       if (min != null && Number.isFinite(min) && (dias == null || dias < min)) return false;
@@ -167,14 +170,20 @@ export default function Mapa() {
 
       return true;
     });
-  }, [clientesConUbicacion, filtros, clientesRuta]);
+  }, [clientesConUbicacion, filtros, clientesRuta, clientesSeleccionados]);
 
   useEffect(() => {
     if (!contenedorRef.current || mapaRef.current) return;
-    const mapa = L.map(contenedorRef.current).setView(VILLAVICENCIO, 13);
+    const mapa = L.map(contenedorRef.current, { zoomControl: true }).setView(VILLAVICENCIO, 13);
     mapaRef.current = mapa;
 
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(mapa);
+
     capaMarcadoresRef.current = L.layerGroup().addTo(mapa);
+    window.setTimeout(() => mapa.invalidateSize(), 0);
 
     return () => {
       capaMarcadoresRef.current?.clearLayers();
@@ -287,17 +296,17 @@ export default function Mapa() {
       </header>
 
       {error && <p className="texto-error">{error}</p>}
-      <p className="banner-info">Mapa vectorial local: los pines y filtros funcionan sin depender de un servicio de mapas remoto.</p>
+      <p className="banner-info">Mapa con calles de OpenStreetMap. Los datos y filtros de clientes siguen almacenados localmente.</p>
       {miUbicacion && <p className="detalle-cliente">Mi ubicación: ±{miUbicacion.precision != null ? Math.round(miUbicacion.precision) + ' m' : 'precisión no disponible'}.</p>}
 
       <section className="tarjeta">
         <div className="grid-dos-columnas">
           <label>
             Buscar cliente o mascota
-            <input value={filtros.texto} onChange={(e) => setFiltros((v) => ({ ...v, texto: e.target.value }))} />
+            <input value={filtros.texto} onChange={(e) => setFiltros((v) => ({ ...v, texto: e.target.value }))} placeholder="Nombre o mascota…" />
           </label>
           <label>
-            Visitados en ruta
+            Ruta
             <select value={filtros.rutaId} onChange={(e) => setFiltros((v) => ({ ...v, rutaId: e.target.value }))}>
               <option value="">Todas las rutas</option>
               {rutas.filter((r) => r.estado !== 'CANCELADA').map((r) => (
@@ -305,6 +314,36 @@ export default function Mapa() {
               ))}
             </select>
           </label>
+        </div>
+        <div className="selector-clientes-mapa">
+          <div className="fila-titulo-boton">
+            <strong>Clientes específicos</strong>
+            <span className="detalle-cliente">{clientesSeleccionados.size} seleccionados</span>
+          </div>
+          <div className="fila-botones">
+            <button type="button" className="boton-secundario" onClick={() => setMostrarSeleccionClientes((v) => !v)}>
+              {mostrarSeleccionClientes ? 'Ocultar selección' : 'Seleccionar clientes'}
+            </button>
+            {clientesSeleccionados.size > 0 && <button type="button" className="boton-texto" onClick={() => setClientesSeleccionados(new Set())}>Limpiar selección</button>}
+          </div>
+          {mostrarSeleccionClientes && (
+            <div className="lista-seleccion-clientes" role="group" aria-label="Clientes específicos del mapa">
+              {clientes.filter((c) => c.lat != null && c.lng != null).map((cliente) => (
+                <label key={cliente.id}>
+                  <input
+                    type="checkbox"
+                    checked={clientesSeleccionados.has(cliente.id)}
+                    onChange={(e) => setClientesSeleccionados((actual) => {
+                      const siguiente = new Set(actual);
+                      if (e.target.checked) siguiente.add(cliente.id); else siguiente.delete(cliente.id);
+                      return siguiente;
+                    })}
+                  />
+                  <span>{cliente.nombre}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
         <div className="grid-dos-columnas">
           <label>
