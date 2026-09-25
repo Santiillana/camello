@@ -694,6 +694,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   max-height: var(--camello-vvh, 100dvh);
   overflow: hidden auto;
   overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   padding:
     calc(14px + env(safe-area-inset-top, 0px))
     max(14px, env(safe-area-inset-right, 0px))
