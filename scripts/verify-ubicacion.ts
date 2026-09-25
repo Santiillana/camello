@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   advertenciaCoordenadasPura,
   coordenadasValidas,
@@ -39,3 +40,11 @@ assert.match(
 );
 
 console.log('ubicacion-parser: PASÓ — formatos directos, geo:, Google Maps, texto WhatsApp, rango e inversión.');
+
+const miniMapa = readFileSync(new URL('../src/components/UbicacionMiniMapa.tsx', import.meta.url), 'utf8');
+const mapaPrincipal = readFileSync(new URL('../src/pages/Mapa.tsx', import.meta.url), 'utf8');
+assert.match(miniMapa, /L\.icon\(\{[\s\S]*?iconUrl: ICONO_PIN_URL/);
+assert.match(miniMapa, /data:image\/svg\+xml/);
+assert.doesNotMatch(mapaPrincipal, /L\.tileLayer\(/);
+assert.doesNotMatch(mapaPrincipal, /tile\.openstreetmap\.org/);
+console.log('mapa-local: PASÓ — icono Leaflet local y mapa principal sin raster remoto.');
