@@ -36,7 +36,7 @@ npm run benchmark:db
 npx cap sync android
 ```
 
-Para release firmado se requieren los cuatro secretos descritos en `docs/RELEASE.md`. La ejecución final de Verify/UI/E2E/APK de este cierre quedó QUEUED y no se interpreta como PASÓ hasta observar su conclusión.
+Para release firmado se requieren los cuatro secretos descritos en `docs/RELEASE.md`. La evidencia de cierre se toma únicamente de ejecuciones reales del estado final de la rama y de las pruebas manuales documentadas en docs/PENDIENTES.md.
 
 ## Estructura
 
