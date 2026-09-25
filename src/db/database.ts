@@ -295,6 +295,7 @@ class Database {
       { version: 13, ejecutar: () => this.migrarVersion13(), foreignKeysOff: false },
       { version: 14, ejecutar: () => this.migrarVersion14(), foreignKeysOff: false },
       { version: 15, ejecutar: () => this.migrarVersion15(), foreignKeysOff: false },
+      { version: 16, ejecutar: () => this.migrarVersion16(), foreignKeysOff: false },
     ] as const;
 
     for (const migracion of migraciones) {
@@ -1027,6 +1028,36 @@ class Database {
     };
   }
 
+  private async migrarVersion16(): Promise<void> {
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS categorias_gastos_personales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL UNIQUE,
+      tipo TEXT NOT NULL CHECK (tipo IN ('fijo','variable')),
+      activa INTEGER NOT NULL DEFAULT 1
+    );`, false);
+    await this.conn().execute(`CREATE TABLE IF NOT EXISTS gastos_personales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fecha TEXT NOT NULL,
+      monto INTEGER NOT NULL CHECK (monto > 0),
+      categoria_id INTEGER NOT NULL,
+      descripcion TEXT,
+      estado TEXT NOT NULL DEFAULT 'pagado' CHECK (estado IN ('pagado','pendiente')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (categoria_id) REFERENCES categorias_gastos_personales(id)
+    );`, false);
+    for (const [nombre, tipo] of [['Alimentación','variable'],['Transporte','variable'],['Vivienda','fijo'],['Servicios','variable'],['Salud','variable'],['Educación','variable'],['Ocio','variable'],['Otros','variable']] as const) {
+      await this.conn().run(
+        'INSERT INTO categorias_gastos_personales(nombre,tipo) VALUES (?,?) ON CONFLICT(nombre) DO NOTHING;',
+        [nombre, tipo],
+        false,
+      );
+    }
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_personales_fecha ON gastos_personales(fecha);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_gastos_personales_categoria ON gastos_personales(categoria_id);', false);
+    await this.conn().execute('CREATE INDEX IF NOT EXISTS idx_categorias_gastos_personales_activa ON categorias_gastos_personales(activa);', false);
+  }
+
   private async migrarVersion15(): Promise<void> {
     await this.conn().execute(\`CREATE TABLE IF NOT EXISTS pedidos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1272,7 +1303,7 @@ class Database {
   }
 
   private async verificarEsquemaCompleto(): Promise<void> {
-    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'pedidos', 'pedido_items', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes', 'borradores', 'categorias_gasto', 'gastos', 'gastos_recurrentes'];
+    const tablasRequeridas = ['clientes', 'mascotas', 'productos', 'rutas', 'pedidos', 'pedido_items', 'ventas', 'configuracion_app', 'fotos', 'pagos', 'seguimiento_clientes', 'borradores', 'categorias_gasto', 'gastos', 'gastos_recurrentes', 'categorias_gastos_personales', 'gastos_personales'];
     const nombres = tablasRequeridas.map((nombre) => "'" + nombre + "'").join(', ');
     const r = await this.conn().query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (" + nombres + ');');
     const existentes = new Set((r.values ?? []).map((row) => String(row.name)));
@@ -2082,6 +2113,85 @@ class Database {
     );
     if(Number(r.changes?.changes ?? 0)===0) throw new Error('El pedido no estaba pendiente de entrega.');
     await this.persist();
+  }
+
+  // GASTOS PERSONALES
+  async listarCategoriasGastosPersonales(incluirInactivas = false): Promise<Array<{ id:number; nombre:string; tipo:'fijo'|'variable'; activa:0|1 }>> {
+    const r = await this.conn().query(
+      'SELECT * FROM categorias_gastos_personales ' + (incluirInactivas ? '' : 'WHERE activa=1 ') + 'ORDER BY tipo, nombre;',
+    );
+    return (r.values ?? []).map((row) => ({ id:Number(row.id), nombre:String(row.nombre), tipo:String(row.tipo) as 'fijo'|'variable', activa:Number(row.activa) as 0|1 }));
+  }
+
+  async crearCategoriaGastoPersonal(nombre: string, tipo: 'fijo'|'variable'): Promise<number> {
+    const limpio=textoObligatorio(nombre,'El nombre de la categoría personal').slice(0,80);
+    const r=await this.conn().run(
+      'INSERT INTO categorias_gastos_personales(nombre,tipo) VALUES (?,?);',
+      [limpio,tipo],
+    );
+    await this.persist();
+    return Number(r.changes?.lastId ?? 0);
+  }
+
+  async listarGastosPersonales(opts?: { desde?:string; hasta?:string; categoriaId?:number; estado?:'pagado'|'pendiente' }): Promise<import('../types').GastoPersonal[]> {
+    const where:string[]=[]; const params:unknown[]=[];
+    if(opts?.desde){where.push('g.fecha>=?');params.push(opts.desde);}
+    if(opts?.hasta){where.push('g.fecha<=?');params.push(opts.hasta);}
+    if(opts?.categoriaId){where.push('g.categoria_id=?');params.push(opts.categoriaId);}
+    if(opts?.estado){where.push('g.estado=?');params.push(opts.estado);}
+    const r=await this.conn().query(
+      `SELECT g.*, c.nombre AS categoria, c.tipo FROM gastos_personales g
+       JOIN categorias_gastos_personales c ON c.id=g.categoria_id${where.length?' WHERE '+where.join(' AND '):''}
+       ORDER BY g.fecha DESC,g.id DESC;`,
+      params,
+    );
+    return (r.values ?? []).map((row)=>({
+      id:Number(row.id), fecha:String(row.fecha), monto:Number(row.monto), categoria:String(row.categoria),
+      tipo:String(row.tipo) as 'fijo'|'variable', descripcion:row.descripcion==null?null:String(row.descripcion),
+      estado:String(row.estado) as 'pagado'|'pendiente', created_at:String(row.created_at), updated_at:String(row.updated_at),
+    }));
+  }
+
+  async crearGastoPersonal(data:{fecha:string;monto:number;categoria_id:number;descripcion?:string;estado:'pagado'|'pendiente'}):Promise<number>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha))throw new Error('La fecha no es válida.');
+    const monto=enteroPositivo(data.monto,'El monto');
+    const cat=await this.conn().query('SELECT id FROM categorias_gastos_personales WHERE id=? AND activa=1;',[data.categoria_id]);
+    if(!cat.values?.length)throw new Error('La categoría personal no existe o está archivada.');
+    const now=new Date().toISOString();
+    const r=await this.conn().run(
+      'INSERT INTO gastos_personales(fecha,monto,categoria_id,descripcion,estado,created_at,updated_at) VALUES (?,?,?,?,?,?,?);',
+      [data.fecha,monto,data.categoria_id,data.descripcion?.trim()||null,data.estado,now,now],
+    );
+    await this.persist();
+    return Number(r.changes?.lastId ?? 0);
+  }
+
+  async actualizarCategoriaGastoPersonal(id:number,data:{nombre?:string;tipo?:'fijo'|'variable'}):Promise<void>{
+    const sets:string[]=[];const params:unknown[]=[];
+    if(data.nombre!==undefined){sets.push('nombre=?');params.push(textoObligatorio(data.nombre,'El nombre de la categoría personal').slice(0,80));}
+    if(data.tipo!==undefined){sets.push('tipo=?');params.push(data.tipo);}
+    if(!sets.length)return;
+    await this.conn().run('UPDATE categorias_gastos_personales SET '+sets.join(', ')+' WHERE id=?;',[...params,id]);
+    await this.persist();
+  }
+
+  async archivarCategoriaGastoPersonal(id:number):Promise<void>{
+    await this.conn().run('UPDATE categorias_gastos_personales SET activa=0 WHERE id=?;',[id]); await this.persist();
+  }
+
+  async resumenGastosPersonales(desde:string,hasta:string):Promise<{total:number;pagados:number;pendientes:number;fijos:number;variables:number}>{
+    const r=await this.conn().query(
+      `SELECT COALESCE(SUM(g.monto),0) total,
+              COALESCE(SUM(CASE WHEN g.estado='pagado' THEN g.monto ELSE 0 END),0) pagados,
+              COALESCE(SUM(CASE WHEN g.estado='pendiente' THEN g.monto ELSE 0 END),0) pendientes,
+              COALESCE(SUM(CASE WHEN c.tipo='fijo' THEN g.monto ELSE 0 END),0) fijos,
+              COALESCE(SUM(CASE WHEN c.tipo='variable' THEN g.monto ELSE 0 END),0) variables
+       FROM gastos_personales g JOIN categorias_gastos_personales c ON c.id=g.categoria_id
+       WHERE g.fecha BETWEEN ? AND ?;`,
+      [desde,hasta],
+    );
+    const row=r.values?.[0]??{};
+    return {total:Number(row.total??0),pagados:Number(row.pagados??0),pendientes:Number(row.pendientes??0),fijos:Number(row.fijos??0),variables:Number(row.variables??0)};
   }
 
   // RUTAS
