@@ -30,7 +30,7 @@ public class CamelloStoragePlugin extends Plugin {
     public void saveBackup(PluginCall call) {
         final String filename = call.getString("filename");
         final String data = call.getString("data");
-        final String mimeType = call.getString("mimeType", "application/json");
+        final String mimeType = call.getString("mimeType");
 
         if (filename == null || filename.trim().isEmpty()) {
             call.reject("Nombre de archivo inválido.");
@@ -106,7 +106,7 @@ public class CamelloStoragePlugin extends Plugin {
                 filename
             );
             if (created == null) {
-                target.reject("Android no pudo crear el archivo de respaldo en la carpeta elegida.");
+                target.reject("Android no pudo crear el archivo en la carpeta elegida.");
                 return;
             }
 
@@ -121,7 +121,7 @@ public class CamelloStoragePlugin extends Plugin {
             result.put("filename", filename);
             target.resolve(result);
         } catch (Exception error) {
-            target.reject("No se pudo guardar el respaldo en la carpeta elegida.", error);
+            target.reject("No se pudo guardar el archivo en la carpeta elegida.", error);
         }
     }
 }
