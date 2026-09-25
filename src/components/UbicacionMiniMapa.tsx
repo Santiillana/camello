@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const ICONO_PIN = '<svg viewBox="0 0 40 50" width="40" height="50" aria-hidden="true"><path d="M20 48C20 48 4 29 4 18A16 16 0 1 1 36 18C36 29 20 48 20 48Z" fill="#c2642b" stroke="#111" stroke-width="2"/><circle cx="20" cy="18" r="6" fill="#fff"/></svg>';
+const ICONO_PIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 50"><path d="M20 48C20 48 4 29 4 18A16 16 0 1 1 36 18C36 29 20 48 20 48Z" fill="#c2642b" stroke="#111" stroke-width="2"/><circle cx="20" cy="18" r="6" fill="#fff"/></svg>';
+const ICONO_PIN_URL = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(ICONO_PIN_SVG);
 
 type Props = { lat: number; lng: number };
 
@@ -13,7 +14,7 @@ export default function UbicacionMiniMapa({ lat, lng }: Props) {
     if (!ref.current) return;
     const mapa = L.map(ref.current, { zoomControl: false, attributionControl: true }).setView([lat, lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; colaboradores de OpenStreetMap' }).addTo(mapa);
-    const icono = L.divIcon({ className: 'camello-pin', html: ICONO_PIN, iconSize: [40, 50], iconAnchor: [20, 48] });
+    const icono = L.icon({ iconUrl: ICONO_PIN_URL, iconSize: [40, 50], iconAnchor: [20, 48], iconRetinaUrl: ICONO_PIN_URL });
     L.marker([lat, lng], { icon: icono, keyboard: true, title: 'Ubicación del cliente' }).addTo(mapa);
     return () => { mapa.remove(); };
   }, [lat, lng]);
