@@ -61,7 +61,7 @@ try {
     await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor({ timeout: 15000 });
     console.log('ui-c1: comprobar menú');
 
-    await page.getByRole('button', { name: 'Abrir menú' }).click();
+    await page.locator('.side-nav').waitFor({ state: 'visible', timeout: 5000 });
     console.log('ui-c1: contar secciones');
     const menuLinks = page.locator('.side-nav .side-nav-item');
     if (await menuLinks.count() !== 12) throw new Error('C1/B4: el menú lateral no muestra las 12 secciones principales.');
