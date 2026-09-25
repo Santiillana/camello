@@ -14,16 +14,20 @@ export function diasDesdeUltimoRespaldo(now = new Date()): number | null {
   } catch { return null; }
 }
 
-export function descargarRespaldo(json: string, date = new Date()): void {
-  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+export function descargarArchivoTexto(contenido: string, nombreArchivo: string, tipo = 'text/plain;charset=utf-8'): void {
+  const blob = new Blob([contenido], { type: tipo });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'camello-respaldo-' + date.toISOString().slice(0, 10) + '.json';
+  a.download = nombreArchivo;
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function descargarRespaldo(json: string, date = new Date()): void {
+  descargarArchivoTexto(json, 'camello-respaldo-' + date.toISOString().slice(0, 10) + '.json', 'application/json;charset=utf-8');
 }
 
 
