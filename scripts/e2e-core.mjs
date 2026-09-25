@@ -372,8 +372,8 @@ async function cerrarRuta(page, sobrantes) {
 }
 
 async function probarEscalaClientes(page) {
-  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1100) INSERT INTO clientes (nombre,telefono1,fecha_registro,estado) SELECT 'Cliente Escala ' || printf('%04d', n), '320100' || printf('%04d', n), date('now'),'activo' FROM nums;");
-  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1100) INSERT INTO mascotas (cliente_id,nombre,estado) SELECT (SELECT id FROM clientes WHERE nombre='Cliente Escala ' || printf('%04d', n) LIMIT 1), 'Mascota Escala ' || printf('%04d', n),'activo' FROM nums;");
+  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1100) INSERT INTO clientes (nombre,nombre_normalizado,telefono1,fecha_registro,estado) SELECT 'Cliente Escala ' || printf('%04d', n), 'cliente escala ' || printf('%04d', n), '320100' || printf('%04d', n), date('now'),'activo' FROM nums;");
+  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1100) INSERT INTO mascotas (cliente_id,nombre,nombre_normalizado,estado) SELECT (SELECT id FROM clientes WHERE nombre='Cliente Escala ' || printf('%04d', n) LIMIT 1), 'Mascota Escala ' || printf('%04d', n), 'mascota escala ' || printf('%04d', n),'activo' FROM nums;");
   
   await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
   const buscadorClientes = page.getByPlaceholder('Buscar por cliente o mascota…');
