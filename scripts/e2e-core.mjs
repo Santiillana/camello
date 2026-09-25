@@ -210,7 +210,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   await page.getByRole('button', { name: 'Listo' }).click().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('button', { name: /Nueva acción/ }).click();
-  await page.getByRole('menu').getByRole('button', { name: 'Nueva venta' }).click();
+  await page.getByRole('menu').getByRole('button', { name: /Nueva venta/ }).click();
   const borrador = page.getByRole('dialog', { name: 'Borrador pendiente' });
   if (await borrador.isVisible().catch(() => false)) {
     await borrador.getByRole('button', { name: 'Descartar' }).click();
