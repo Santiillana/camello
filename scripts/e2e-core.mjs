@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { readFile } from 'node:fs/promises';
 
 const { chromium } = await import('playwright');
 
@@ -285,6 +286,39 @@ async function cerrarRuta(page, sobrantes) {
   await page.getByText('Diferencia').locator('..').getByText('0').waitFor().catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
 }
 
+async function probarExportacionClientes(page) {
+  await page.goto('http://127.0.0.1:5173/#/respaldo', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.getByRole('heading', { name: 'Respaldo', exact: true }).waitFor({ timeout: 20000 });
+
+  const jsonDownload = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Descargar clientes completos (JSON)' }).click(),
+  ]);
+  const jsonPath = await jsonDownload[0].path();
+  if (!jsonPath) throw new Error('E2E: no se obtuvo la ruta de la exportación JSON.');
+  const jsonText = await readFile(jsonPath, 'utf8');
+  const parsed = JSON.parse(jsonText);
+  if (parsed.camello_client_export_version !== 1) throw new Error('E2E: versión de exportación de clientes incorrecta.');
+  if (!Array.isArray(parsed.tables?.clientes)) throw new Error('E2E: exportación JSON sin tabla clientes.');
+  if (!parsed.tables.clientes.some((row) => row?.nombre === 'Cliente E2E')) {
+    throw new Error('E2E: el cliente creado no aparece en la exportación JSON.');
+  }
+  if (!Array.isArray(parsed.tables?.mascotas) || !Array.isArray(parsed.tables?.ventas) || !Array.isArray(parsed.tables?.pagos) || !Array.isArray(parsed.tables?.pedidos)) {
+    throw new Error('E2E: la exportación JSON no contiene todas las tablas relacionadas esperadas.');
+  }
+
+  const csvDownload = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'CSV para Excel' }).click(),
+  ]);
+  const csvPath = await csvDownload[0].path();
+  if (!csvPath) throw new Error('E2E: no se obtuvo la ruta de la exportación CSV.');
+  const csvText = await readFile(csvPath, 'utf8');
+  if (!csvText.includes('nombre') || !csvText.includes('Cliente E2E')) {
+    throw new Error('E2E: el CSV no contiene la columna o cliente esperado.');
+  }
+}
+
 async function probarUbicacionWeb(page) {
   await page.goto('http://127.0.0.1:5173/#/clientes/1', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { /* Operación auxiliar best-effort; el flujo principal valida el estado por separado. */ });
   await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -309,6 +343,7 @@ try {
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
     await crearCliente(page);
+    await probarExportacionClientes(page);
 
     const clienteCreado = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
     if (clienteCreado.length !== 1 || clienteCreado[0]?.estado !== 'activo') {
