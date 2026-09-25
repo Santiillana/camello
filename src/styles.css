@@ -832,11 +832,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .side-nav-item { justify-content: center; }
   .side-nav.expandido .side-nav-item { justify-content: flex-start; }
   .side-nav-backdrop.visible {
-    display: block !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    z-index: 9999 !important;
-    pointer-events: auto !important;
+    display: none !important;
+    pointer-events: none !important;
   }
 }
 
