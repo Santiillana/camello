@@ -345,6 +345,14 @@ try {
     page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
     await crearCliente(page);
+
+    // Precalentar la ruta lazy de pedidos antes de ejecutar el flujo intensivo.
+    // Esto evita que la primera transformación del módulo ocurra al final de la suite,
+    // después de múltiples navegaciones, consultas y operaciones de SQLite.
+    await page.goto('http://127.0.0.1:5173/#/pedidos', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByRole('heading', { name: 'Registrar pedido', exact: true }).waitFor({ state: 'visible', timeout: 60000 });
+    await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
+
     await probarExportacionClientes(page);
 
     const clienteCreado = await sql(page, "SELECT id,nombre,estado FROM clientes WHERE nombre='Cliente E2E' ORDER BY id DESC LIMIT 1;");
