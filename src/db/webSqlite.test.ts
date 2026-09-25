@@ -13,6 +13,14 @@ async function crearConexion() {
 }
 
 describe('WebSqliteConnection', () => {
+  it('conserva binario UTF-8 en la capa Base64 compartida', async () => {
+    const { bytesToBase64, base64ToBytes } = await import('../utils/base64');
+    const original = new TextEncoder().encode('CAMELLO · ñ · 🐕');
+    const encoded = bytesToBase64(original);
+    const decoded = base64ToBytes(encoded);
+    expect(Array.from(decoded)).toEqual(Array.from(original));
+  });
+
   afterEach(async () => {
     const db = await crearConexion();
     await db.deletePersistedDatabase();
