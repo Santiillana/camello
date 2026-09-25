@@ -7,7 +7,8 @@ export type EstadoPago = 'PAGADA' | 'PENDIENTE';
 export type EstadoRegistro = 'activa' | 'anulada';
 export type MetodoPago = 'EFECTIVO' | 'TRANSFERENCIA_NEQUI' | 'FIADO' | 'PARCIAL';
 export type EstadoRuta = 'EN_CURSO' | 'FINALIZADA' | 'CANCELADA';
-export type TipoRuta = 'Puerta a puerta' | 'Venta local móvil';
+export type TipoRuta = 'Puerta a puerta' | 'Venta local móvil' | 'Entrega de pedidos';
+export type EstadoPedido = 'PENDIENTE' | 'ASIGNADO' | 'ENTREGADO' | 'NO_ENTREGADO' | 'CANCELADO';
 export type SexoMascota = 'M' | 'H' | 'Desconocido';
 export type TamanoMascota = 'Pequeño' | 'Mediano' | 'Grande';
 export type EstadoSeguimiento = 'ACTIVO' | 'POR_CONTACTAR' | 'INACTIVO';
@@ -108,6 +109,39 @@ export interface Ruta {
   notas?: string;
 }
 
+export interface PedidoItem {
+  id: number;
+  pedido_id: number;
+  producto_id?: number | null;
+  producto_nombre: string;
+  cantidad: number;
+  precio_aplicado: number;
+  costo_aplicado: number;
+  total: number;
+}
+
+export interface Pedido {
+  id: number;
+  cliente_id: number;
+  fecha_pedido: string;
+  fecha_entrega: string;
+  estado: EstadoPedido;
+  ruta_id?: number | null;
+  orden_entrega?: number | null;
+  notas?: string | null;
+  total_estimado: number;
+  pago_estado: 'PENDIENTE' | 'COBRADO' | 'FIADO';
+  created_at: string;
+  updated_at: string;
+  entregado_at?: string | null;
+}
+
+export interface PedidoConDetalle extends Pedido {
+  cliente_nombre: string;
+  cliente_telefono?: string | null;
+  items: PedidoItem[];
+}
+
 export interface Venta {
   id: number;
   cliente_id: number;
@@ -125,6 +159,7 @@ export interface Venta {
   metodo_pago?: MetodoPago | string;
   monto_pagado?: number;
   operacion_id?: string | null;
+  pedido_id?: number | null;
   estado_registro?: EstadoRegistro;
   motivo_anulacion?: string | null;
   anulada_at?: string | null;
