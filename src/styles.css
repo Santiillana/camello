@@ -810,7 +810,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 767px) {
-  .app-contenido { padding-top: 58px; padding-left: 64px; }
+  .app-topbar {
+    height: calc(56px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    background: var(--color-fondo);
+  }
+  .app-contenido { padding-top: calc(58px + env(safe-area-inset-top, 0px)); padding-left: 64px; }
   .side-nav {
     left: 0;
     right: auto;
@@ -826,6 +831,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .side-nav .side-nav-texto { display: none; }
   .side-nav.expandido .side-nav-texto { display: inline; }
   .side-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .side-nav-cabecera {
+    min-height: calc(64px + env(safe-area-inset-top, 0px));
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  }
   .side-nav-marca { display: inline-flex; overflow: hidden; width: 0; }
   .side-nav.expandido .side-nav-marca { width: auto; margin-right: auto; }
   .side-nav-cerrar { display: inline-flex; }
