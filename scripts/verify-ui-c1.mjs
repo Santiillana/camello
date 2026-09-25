@@ -61,16 +61,17 @@ try {
     await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor({ timeout: 15000 });
     console.log('ui-c1: comprobar menú');
 
-    await page.locator('.side-nav').waitFor({ state: 'visible', timeout: 5000 });
-    console.log('ui-c1: contar secciones');
+    const tab = page.locator('.side-nav-tab');
+    await tab.waitFor({ state: 'visible', timeout: 5000 });
+    console.log('ui-c1: abrir lengüeta y contar secciones');
+    await tab.click();
     const menuLinks = page.locator('.side-nav .side-nav-item');
-    if (await menuLinks.count() !== 12) throw new Error('C1/B4: el menú lateral no muestra las 12 secciones principales.');
+    if (await menuLinks.count() !== 12) throw new Error('C1/B4: el menú expandido no muestra las 12 secciones principales.');
     if (await page.getByRole('link', { name: 'Vender' }).count() !== 0) throw new Error('C1: todavía existe Vender en la barra inferior.');
     if (await page.getByRole('link', { name: 'Gastos' }).count() !== 1) throw new Error('B4: falta Gastos en el menú lateral.');
     const marca = await page.locator('.side-nav-marca').innerText();
     if (marca !== 'CAMELLO') throw new Error('B4: el nombre CAMELLO no se muestra completo.');
     const menuToggle = page.locator('.side-nav .side-nav-toggle').first();
-    await menuToggle.click();
     await menuToggle.click();
     console.log('ui-c1: comprobar +');
     const fab = page.getByRole('button', { name: 'Nueva acción' });
@@ -82,7 +83,7 @@ try {
     await page.setViewportSize({ width: 360, height: 800 });
     const contenidoMovil = page.locator('.app-contenido');
     const paddingLeft = await contenidoMovil.evaluate((el) => getComputedStyle(el).paddingLeft);
-    if (Number.parseFloat(paddingLeft) < 50) throw new Error('B4: el contenido móvil no reserva espacio para el riel.');
+    if (Number.parseFloat(paddingLeft) >= 50) throw new Error('C1: el contenido móvil todavía reserva un riel lateral permanente.');
 
     console.log('ui-c1: comprobar escritorio');
     await page.setViewportSize({ width: 1200, height: 800 });
@@ -92,8 +93,9 @@ try {
     const contenido = page.locator('.pantalla');
     const ancho = await contenido.evaluate((el) => getComputedStyle(el).maxWidth);
     if (ancho === 'none' || ancho === '100%') throw new Error('C1: el contenido perdió el ancho máximo en escritorio.');
+    await page.locator('.side-nav-tab').waitFor({ state: 'visible', timeout: 5000 });
 
-    console.log('ui-c1: PASÓ — 12 secciones, Gastos, sin Vender, + con Nueva venta/Nueva ruta, riel 360px y ancho limitado.');
+    console.log('ui-c1: PASÓ — lengüeta flotante, 12 secciones, Gastos, sin Vender, + con Nueva venta/Nueva ruta y ancho limitado.');
   } finally {
     await browser.close();
   }
