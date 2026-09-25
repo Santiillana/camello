@@ -659,6 +659,8 @@ try {
     }
 
     // Crear un segundo pedido para cubrir el flujo de ruta después de probar entrega sin ruta.
+    await formularioPedido.locator('input[placeholder="Nombre o mascota…"]').fill('Cliente E2E');
+    await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 30000 });
     await clientePedido.selectOption(String(ids[0].cliente_id));
     await productoPedido.selectOption(String(ids[0].producto_id));
     await formularioPedido.getByLabel('Cantidad').fill('1');
