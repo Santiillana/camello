@@ -98,7 +98,9 @@ async function writeStore(name: string, key: string, bytes: Uint8Array): Promise
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, base64);
   } catch {
-    // Fallback best-effort; IndexedDB sigue siendo la persistencia principal.
+    // Si el almacenamiento síncrono quedó sin espacio, elimina el snapshot viejo
+    // para no reabrir una versión desactualizada; IndexedDB conserva el respaldo.
+    try { localStorage.removeItem(LOCAL_STORAGE_KEY); } catch { /* best-effort */ }
   }
 
   const db = await openStore(name);
@@ -146,14 +148,19 @@ export class WebSqliteConnection {
       locateFile: (file) => this.wasmBasePath + file,
     });
 
-    let persisted = await readStore(STORE_DB, STORE_KEY);
+    let persisted: Uint8Array | null = null;
+
+    // localStorage se escribe antes que IndexedDB en cada persistencia. Cuando está
+    // disponible y contiene un SQLite válido, representa el snapshot más reciente.
+    try {
+      const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (local) persisted = base64ToBytes(local);
+    } catch {
+      // Se continúa con IndexedDB.
+    }
+
     if (!persisted || persisted.byteLength === 0) {
-      try {
-        const local = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (local) persisted = base64ToBytes(local);
-      } catch {
-        // Se intentará la persistencia legacy.
-      }
+      persisted = await readStore(STORE_DB, STORE_KEY);
     }
     if (!persisted || persisted.byteLength === 0) {
       persisted = await readStore(LEGACY_STORE_DB, this.databaseName + 'SQLite.db');
