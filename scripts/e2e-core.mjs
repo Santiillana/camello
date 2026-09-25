@@ -418,9 +418,12 @@ try {
     page.setDefaultTimeout(8000);
     const consoleErrors = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      if (msg.type() === 'error') {
+        const loc = msg.location();
+        consoleErrors.push(msg.text() + ' @ ' + (loc.url || 'unknown') + ':' + loc.lineNumber + ':' + loc.columnNumber);
+      }
     });
-    page.on('pageerror', (err) => consoleErrors.push(String(err)));
+    page.on('pageerror', (err) => consoleErrors.push((err.stack || String(err))));
 
     await crearCliente(page);
     await probarDescartarBorrador(page);
