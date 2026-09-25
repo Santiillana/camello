@@ -114,7 +114,7 @@ async function probarUbicacionDesdeFichaYScroll(page) {
   if (idRow.length !== 1 || Number(idRow[0]?.id) <= 100) throw new Error('E2E: el cliente de mapa no quedó fuera del primer bloque de 100.');
 
   await page.getByRole('button', { name: 'Agregar ubicación' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Ubicación del cliente' });
+  const dialog = page.getByRole('dialog', { name: 'Ubicación' });
   await dialog.waitFor({ state: 'visible', timeout: 30000 });
 
   await page.setViewportSize({ width: 390, height: 640 });
