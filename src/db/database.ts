@@ -557,15 +557,16 @@ class Database {
     if (!objetos.length) return;
 
     const temporales = new Set<string>();
-    const extraer = /\b[A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*\b/g;
+    const extraer = /\\b[A-Za-z_][A-Za-z0-9]*_migracion_[A-Za-z0-9_]*\\b/g;
     for (const objeto of objetos) {
       for (const match of objeto.sql.match(extraer) ?? []) temporales.add(match);
       if (objeto.name.includes('_migracion_')) temporales.add(objeto.name);
     }
+
     const reemplazos = new Map<string, string>();
     for (const temporal of temporales) {
       const base = temporal.split('_migracion_')[0];
-      if (base) reemplazos.set(temporal, base);
+      if (base && base !== temporal) reemplazos.set(temporal, base);
     }
 
     const normalizarSql = (sql: string): string => {
@@ -576,20 +577,6 @@ class Database {
       return resultado;
     };
 
-    const objetosNoTabla = objetos.filter((objeto) => objeto.type !== 'table');
-    for (const objeto of objetosNoTabla) {
-      const quoted = '"' + objeto.name.replace(/"/g, '""') + '"';
-      if (objeto.type === 'index') await db.execute('DROP INDEX IF EXISTS ' + quoted + ';', false);
-      if (objeto.type === 'trigger') await db.execute('DROP TRIGGER IF EXISTS ' + quoted + ';', false);
-      if (objeto.type === 'view') await db.execute('DROP VIEW IF EXISTS ' + quoted + ';', false);
-    }
-
-    const afectadas = objetos.filter((objeto) =>
-      objeto.type === 'table' &&
-      !objeto.name.includes('_migracion_') &&
-      Array.from(reemplazos.keys()).some((temporal) => objeto.sql.includes(temporal))
-    );
-
     const sentenciaTabla = (nombre: string): string => {
       const sentencia = SCHEMA_STATEMENTS.find((statement) =>
         statement.trimStart().startsWith('CREATE TABLE IF NOT EXISTS ' + nombre + ' '),
@@ -598,38 +585,69 @@ class Database {
       return sentencia;
     };
 
-    for (const objeto of afectadas) {
-        const nombre = objeto.name;
-        const originalCols = await this.columnasDeTabla(nombre);
-        const create = sentenciaTabla(nombre);
-        const reparacion = nombre + '_reparacion_v9';
-        await db.execute('DROP TABLE IF EXISTS ' + reparacion + ';', false);
-        await db.execute(create.replace('CREATE TABLE IF NOT EXISTS ' + nombre, 'CREATE TABLE ' + reparacion), false);
-        const nuevasCols = await this.columnasDeTabla(reparacion);
-        const comunes = Array.from(originalCols.keys()).filter((columna) => nuevasCols.has(columna));
-        if (!comunes.length) throw new Error('No hay columnas comunes para reparar ' + nombre + '.');
-        const lista = comunes.map((columna) => '"' + columna.replace(/"/g, '""') + '"').join(', ');
-        await db.execute(`INSERT INTO ${reparacion} (${lista}) SELECT ${lista} FROM ${nombre};`, false);
-        await db.execute('DROP TABLE ' + nombre + ';', false);
-        await db.execute(create, false);
-        await db.execute(`INSERT INTO ${nombre} (${lista}) SELECT ${lista} FROM ${reparacion};`, false);
-        await db.execute('DROP TABLE ' + reparacion + ';', false);
-      }
+    const tablasAfectadas = objetos.filter((objeto) =>
+      objeto.type === 'table'
+      && !objeto.name.includes('_migracion_')
+      && Array.from(reemplazos.keys()).some((temporal) => objeto.sql.includes(temporal)),
+    );
 
-      const tablasTemporales = objetos.filter((objeto) => objeto.type === 'table' && objeto.name.includes('_migracion_'));
-      for (const objeto of tablasTemporales) {
-        const canonical = reemplazos.get(objeto.name);
-        if (!canonical) continue;
-        const existeCanonica = await db.query(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?;`, [canonical]);
-        if (Number(existeCanonica.values?.[0]?.n ?? 0) > 0) {
-          const filasTemp = await db.query('SELECT COUNT(*) AS n FROM ' + objeto.name + ';');
-          if (Number(filasTemp.values?.[0]?.n ?? 0) === 0) await db.execute('DROP TABLE ' + objeto.name + ';', false);
-          else throw new Error('Quedó una tabla temporal con datos: ' + objeto.name);
-        }
-      }
+    for (const objeto of tablasAfectadas) {
+      const nombre = objeto.name;
+      const originalCols = await this.columnasDeTabla(nombre);
+      const create = sentenciaTabla(nombre);
+      const reparacion = nombre + '_reparacion_v9';
 
-    for (const objeto of objetosNoTabla) {
+      await db.execute('DROP TABLE IF EXISTS ' + reparacion + ';', false);
+      await db.execute(create.replace(
+        'CREATE TABLE IF NOT EXISTS ' + nombre,
+        'CREATE TABLE ' + reparacion,
+      ), false);
+
+      const nuevasCols = await this.columnasDeTabla(reparacion);
+      const comunes = Array.from(originalCols.keys()).filter((columna) => nuevasCols.has(columna));
+      if (!comunes.length) throw new Error('No hay columnas comunes para reparar ' + nombre + '.');
+
+      const lista = comunes.map((columna) => '"' + columna.replace(/"/g, '""') + '"').join(', ');
+      await db.execute(
+        'INSERT INTO ' + reparacion + ' (' + lista + ') SELECT ' + lista + ' FROM ' + nombre + ';',
+        false,
+      );
+      await db.execute('DROP TABLE ' + nombre + ';', false);
+      await db.execute(create, false);
+      await db.execute(
+        'INSERT INTO ' + nombre + ' (' + lista + ') SELECT ' + lista + ' FROM ' + reparacion + ';',
+        false,
+      );
+      await db.execute('DROP TABLE ' + reparacion + ';', false);
+    }
+
+    const tablasTemporales = objetos.filter(
+      (objeto) => objeto.type === 'table' && objeto.name.includes('_migracion_'),
+    );
+    for (const objeto of tablasTemporales) {
+      const canonical = reemplazos.get(objeto.name);
+      if (!canonical) continue;
+
+      const existeCanonica = await db.query(
+        `SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?;`,
+        [canonical],
+      );
+      if (Number(existeCanonica.values?.[0]?.n ?? 0) <= 0) continue;
+
+      const filasTemp = await db.query('SELECT COUNT(*) AS n FROM ' + objeto.name + ';');
+      if (Number(filasTemp.values?.[0]?.n ?? 0) === 0) {
+        await db.execute('DROP TABLE ' + objeto.name + ';', false);
+      } else {
+        throw new Error('Quedó una tabla temporal con datos: ' + objeto.name);
+      }
+    }
+
+    for (const objeto of objetos.filter((entry) => entry.type !== 'table')) {
       const sql = normalizarSql(objeto.sql);
+      const quoted = '"' + objeto.name.replace(/"/g, '""') + '"';
+      if (objeto.type === 'index') await db.execute('DROP INDEX IF EXISTS ' + quoted + ';', false);
+      if (objeto.type === 'trigger') await db.execute('DROP TRIGGER IF EXISTS ' + quoted + ';', false);
+      if (objeto.type === 'view') await db.execute('DROP VIEW IF EXISTS ' + quoted + ';', false);
       if (sql) await db.execute(sql, false);
     }
 
@@ -641,13 +659,13 @@ class Database {
     if ((restantes.values ?? []).length) {
       throw new Error('Quedaron referencias a _migracion_ tras v9: ' + JSON.stringify(restantes.values));
     }
+
     const fk = await db.query('PRAGMA foreign_key_check;');
     if ((fk.values ?? []).length) throw new Error('v9: foreign_key_check no está vacío.');
     const integrity = await db.query('PRAGMA integrity_check;');
     const resultadoIntegrity = String(integrity.values?.[0]?.integrity_check ?? integrity.values?.[0]?.[0] ?? '');
     if (resultadoIntegrity.toLowerCase() !== 'ok') throw new Error('v9: integrity_check = ' + resultadoIntegrity);
   }
-
   private async migrarVersion10(): Promise<void> {
     await this.conn().execute(`CREATE TABLE IF NOT EXISTS borradores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
