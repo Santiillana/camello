@@ -28,7 +28,7 @@ jobs:
       - name: Instalar dependencias del navegador para E2E
         run: npx playwright install --with-deps chromium
       - name: Ejecutar Verify
-        run: npm run verify
+        run: timeout --signal=TERM --kill-after=30s 15m npm run verify
 
   modulo-sin-carpeta:
     runs-on: ubuntu-24.04
