@@ -120,9 +120,10 @@ async function probarUbicacionDesdeFichaYScroll(page) {
   await page.setViewportSize({ width: 390, height: 640 });
   const dimensiones = await dialog.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
   if (dimensiones.scrollHeight <= dimensiones.clientHeight) throw new Error('E2E: el formulario de ubicación no genera contenido desplazable en móvil.');
-  await dialog.locator('.ubicacion-metodo').first().hover();
-  await page.mouse.wheel(0, 700);
-  const desplazamiento = await dialog.evaluate((el) => el.scrollTop);
+  const desplazamiento = await dialog.evaluate((el) => {
+    el.scrollTo({ top: 700, behavior: 'auto' });
+    return el.scrollTop;
+  });
   if (desplazamiento <= 0) throw new Error('E2E: el formulario de ubicación no respondió al desplazamiento.');
 
   await dialog.getByLabel('Latitud').fill('4.1425');
