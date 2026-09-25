@@ -2236,13 +2236,18 @@ class Database {
   async registrarEntregaPedido(pedidoId: number, metodoPago: 'EFECTIVO'|'TRANSFERENCIA_NEQUI'|'FIADO'): Promise<void> {
     if(!Number.isInteger(pedidoId)||pedidoId<=0) throw new Error('Pedido inválido.');
     const pedidoResult=await this.conn().query(
-      `SELECT p.*,r.estado AS ruta_estado,r.tipo AS ruta_tipo FROM pedidos p JOIN rutas r ON r.id=p.ruta_id WHERE p.id=?;`,
+      `SELECT p.*,r.estado AS ruta_estado,r.tipo AS ruta_tipo FROM pedidos p LEFT JOIN rutas r ON r.id=p.ruta_id WHERE p.id=?;`,
       [pedidoId],
     );
     const pedido=pedidoResult.values?.[0];
     if(!pedido) throw new Error('El pedido no existe o no tiene ruta.');
-    if(pedido.estado!=='ASIGNADO') throw new Error('Este pedido ya fue resuelto.');
-    if(pedido.ruta_estado!=='EN_CURSO'||pedido.ruta_tipo!=='Entrega de pedidos') throw new Error('La ruta de entrega no está en curso.');
+    const sinRuta = pedido.ruta_id == null;
+    if (sinRuta) {
+      if (pedido.estado !== 'PENDIENTE') throw new Error('Este pedido ya fue resuelto.');
+    } else {
+      if (pedido.estado !== 'ASIGNADO') throw new Error('Este pedido ya fue resuelto.');
+      if (pedido.ruta_estado !== 'EN_CURSO' || pedido.ruta_tipo !== 'Entrega de pedidos') throw new Error('La ruta de entrega no está en curso.');
+    }
     const items=await this.conn().query('SELECT * FROM pedido_items WHERE pedido_id=? ORDER BY id;',[pedidoId]);
     if(!items.values?.length) throw new Error('El pedido no tiene productos.');
 
@@ -2262,7 +2267,7 @@ class Database {
         await this.conn().run(
           `INSERT INTO ventas (cliente_id,ruta_id,pedido_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,fecha_pago,metodo_pago,monto_pagado,operacion_id,estado_registro)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'activa');`,
-          [Number(pedido.cliente_id),Number(pedido.ruta_id),pedidoId,String(item.producto_nombre),cantidad,precio,costo,totalItem,utilidad,
+          [Number(pedido.cliente_id),pedido.ruta_id == null ? null : Number(pedido.ruta_id),pedidoId,String(item.producto_nombre),cantidad,precio,costo,totalItem,utilidad,
             fechaLocalISO(ahora),horaLocalHHMM(ahora),pagada?'PAGADA':'PENDIENTE',pagada?fechaLocalISO(ahora):null,
             metodoPago,pagada?totalItem:0,operacionId],
           false,
@@ -2281,6 +2286,28 @@ class Database {
     }
   }
 
+  async reagendarPedido(pedidoId: number, nuevaFecha: string): Promise<void> {
+    if (!Number.isInteger(pedidoId) || pedidoId <= 0) throw new Error('Pedido inválido.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha)) throw new Error('La nueva fecha no es válida.');
+    const r = await this.conn().run("UPDATE pedidos SET fecha_entrega=?, estado='PENDIENTE', ruta_id=NULL, orden_entrega=NULL, pago_estado='PENDIENTE', updated_at=? WHERE id=? AND estado IN ('PENDIENTE','NO_ENTREGADO');", [nuevaFecha, new Date().toISOString(), pedidoId]);
+    if (Number(r.changes?.changes ?? 0) === 0) throw new Error('El pedido no puede reagendarse en su estado actual.');
+    await this.persist();
+  }
+
+  async cancelarPedido(pedidoId: number, nota?: string): Promise<void> {
+    if (!Number.isInteger(pedidoId) || pedidoId <= 0) throw new Error('Pedido inválido.');
+    const notaLimpia = nota?.trim() ?? '';
+    const r = await this.conn().run("UPDATE pedidos SET estado='CANCELADO', notas=CASE WHEN ? <> '' THEN TRIM(COALESCE(notas,'') || CASE WHEN COALESCE(notas,'')='' THEN '' ELSE ' | ' END || ?) ELSE notas END, updated_at=? WHERE id=? AND estado IN ('PENDIENTE','NO_ENTREGADO');", [notaLimpia, notaLimpia, new Date().toISOString(), pedidoId]);
+    if (Number(r.changes?.changes ?? 0) === 0) throw new Error('El pedido no puede cancelarse en su estado actual.');
+    await this.persist();
+  }
+
+  async resumenPedidosPeriodo(desde: string, hasta: string): Promise<{ entregados:number; cantidad:number; valor:number }> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || desde > hasta) throw new Error('Rango de fechas inválido.');
+    const r = await this.conn().query("SELECT COUNT(DISTINCT p.id) AS entregados, COALESCE(SUM(pi.cantidad),0) AS cantidad, COALESCE(SUM(pi.total),0) AS valor FROM pedidos p JOIN pedido_items pi ON pi.pedido_id=p.id WHERE p.estado='ENTREGADO' AND p.fecha_entrega BETWEEN ? AND ?;", [desde, hasta]);
+    const row=r.values?.[0]??{};
+    return {entregados:Number(row.entregados??0),cantidad:Number(row.cantidad??0),valor:Number(row.valor??0)};
+  }
   async marcarPedidoNoEntregado(pedidoId: number, nota?: string): Promise<void> {
     if(!Number.isInteger(pedidoId)||pedidoId<=0) throw new Error('Pedido inválido.');
     const notaLimpia=nota?.trim() ?? '';
