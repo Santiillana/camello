@@ -65,6 +65,7 @@ export default function NuevaVenta() {
     clave: 'nueva',
     datos: datosBorrador,
     paso: pasoInicial,
+    activo: voucher === null,
   });
 
   useEffect(() => {
