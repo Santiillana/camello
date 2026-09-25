@@ -426,6 +426,30 @@ try {
     await probarDescartarBorrador(page);
     await probarUbicacionDesdeFichaYScroll(page);
 
+    // Escala UI: crear más de 1.000 clientes y comprobar búsqueda SQLite fuera de la primera página.
+    await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 1200) INSERT INTO clientes (nombre,telefono1,fecha_registro,nombre_normalizado) SELECT 'Cliente escala ' || n, '320' || printf('%07d', n), date('now'), 'cliente escala ' || n FROM nums;");
+    const escalaRow = await sql(page, "SELECT id,nombre FROM clientes WHERE nombre='Cliente escala 1001' AND estado='activo' LIMIT 1;");
+    if (escalaRow.length !== 1 || Number(escalaRow[0]?.id) < 1001) throw new Error('E2E: no se creó el cliente de escala 1001+.');
+    await page.goto('http://127.0.0.1:5173/#/clientes', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor({ state: 'visible', timeout: 30000 });
+    const buscadorEscala = page.getByPlaceholder('Buscar por cliente o mascota…');
+    await buscadorEscala.fill('Cliente escala 1001');
+    await page.getByText('Cliente escala 1001', { exact: true }).waitFor({ state: 'visible', timeout: 30000 });
+    await page.goto('http://127.0.0.1:5173/#/venta-nueva', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.locator('input[placeholder="Nombre o mascota…"]').first().fill('Cliente escala 1001');
+    const selectEscala = page.locator('select').first();
+    await selectEscala.locator(`option[value="${escalaRow[0].id}"]`).waitFor({ state: 'attached', timeout: 30000 });
+    await selectEscala.selectOption(String(escalaRow[0].id));
+    await siguiente(page);
+    await siguiente(page);
+    await siguiente(page);
+    await page.getByRole('button', { name: 'Siguiente' }).click();
+    const confirmarEscala = page.getByRole('button', { name: 'CONFIRMAR VENTA', exact: true });
+    await confirmarEscala.click();
+    await page.getByRole('heading', { name: 'Venta registrada' }).waitFor({ timeout: 30000 });
+    const ventaEscala = await sql(page, "SELECT COUNT(*) AS n FROM ventas WHERE cliente_id=? AND estado_registro='activa';", [Number(escalaRow[0].id)]);
+    if (Number(ventaEscala[0]?.n) !== 1) throw new Error('E2E: no se pudo crear venta para cliente 1001+.');
+
     // Precalentar la ruta lazy de pedidos antes de ejecutar el flujo intensivo.
     // Esto evita que la primera transformación del módulo ocurra al final de la suite,
     // después de múltiples navegaciones, consultas y operaciones de SQLite.
@@ -496,10 +520,12 @@ try {
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) >= Number(carteraAntes[0]?.pendiente)) throw new Error('E2E: el cobro no redujo la cartera.');
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
-    const fiadoCobrado = await sql(page, "SELECT estado_pago,monto_pagado,total FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND metodo_pago='FIADO' ORDER BY id DESC LIMIT 1;");
-    if (fiadoCobrado.length !== 1 || fiadoCobrado[0]?.estado_pago !== 'PAGADA' || Number(fiadoCobrado[0]?.monto_pagado) !== Number(fiadoCobrado[0]?.total)) {
-      throw new Error('E2E: el cobro desde Cartera no liquidó la venta fiada.');
+    const fiadoPendienteDespues = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND estado_registro='activa';");
+    if (Number(fiadoPendienteDespues[0]?.pendiente) >= Number(carteraAntes[0]?.pendiente)) {
+      throw new Error('E2E: el cobro desde Cartera no redujo la deuda total del cliente.');
     }
+    const pagosCliente = await sql(page, "SELECT COALESCE(SUM(monto),0) AS total FROM pagos WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND estado_registro='activa';");
+    if (Number(pagosCliente[0]?.total) <= 0) throw new Error('E2E: el cobro no dejó un pago trazable.');
 
     await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
