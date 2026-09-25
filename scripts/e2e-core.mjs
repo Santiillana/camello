@@ -383,6 +383,14 @@ try {
 
     const fiado = await venta(page, 'FIADO', 1);
     if (!fiado.includes('Pendiente')) throw new Error('La venta fiada no dejó pendiente.');
+    const fiadoBase = await sql(page, "SELECT estado_pago,metodo_pago,monto_pagado,total FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND estado_registro='activa' AND metodo_pago='FIADO' ORDER BY id DESC LIMIT 1;");
+    if (fiadoBase.length !== 1 || fiadoBase[0]?.estado_pago !== 'PENDIENTE' || fiadoBase[0]?.metodo_pago !== 'FIADO' || Number(fiadoBase[0]?.monto_pagado) !== 0 || Number(fiadoBase[0]?.total) <= 0) {
+      throw new Error('E2E: la venta fiada no quedó integrada como pendiente en ventas.');
+    }
+    const carteraFiado = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND estado_registro='activa';");
+    if (Number(carteraFiado[0]?.pendiente) < Number(fiadoBase[0]?.total)) {
+      throw new Error('E2E: la venta fiada no alimentó la cartera.');
+    }
 
     const parcial = await venta(page, 'PARCIAL', 1);
     if (!parcial.includes('Pendiente')) throw new Error('La venta parcial no dejó pendiente.');
@@ -405,6 +413,10 @@ try {
     const carteraBase = await sql(page, "SELECT COALESCE(SUM(total-monto_pagado),0) AS pendiente FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND COALESCE(estado_registro,'activa')='activa';");
     if (Number(carteraBase[0]?.pendiente) >= Number(carteraAntes[0]?.pendiente)) throw new Error('E2E: el cobro no redujo la cartera.');
     if (Number(carteraBase[0]?.pendiente) < 0) throw new Error('E2E: cartera negativa.');
+    const fiadoCobrado = await sql(page, "SELECT estado_pago,monto_pagado,total FROM ventas WHERE cliente_id=(SELECT id FROM clientes WHERE nombre='Cliente E2E') AND metodo_pago='FIADO' ORDER BY id DESC LIMIT 1;");
+    if (fiadoCobrado.length !== 1 || fiadoCobrado[0]?.estado_pago !== 'PAGADA' || Number(fiadoCobrado[0]?.monto_pagado) !== Number(fiadoCobrado[0]?.total)) {
+      throw new Error('E2E: el cobro desde Cartera no liquidó la venta fiada.');
+    }
 
     await page.goto('http://127.0.0.1:5173/#/rutas', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
