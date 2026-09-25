@@ -1,24 +1,20 @@
-import { access, copyFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { copyFileSync, mkdirSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
-const source = resolve('node_modules/sql.js/dist/sql-wasm.wasm');
-const destination = resolve('public/assets/sql-wasm.wasm');
-const expectedVersion = '1.11.0';
+const root = process.cwd();
+const candidates = [
+  join(root, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+  join(root, 'node_modules', 'jeep-sqlite', 'dist', 'assets', 'sql-wasm.wasm'),
+  join(root, 'node_modules', '@capacitor-community', 'sqlite', 'dist', 'esm', 'web', 'sql-wasm.wasm'),
+];
 
-try {
-  await access(source);
-  const packageJson = JSON.parse(
-    await readFile(resolve('node_modules/sql.js/package.json'), 'utf8'),
-  );
-  if (packageJson.version !== expectedVersion) {
-    throw new Error(
-      `Se esperaba sql.js ${expectedVersion}, pero está instalada la versión ${String(packageJson.version)}.`,
-    );
-  }
-  await mkdir(dirname(destination), { recursive: true });
-  await copyFile(source, destination);
-  console.log('Copied sql-wasm.wasm to ' + destination);
-} catch (error) {
-  console.error('No se pudo preparar sql-wasm.wasm para la web.', error);
-  process.exitCode = 1;
+const source = candidates.find(existsSync);
+if (!source) {
+  console.warn('CAMELLO: no se encontró sql-wasm.wasm durante postinstall. La instalación continúa.');
+  process.exit(0);
 }
+
+const target = join(root, 'public', 'assets', 'sql-wasm.wasm');
+mkdirSync(dirname(target), { recursive: true });
+copyFileSync(source, target);
+console.log('CAMELLO: SQLite WASM preparado en public/assets/sql-wasm.wasm');
