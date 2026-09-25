@@ -1,203 +1,406 @@
-# CAMELLO v1 · Instrucción maestra para cierre y APK final
+# INSTRUCCIÓN MAESTRA DEFINITIVA PARA CERRAR CAMELLO
 
 ## Objetivo
 
-Trabajar sobre `release/v1` como fuente de verdad y entregar una versión final de CAMELLO que conserve todas las funciones ya existentes y corrija los problemas observados en pruebas reales.
+Trabajar sobre `release/v1` como fuente de verdad y dejar CAMELLO listo para generar el APK DEBUG final.
 
-No se deben eliminar funcionalidades existentes por simplificar. Tampoco se deben introducir funcionalidades especulativas. Cada cambio debe responder a un requisito de esta instrucción, a un bug reproducible o a una necesidad técnica comprobable.
+CAMELLO ya existe y tiene una arquitectura y funcionalidades construidas. **No se debe reconstruir ni rediseñar radicalmente.** El trabajo consiste en entender lo existente, corregir errores, limpiar lo necesario, completar lo que falte y añadir solo las mejoras acordadas.
 
-## Interfaz y experiencia móvil
+El criterio de éxito es:
 
-Mantener la estética moderna, tarjetas, colores, personalización, configuración inicial, accesos rápidos y botón flotante “+”.
+**todo lo que CAMELLO ya hace debe funcionar correctamente, sin errores conocidos, sin pérdida de datos y sin duplicaciones, con una operación sencilla y eficaz.**
 
-Eliminar la navegación horizontal inferior. La navegación principal debe vivir en el riel lateral vertical. No duplicar Clientes, Rutas, Cartera, Gastos, Informes ni las demás secciones en una barra inferior.
+## Regla principal: no sobreingeniería
 
-Revisar todas las pantallas para:
-- evitar texto superpuesto;
-- impedir desbordamientos fuera de tarjetas;
-- permitir textos largos sin romper el diseño;
-- adaptar botones, inputs, selects y áreas de texto al ancho disponible;
-- usar una sola columna en pantallas pequeñas cuando dos columnas resulten incómodas;
-- respetar áreas seguras y viewport dinámico del teléfono;
-- mantener controles táctiles utilizables;
-- comprobar al menos 360 px, 390 px y 430 px de ancho.
+No crear complejidad por el simple hecho de que sea técnicamente posible.
 
-## Ventas, formularios y tickets
+Antes de añadir una capa, módulo, estructura o cálculo nuevo, comprobar si realmente es necesaria.
 
-Toda operación confirmable debe ser idempotente. Un doble toque, reintento o reapertura de pantalla no puede crear una segunda venta.
+La solución preferida es la más sencilla que sea:
 
-El flujo de borrador debe ser:
-Borrador → Confirmación → Registro definitivo → Ticket → Limpieza del borrador.
+- segura;
+- confiable;
+- mantenible;
+- suficiente para el negocio.
 
-Después de una operación confirmada, el borrador correspondiente debe eliminarse de forma fiable. Un ticket cerrado no puede reaparecer como formulario pendiente.
+CAMELLO debe ser completo en información y sencillo en operación. No debe convertirse en un ERP.
 
-Las operaciones deben tener identificadores idempotentes estables durante el intento de guardado. La base debe mantener restricciones únicas donde corresponda.
+## Auditoría antes de modificar
 
-## Gastos empresariales
+Revisar primero:
 
-El estado del pago debe ser obligatorio y claramente seleccionable:
-- Ya pagué.
+- arquitectura;
+- tecnologías;
+- estructura;
+- navegación;
+- base de datos;
+- migraciones;
+- persistencia;
+- ventas;
+- clientes;
+- mascotas;
+- productos;
+- pagos;
+- cartera;
+- gastos;
+- gastos personales;
+- pedidos;
+- rutas;
+- mapa;
+- informes;
+- backup/restore;
+- exportación de clientes;
+- configuración;
+- pruebas;
+- GitHub Actions;
+- generación del APK.
+
+Clasificar lo encontrado como funcionando, parcial, roto, incompleto, innecesariamente complejo o susceptible de pérdida/duplicación de datos.
+
+## No regresión
+
+Conservar todo lo que ya funcione.
+
+Prioridad de trabajo:
+
+**corregir → estabilizar → limpiar → mejorar → añadir lo estrictamente necesario.**
+
+No sustituir arquitectura ni tecnologías únicamente por preferencia.
+
+## Operación diaria
+
+Minimizar la información que debe introducir el usuario.
+
+Cuando un dato pueda calcularse o relacionarse automáticamente con información ya registrada, no pedirlo de nuevo.
+
+CAMELLO debe encargarse de cálculos, totales, estados, relaciones, saldos e informes.
+
+## Productos
+
+Mantener un modelo deliberadamente sencillo.
+
+Cada producto solo necesita:
+
+- nombre;
+- precio de venta;
+- costo unitario;
+- estado básico.
+
+El **costo unitario** lo define el usuario.
+
+Utilizar ese costo unitario como referencia histórica de cada venta.
+
+No crear:
+
+- recetas;
+- costeo por lote;
+- materias primas detalladas;
+- inventario industrial;
+- MRP;
+- fórmulas de fabricación;
+- costeo avanzado.
+
+El control financiero debe relacionar:
+
+**ventas + costo unitario de los productos vendidos + gastos del negocio + pagos + cartera.**
+
+## Finanzas del negocio
+
+Mostrar por día, semana, mes y rango:
+
+- ventas;
+- número de ventas;
+- unidades vendidas;
+- ingresos;
+- dinero cobrado;
+- dinero pendiente;
+- costos de productos;
+- gastos operativos;
+- utilidad;
+- flujo de caja;
+- cuentas por cobrar.
+
+Diferenciar:
+
+**costo del producto**
+
+de
+
+**gasto operativo**
+
+y de
+
+**gasto personal**.
+
+Una venta con varios productos sigue siendo una sola venta y debe contabilizar sus unidades correctamente.
+
+No complicar la contabilidad más allá del control real que necesita el negocio.
+
+## Gastos
+
+Permitir:
+
+- categoría;
+- valor;
+- fecha;
+- descripción;
+- fijo/variable;
+- pagado/pendiente.
+
+Los estados deben ser seleccionables y persistentes:
+
+- Ya pagué;
 - Por pagar.
 
-Las categorías deben utilizar selectores claros:
-- Fijo / Variable.
-- Operativo / Compra de insumos / Retiro del dueño.
+Las categorías deben usar selectores cuando existan valores predefinidos.
 
-Una compra de materia prima no debe restarse dos veces de la utilidad si el costo aplicado al producto vendido ya incorpora ese costo. Las compras deben mostrarse también como movimiento de caja para que el usuario pueda conciliar dinero real.
+Diferenciar:
+
+- operativo;
+- compra de insumos;
+- retiro del dueño.
+
+Una compra de insumos no debe descontarse dos veces de la utilidad si el costo unitario aplicado al producto ya incorpora ese costo. Sí debe poder reflejarse como salida real de dinero en el flujo de caja.
 
 ## Gastos personales
 
-Los gastos personales son un módulo independiente y opcional.
+Son opcionales y están separados del negocio.
 
 Nunca deben contaminar:
+
 - ventas;
-- costos de producto;
-- gastos operativos empresariales;
+- costos;
+- gastos operativos;
 - utilidad;
 - cartera;
 - flujo de caja empresarial.
 
-Debe existir activación/desactivación desde Configuración. Sus categorías tienen Fijo/Variable y sus registros deben permanecer separados incluso después de respaldos y restauraciones.
+Los retiros del dueño deben mantenerse diferenciados de los gastos operativos.
 
-## Pedidos y rutas de entrega
+## Ventas y tickets
 
-Debe existir un flujo simple:
+El flujo debe ser:
 
-Pedidos recibidos → selección de pedidos → ruta de entrega → orden de paradas → entrega → cobro o fiado → cierre.
+**borrador → confirmación → venta definitiva → ticket → pago → cartera/informes.**
 
-Una ruta de entrega permite seleccionar pedidos pendientes sin ruta.
+Toda operación confirmable debe ser idempotente.
 
-Cada parada debe mostrar cliente, productos, cantidades, total y estado.
+No permitir:
 
-La entrega crea las ventas correspondientes una sola vez mediante identificadores idempotentes y registra el método de pago.
+- ventas duplicadas;
+- tickets duplicados;
+- pagos duplicados;
+- formularios pendientes que reaparezcan después de una confirmación;
+- duplicación por doble toque o reapertura.
 
-Una ruta no puede cerrarse mientras tenga pedidos pendientes de resolver ni mientras el cuadre de inventario sea distinto de cero.
+Los datos deben persistir correctamente al navegar, cerrar y reabrir la aplicación.
+
+## Clientes y mascotas
+
+Conservar íntegramente la información y relaciones entre clientes, mascotas, teléfonos, ubicación, ventas, pagos, pedidos y cartera.
+
+No perder datos por cancelar o abandonar formularios.
+
+## Pedidos y rutas
+
+Mantener el flujo:
+
+**pedido → selección → ruta de entrega → orden de paradas → entrega → cobro o fiado.**
+
+Una entrega no debe generar ventas o pagos duplicados.
 
 ## Mapa
 
-El mapa debe cargar las calles de OpenStreetMap mediante HTTPS, redimensionarse correctamente y mostrar estados claros de carga/error.
+Corregir la carga de calles, tamaño, errores de render, ubicación y persistencia de coordenadas.
 
-Los marcadores, clientes y filtros locales no deben desaparecer porque las teselas de calles fallen.
+Mantener filtros por:
 
-Los filtros deben permitir:
-- todos los clientes;
-- búsqueda;
-- una ruta específica;
-- clientes seleccionados manualmente;
+- cliente;
+- múltiples clientes;
+- ruta;
+- ruta de entrega;
+- pedidos;
 - deuda;
 - días sin compra;
-- recompra vencida.
+- otros filtros existentes útiles.
 
-Para rutas de entrega debe mostrarse el orden de las paradas.
+Mostrar el orden de las paradas y, cuando sea viable, una polilínea.
 
-La polilínea interna representa el orden de las paradas, no navegación giro a giro. La navegación externa puede abrir un servicio de mapas cuando sea necesaria.
+No convertir CAMELLO en un navegador GPS giro a giro.
 
-Las coordenadas deben validarse y la ubicación actual debe usar alta precisión cuando el dispositivo la permita.
+## Interfaz
 
-## Informes financieros
+Conservar la identidad visual actual.
 
-Los informes deben ofrecer hoy, semana, mes y rango personalizado.
+Corregir:
 
-Como mínimo deben mostrar:
-- ventas;
-- número de ventas;
-- clientes atendidos;
-- productos y unidades;
-- costo de producto/materia prima;
-- utilidad bruta;
-- gastos operativos;
-- utilidad neta;
-- cobrado;
-- pendiente;
-- cartera;
-- flujo de caja;
-- compras de insumos;
-- gastos fijos;
-- gastos pendientes;
-- retiros del dueño.
+- desbordamientos;
+- textos sobrepuestos;
+- elementos fuera de tarjetas;
+- botones pequeños;
+- formularios incómodos;
+- problemas de espaciado;
+- contenido cortado.
 
-El detalle por producto debe mostrar cantidad, ventas, utilidad y clientes.
+Validar 360 px, 390 px y 430 px.
 
-Las cifras deben proceder de movimientos reales de SQLite y conservar coherencia con ventas, pagos y gastos.
+Eliminar la navegación horizontal inferior duplicada.
 
-## Respaldo y restauración
+Mantener una sola navegación lateral y el botón flotante de acciones rápidas.
 
-El respaldo debe ser completo y verificable con checksum.
+No rediseñar toda la aplicación.
 
-Debe existir:
-- exportación normal;
-- exportación cifrada;
-- guardado en una carpeta elegida por el usuario;
-- restauración;
-- validación antes de modificar la base;
-- respaldo de seguridad previo a restaurar cuando la plataforma lo permita;
-- limpieza de aplicación condicionada a respaldo verificado.
+## Backup y restore
 
-La copia guardada mediante el selector de carpeta Android debe quedar fuera del almacenamiento privado de CAMELLO y sobrevivir a la desinstalación.
+El respaldo completo debe ser verificable y guardable en una ubicación externa al almacenamiento privado de CAMELLO.
 
-Probar restauración con datos de prueba y comprobar clientes, productos, ventas, pagos, gastos, pedidos, rutas y datos de módulos.
+Debe sobrevivir a desinstalar y reinstalar la aplicación.
 
-## Seguridad e integridad
+Validar:
 
-Mantener TypeScript estricto, consultas parametrizadas y validación de entradas.
-
-No guardar secretos, keystores, contraseñas, tokens ni credenciales en Git.
-
-Conservar las protecciones de base, unicidad de operaciones, auditoría de anulaciones y validación de backups.
-
-No ocultar errores reales detrás de catches silenciosos cuando una operación de datos pueda haber quedado incompleta. Los fallos auxiliares opcionales sí pueden ser best-effort cuando no comprometan integridad.
-
-## Código limpio
-
-Eliminar:
-- imports sin uso;
-- estados sin uso;
-- código muerto;
-- handlers duplicados;
-- estilos contradictorios;
-- soluciones temporales;
-- sintaxis accidentalmente escapada;
-- comentarios obvios que no aporten contexto.
-
-No dejar archivos de depuración, capturas, credenciales ni artefactos temporales en el repositorio.
-
-## Pruebas obligatorias
-
-Ejecutar y dejar en verde:
-- `npm ci`
-- `npm run build`
-- `npm run verify`
-- verify-db
-- verify-modulos
-- verify-security
-- verify-ubicacion
-- benchmarks
-- UI Smoke
-- E2E
-
-El E2E debe cubrir configuración inicial, borradores tras recarga, clientes, ventas, doble confirmación, anulación, pagos, cartera, gasto pagado, gasto pendiente, pedido, ruta de entrega, entrega cobrada, cierre/cuadre, mapa, respaldo y ausencia de errores de consola.
-
-## APK
-
-El APK solo debe generarse desde el HEAD exacto que haya pasado toda la batería.
-
-El workflow debe publicar:
-- APK debug;
-- SHA-256 del APK;
 - versión;
-- commit/HEAD verificable.
+- integridad;
+- checksum;
+- estructura;
+- compatibilidad;
+- restauración segura.
 
-Verificar además que el APK sea un paquete Android válido y que su contenido ZIP no tenga errores.
+No permitir una limpieza destructiva sin un respaldo verificado cuando corresponda.
 
-La versión debug se usa para pruebas físicas. La release firmada requiere el keystore real del propietario y los secretos correspondientes. El keystore nunca entra a Git.
+## Exportación completa de clientes
+
+Debe existir **Exportar clientes** como función independiente.
+
+La exportación completa debe utilizar **JSON UTF-8** como formato maestro.
+
+Debe conservar la información y relaciones relevantes de:
+
+- clientes;
+- mascotas;
+- fotos;
+- seguimiento;
+- ventas;
+- pagos;
+- pedidos;
+- artículos de pedidos;
+- rutas referenciadas.
+
+El JSON debe conservar IDs, valores nulos, fechas, campos opcionales y relaciones.
+
+Además puede existir una exportación **CSV UTF-8** para la tabla de clientes, orientada a Excel, Google Sheets y LibreOffice.
+
+El JSON es la copia maestra cuando el objetivo sea conservar la información completa.
+
+La exportación no puede modificar ni borrar datos.
+
+## Seguridad
+
+Revisar:
+
+- secretos;
+- credenciales;
+- permisos;
+- almacenamiento;
+- logs;
+- datos personales;
+- dependencias;
+- backups.
+
+No colocar secretos ni keystores de release en Git.
+
+No registrar información personal innecesariamente.
+
+Mantener validaciones, consultas parametrizadas y controles de integridad.
+
+## Limpieza
+
+Eliminar, cuando realmente estén sin uso:
+
+- imports;
+- estados;
+- componentes;
+- handlers;
+- código muerto;
+- logs temporales;
+- CSS contradictorio;
+- soluciones temporales;
+- capturas y artefactos de prueba.
+
+No limpiar por estética si existe riesgo de regresión.
+
+## README
+
+Actualizar `README.md` para que describa el proyecto real.
+
+Debe explicar:
+
+- qué es CAMELLO;
+- para qué sirve;
+- funcionalidades;
+- filosofía de uso;
+- modelo financiero sencillo;
+- costo unitario de productos;
+- backup/restore;
+- exportación de clientes;
+- arquitectura;
+- desarrollo;
+- pruebas;
+- APK;
+- alcance y límites.
+
+No inventar capacidades.
+
+## Pruebas
+
+Ejecutar y dejar en verde las validaciones disponibles:
+
+- `npm ci`;
+- `npm run build`;
+- `npm run verify`;
+- verify DB;
+- módulos;
+- seguridad;
+- ubicación;
+- benchmarks;
+- UI Smoke;
+- E2E;
+- compilación Android;
+- validación del APK.
+
+El E2E debe cubrir especialmente clientes, borradores tras recarga, ventas, doble confirmación, anulación, pagos, cartera, gastos, pedidos, rutas, entregas, mapa, respaldo y exportación de clientes.
+
+## APK DEBUG final
+
+Generar el APK únicamente desde el mismo commit que haya pasado la batería de validaciones.
+
+Verificar:
+
+- commit SHA;
+- workflow;
+- ejecución;
+- versión;
+- tamaño;
+- SHA-256;
+- validez del paquete Android;
+- correspondencia exacta entre APK y HEAD.
+
+La release firmada queda separada y requiere los secretos reales del propietario.
 
 ## Criterio de cierre
 
-Esta iteración se considera cerrada cuando:
-1. el código está limpio;
-2. el CI está verde;
-3. los flujos críticos tienen cobertura E2E;
-4. el APK corresponde exactamente al HEAD verificado;
-5. no existen errores conocidos de los requisitos definidos aquí.
+CAMELLO está listo cuando:
 
-La protección administrativa de `main`, tags oficiales y firma release se gestionan por separado cuando requieren permisos o secretos del propietario.
+- sus funciones existentes funcionan;
+- los errores reportados están corregidos;
+- no existen duplicaciones conocidas;
+- no se pierde información;
+- los cálculos financieros son coherentes;
+- backup y restore funcionan;
+- exportación de clientes funciona;
+- interfaz es usable en teléfonos;
+- mapa, pedidos y rutas funcionan;
+- README está actualizado;
+- CI está en verde;
+- el APK DEBUG corresponde exactamente al HEAD validado.
+
+**No terminar agregando más cosas. Terminar haciendo que lo que ya existe funcione muy bien.**
