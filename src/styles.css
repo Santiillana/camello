@@ -255,6 +255,7 @@ input, select {
 .chip-filtro { flex: none; border-radius: 999px; border: 1px solid var(--color-borde); background: var(--color-superficie); padding: 6px 12px; font-size: 12px; }
 .chip-filtro.activo { background: var(--color-primario); color: #fff; border-color: var(--color-primario); }
 .contenedor-mapa { height: 55vh; min-height: 320px; border-radius: var(--radio); overflow: hidden; border: 1px solid var(--color-borde); }
+.mapa-vectorial-local { background-color: #f2efe9; background-image: linear-gradient(rgba(17,17,17,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(17,17,17,.06) 1px, transparent 1px); background-size: 32px 32px; }
 
 textarea {
   font-family: inherit;
