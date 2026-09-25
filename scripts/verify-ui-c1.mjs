@@ -32,7 +32,6 @@ try {
     page.setDefaultTimeout(7000);
     console.log('ui-c1: abrir app');
     await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await configurarPrimeraVez(page);
     console.log('ui-c1: comprobar Inicio');
     await page.getByRole('heading', { name: '¿Cómo vamos?' }).waitFor({ timeout: 15000 });
     console.log('ui-c1: comprobar menú');
