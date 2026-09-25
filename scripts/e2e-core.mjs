@@ -423,6 +423,7 @@ try {
     await siguiente(page);
     await page.getByRole('button', { name: 'Ya pagué' }).click();
     await siguiente(page);
+    await siguiente(page);
     for (let i = 0; i < 5; i += 1) {
       const omitir = page.locator('.asistente-overlay').getByRole('button', { name: 'Omitir' });
       if (await omitir.count()) await omitir.click();
