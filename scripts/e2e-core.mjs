@@ -84,20 +84,13 @@ async function crearCliente(page) {
 
   await page.getByRole('heading', { name: 'Tienes un formulario sin terminar' }).waitFor({ timeout: 60000 });
   await page.getByRole('button', { name: 'Continuar' }).click();
-  const nombreInput = page.getByLabel('Nombre completo');
-  const telefonoInput = page.getByLabel('Teléfono 1');
-  let nombreRestaurado = false;
-  let telefonoRestaurado = false;
-  for (let intento = 0; intento < 120; intento += 1) {
-    const nombre = await nombreInput.inputValue().catch(() => '');
-    const telefono = await telefonoInput.inputValue().catch(() => '');
-    nombreRestaurado = nombre === 'Cliente E2E';
-    telefonoRestaurado = telefono === '3001234567';
-    if (nombreRestaurado && telefonoRestaurado) break;
-    await sleep(250);
-  }
-  if (!nombreRestaurado) throw new Error('El borrador no restauró el nombre.');
-  if (!telefonoRestaurado) throw new Error('El borrador no restauró el teléfono.');
+  await page.getByLabel('Teléfono 1').waitFor({ state: 'visible', timeout: 10000 });
+  const telefonoRestaurado = await page.getByLabel('Teléfono 1').inputValue();
+  if (telefonoRestaurado !== '3001234567') throw new Error('El borrador no restauró el teléfono.');
+  await page.getByRole('button', { name: 'Atrás' }).click();
+  await page.getByLabel('Nombre completo').waitFor({ state: 'visible', timeout: 10000 });
+  const nombreRestaurado = await page.getByLabel('Nombre completo').inputValue();
+  if (nombreRestaurado !== 'Cliente E2E') throw new Error('El borrador no restauró el nombre.');
 
   await siguiente(page);
   for (let i = 0; i < 5; i += 1) await omitir(page);
