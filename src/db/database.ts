@@ -2729,6 +2729,83 @@ class Database {
     return this.resumenPeriodo(hoy, hoy);
   }
 
+  // EXPORTACIÓN DE CLIENTES
+
+  async exportarClientes(): Promise<string> {
+    const conn = this.conn();
+    const [clientes, mascotas, fotos, seguimiento, ventas, pagos, pedidos, pedidoItems] = await Promise.all([
+      conn.query('SELECT * FROM clientes ORDER BY id ASC;'),
+      conn.query('SELECT * FROM mascotas ORDER BY cliente_id ASC, id ASC;'),
+      conn.query('SELECT * FROM fotos ORDER BY cliente_id ASC, id ASC;'),
+      conn.query('SELECT * FROM seguimiento_clientes ORDER BY cliente_id ASC;'),
+      conn.query("SELECT * FROM ventas WHERE COALESCE(estado_registro,'activa') IN ('activa','anulada') ORDER BY cliente_id ASC, id ASC;"),
+      conn.query("SELECT * FROM pagos WHERE COALESCE(estado_registro,'activa') IN ('activa','anulada') ORDER BY cliente_id ASC, id ASC;"),
+      conn.query('SELECT * FROM pedidos ORDER BY cliente_id ASC, id ASC;'),
+      conn.query('SELECT * FROM pedido_items ORDER BY pedido_id ASC, id ASC;'),
+    ]);
+
+    const clienteRows = clientes.values ?? [];
+    const idsRuta = new Set<number>();
+    for (const row of ventas.values ?? []) if (row.ruta_id != null) idsRuta.add(Number(row.ruta_id));
+    for (const row of pedidos.values ?? []) if (row.ruta_id != null) idsRuta.add(Number(row.ruta_id));
+
+    let rutas: { values?: Record<string, unknown>[] } = { values: [] };
+    if (idsRuta.size > 0) {
+      const rutaIds = [...idsRuta];
+      rutas = await conn.query(
+        'SELECT * FROM rutas WHERE id IN (' + rutaIds.map(() => '?').join(',') + ') ORDER BY id ASC;',
+        rutaIds,
+      );
+    }
+
+    const payload = {
+      camello_client_export_version: 1,
+      database: DB_NAME,
+      schema_version: DB_VERSION,
+      exported_at: new Date().toISOString(),
+      scope: 'clientes_completo',
+      tables: {
+        clientes: clienteRows,
+        mascotas: mascotas.values ?? [],
+        fotos: fotos.values ?? [],
+        seguimiento_clientes: seguimiento.values ?? [],
+        ventas: ventas.values ?? [],
+        pagos: pagos.values ?? [],
+        pedidos: pedidos.values ?? [],
+        pedido_items: pedidoItems.values ?? [],
+        rutas_referenciadas: rutas.values ?? [],
+      },
+      relaciones: {
+        cliente_mascota: 'mascotas.cliente_id -> clientes.id',
+        cliente_foto: 'fotos.cliente_id -> clientes.id',
+        cliente_seguimiento: 'seguimiento_clientes.cliente_id -> clientes.id',
+        venta_cliente: 'ventas.cliente_id -> clientes.id',
+        pago_venta: 'pagos.venta_id -> ventas.id',
+        pedido_cliente: 'pedidos.cliente_id -> clientes.id',
+        pedido_item: 'pedido_items.pedido_id -> pedidos.id',
+        venta_pedido: 'ventas.pedido_id -> pedidos.id',
+        venta_ruta: 'ventas.ruta_id -> rutas_referenciadas.id',
+        pedido_ruta: 'pedidos.ruta_id -> rutas_referenciadas.id',
+      },
+    };
+    const checksum = await calcularChecksum(JSON.stringify(payload));
+    return JSON.stringify({ ...payload, checksum }, null, 2);
+  }
+
+  async exportarClientesCsv(): Promise<string> {
+    const result = await this.conn().query('SELECT * FROM clientes ORDER BY id ASC;');
+    const columns = result.columns ?? [];
+    const quoteCsv = (value: unknown): string => {
+      const text = value == null ? '' : String(value);
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    const lines = [columns.map(quoteCsv).join(',')];
+    for (const row of result.values ?? []) {
+      lines.push(columns.map((column) => quoteCsv(row[column])).join(','));
+    }
+    return '\\uFEFF' + lines.join('\\r\\n') + '\\r\\n';
+  }
+
   // RESPALDO
 
   async exportarRespaldo(): Promise<string> {
