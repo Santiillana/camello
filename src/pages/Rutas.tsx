@@ -129,6 +129,7 @@ function FormNuevaRuta({
   const [error, setError] = useState<string | null>(null);
   const [pasoInicial, setPasoInicial] = useState(0);
   const [pedidosDisponibles, setPedidosDisponibles] = useState<PedidoConDetalle[]>([]);
+  const [pedidosCargando, setPedidosCargando] = useState(false);
   const [pedidosSeleccionados, setPedidosSeleccionados] = useState<number[]>([]);
   const datosBorrador = { nombre, tipo, paquetes, usarGps, pedidosSeleccionados };
   useEffect(() => {
@@ -141,14 +142,25 @@ function FormNuevaRuta({
     }
 
     const cargarPedidosPendientes = async () => {
+      if (activo) {
+        setPedidosCargando(true);
+        setError(null);
+      }
       try {
         await database.init();
-        const pedidos = (await database.listarPedidos({ sinRuta: true })).filter((pedido) => pedido.estado === 'PENDIENTE');
+        let pedidos: PedidoConDetalle[] = [];
+        for (let intento = 0; intento < 5; intento += 1) {
+          pedidos = (await database.listarPedidos({ sinRuta: true })).filter((pedido) => pedido.estado === 'PENDIENTE');
+          if (pedidos.length) break;
+          await new Promise((resolve) => window.setTimeout(resolve, 200));
+        }
         if (activo) setPedidosDisponibles(pedidos);
       } catch (e: unknown) {
         if (!activo) return;
         setPedidosDisponibles([]);
         setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (activo) setPedidosCargando(false);
       }
     };
 
@@ -196,13 +208,14 @@ function FormNuevaRuta({
         <div className="selector-clientes-mapa">
           <p className="detalle-cliente">Selecciona los pedidos que vas a entregar hoy. El orden será el de esta selección.</p>
           <div className="lista-seleccion-clientes" role="group" aria-label="Pedidos disponibles">
-            {pedidosDisponibles.map((pedido) => (
+            {pedidosCargando && <p className="texto-vacio">Cargando pedidos pendientes…</p>}
+            {!pedidosCargando && pedidosDisponibles.map((pedido) => (
               <label key={pedido.id}>
                 <input type="checkbox" checked={pedidosSeleccionados.includes(pedido.id)} onChange={(e) => setPedidosSeleccionados((actual) => e.target.checked ? [...actual, pedido.id] : actual.filter((id) => id !== pedido.id))} />
                 <span>{pedido.cliente_nombre} · {formatoMoneda(pedido.total_estimado)} · {pedido.items.map((item) => item.producto_nombre + ' × ' + item.cantidad).join(', ')}</span>
               </label>
             ))}
-            {!pedidosDisponibles.length && <p className="texto-vacio">No hay pedidos pendientes sin ruta. Primero créalos en Pedidos.</p>}
+            {!pedidosCargando && !pedidosDisponibles.length && <p className="texto-vacio">No hay pedidos pendientes sin ruta. Primero créalos en Pedidos.</p>}
           </div>
         </div>
       ) : <p className="texto-vacio">Este paso se usa solo en una ruta de entrega.</p>,
