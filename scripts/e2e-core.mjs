@@ -95,6 +95,58 @@ async function probarDescartarBorrador(page) {
   await page.getByRole('heading', { name: 'Nuevo cliente' }).waitFor({ state: 'visible', timeout: 30000 });
 }
 
+async function probarUbicacionDesdeFichaYScroll(page) {
+  await sql(page, "WITH RECURSIVE nums(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM nums WHERE n < 105) INSERT INTO clientes (nombre,telefono1,fecha_registro) SELECT 'Cliente mapa dummy ' || n, '310000' || printf('%04d', n), date('now') FROM nums;");
+  await page.goto('http://127.0.0.1:5173/#/clientes?nuevo=1', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.getByRole('heading', { name: 'Nuevo cliente' }).waitFor({ state: 'visible', timeout: 30000 });
+  await page.getByLabel('Nombre completo').fill('Cliente Mapa E2E');
+  await siguiente(page);
+  await page.getByLabel('Teléfono 1').fill('3001112233');
+  await siguiente(page);
+  await omitir(page);
+  await omitir(page);
+  await omitir(page);
+  await omitir(page);
+  const guardarNuevo = page.getByRole('button', { name: 'Guardar cliente' });
+  if (await guardarNuevo.count()) await guardarNuevo.click();
+  else throw new Error('E2E: no se pudo finalizar la creación de Cliente Mapa E2E.');
+  await page.getByRole('heading', { name: 'Cliente Mapa E2E' }).waitFor({ state: 'visible', timeout: 30000 });
+  const idRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente Mapa E2E' ORDER BY id DESC LIMIT 1;");
+  if (idRow.length !== 1 || Number(idRow[0]?.id) <= 100) throw new Error('E2E: el cliente de mapa no quedó fuera del primer bloque de 100.');
+
+  await page.getByRole('button', { name: 'Agregar ubicación' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ubicación del cliente' });
+  await dialog.waitFor({ state: 'visible', timeout: 30000 });
+
+  await page.setViewportSize({ width: 390, height: 640 });
+  const dimensiones = await dialog.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+  if (dimensiones.scrollHeight <= dimensiones.clientHeight) throw new Error('E2E: el formulario de ubicación no genera contenido desplazable en móvil.');
+  await dialog.hover();
+  await page.mouse.wheel(0, 700);
+  const desplazamiento = await dialog.evaluate((el) => el.scrollTop);
+  if (desplazamiento <= 0) throw new Error('E2E: el formulario de ubicación no respondió al desplazamiento.');
+
+  await dialog.getByLabel('Latitud').fill('4.1425');
+  await dialog.getByLabel('Longitud').fill('-73.6270');
+  await dialog.getByRole('button', { name: 'Guardar coordenadas' }).click();
+  await dialog.getByRole('button', { name: 'Guardar ubicación' }).click();
+  await dialog.waitFor({ state: 'hidden', timeout: 30000 });
+
+  const guardada = await sql(page, "SELECT lat,lng,ubicacion_fuente FROM clientes WHERE id=?;", [Number(idRow[0].id)]);
+  if (guardada.length !== 1 || Number(guardada[0]?.lat) !== 4.1425 || Number(guardada[0]?.lng) !== -73.627 || guardada[0]?.ubicacion_fuente !== 'manual') {
+    throw new Error('E2E: la ubicación no quedó guardada en la ficha del cliente.');
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('http://127.0.0.1:5173/#/mapa', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.getByRole('heading', { name: 'Mapa de clientes' }).waitFor({ state: 'visible', timeout: 30000 });
+  await page.getByText(/clientes con ubicación cumplen los filtros/).waitFor({ state: 'visible', timeout: 30000 });
+  const mapaMarker = page.locator('.leaflet-overlay-pane path.leaflet-interactive').first();
+  await mapaMarker.waitFor({ state: 'visible', timeout: 30000 });
+  await mapaMarker.click();
+  await page.getByText('Cliente Mapa E2E', { exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+}
+
 async function crearCliente(page) {
   await page.goto('http://127.0.0.1:5173/#/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForFunction(
@@ -370,6 +422,7 @@ try {
 
     await crearCliente(page);
     await probarDescartarBorrador(page);
+    await probarUbicacionDesdeFichaYScroll(page);
 
     // Precalentar la ruta lazy de pedidos antes de ejecutar el flujo intensivo.
     // Esto evita que la primera transformación del módulo ocurra al final de la suite,
