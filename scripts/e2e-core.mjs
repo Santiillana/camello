@@ -445,7 +445,7 @@ try {
     const productoPedido = formularioPedido.locator('select').nth(1);
     try {
       await clientePedido.locator('option').filter({ hasText: /^Cliente E2E$/ }).waitFor({ state: 'attached', timeout: 60000 });
-      await productoPedido.locator(`option[value="\${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
+      await productoPedido.locator(`option[value="${ids[0].producto_id}"]`).waitFor({ state: 'attached', timeout: 60000 });
     } catch (error) {
       const diagnostico = {
         url: page.url(),
