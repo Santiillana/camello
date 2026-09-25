@@ -12,6 +12,7 @@ const ETIQUETA_SEGUIMIENTO: Record<string, string> = {
 };
 
 const PAGE_SIZE = 50;
+type FiltroMetrica = 'monto' | 'sinRecompra' | 'cantidad';
 
 export default function Clientes() {
   const [clientes, setClientes] = useState<ClienteConResumen[]>([]);
@@ -23,6 +24,7 @@ export default function Clientes() {
     ticketPromedio: 0, frecuencia: 20, cumpleanos: 0, mejorMonto: [], mejorFrecuencia: [],
   });
   const [hayMas, setHayMas] = useState(false);
+  const [filtroMetrica, setFiltroMetrica] = useState<FiltroMetrica>('monto');
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,16 +121,24 @@ export default function Clientes() {
           <div className="stat-card"><span className="stat-valor">{formatoMoneda(metricas.ticketPromedio)}</span><span className="stat-etiqueta">Ticket promedio</span></div>
           <div className="stat-card"><span className="stat-valor">{Math.round(metricas.frecuencia)} d</span><span className="stat-etiqueta">Frecuencia media</span></div>
         </div>
+        <div className="filtros-mapa">
+          <button type="button" className={'chip-filtro'+(filtroMetrica==='monto'?' activo':'')} onClick={()=>setFiltroMetrica('monto')}>Mejores clientes</button>
+          <button type="button" className={'chip-filtro'+(filtroMetrica==='sinRecompra'?' activo':'')} onClick={()=>setFiltroMetrica('sinRecompra')}>No han vuelto</button>
+          <button type="button" className={'chip-filtro'+(filtroMetrica==='cantidad'?' activo':'')} onClick={()=>setFiltroMetrica('cantidad')}>Más cantidad</button>
+        </div>
         <div className="metricas-listas">
-          <div><strong>Mejores clientes por monto</strong><ul>
-            {metricas.mejorMonto.map((c) => <li key={c.id}><span>{c.nombre}</span><strong>{formatoMoneda(c.total_comprado)}</strong></li>)}
-          </ul></div>
-          <div><strong>Clientes con ritmo de compra más frecuente</strong><ul>
-            {metricas.mejorFrecuencia.map((c) => <li key={c.id}><span>{c.nombre}</span><strong>cada {c.ritmo_dias} días</strong></li>)}
-          </ul></div>
-          <div><strong>Cumpleaños registrados</strong>
-            <p className="texto-vacio">{metricas.cumpleanos} cumpleaños con día y mes guardados.</p>
+          {filtroMetrica==='monto' && <div><strong>Mejores clientes por monto comprado</strong><ul>{metricas.mejorMonto.map((c)=><li key={c.id}><span>{c.nombre}</span><strong>{formatoMoneda(c.total_comprado)}</strong></li>)}</ul></div>}
+          {filtroMetrica==='sinRecompra' && <div><strong>Clientes que nunca volvieron a comprar</strong><ul>{metricas.sinRecompra.map((c)=><li key={c.id}><span>{c.nombre}</span><strong>{c.ultima_compra??'Sin compras'}</strong></li>)}</ul></div>}
+          {filtroMetrica==='cantidad' && <div><strong>Clientes que más piden en cantidad</strong><ul>{metricas.mejorCantidad.map((c)=><li key={c.id}><span>{c.nombre}</span><strong>{c.cantidad} unidades</strong></li>)}</ul></div>}
+          <div><strong>Estadísticas generales</strong>
+            <div className="grafico-barras">
+              <GraficoBarra etiqueta="Activos" valor={metricas.activos} max={Math.max(metricas.activos,1)} />
+              <GraficoBarra etiqueta="Con deuda" valor={metricas.conDeuda} max={Math.max(metricas.activos,1)} />
+              <GraficoBarra etiqueta="Sin comprar +20 d" valor={metricas.sinComprar} max={Math.max(metricas.activos,1)} />
+              <GraficoBarra etiqueta="Nuevos este mes" valor={metricas.nuevosMes} max={Math.max(metricas.activos,1)} />
+            </div>
           </div>
+          <div><strong>Cumpleaños registrados</strong><p className="texto-vacio">{metricas.cumpleanos} cumpleaños con día y mes guardados.</p></div>
         </div>
       </section>
 
@@ -163,4 +173,8 @@ export default function Clientes() {
       )}
     </div>
   );
+}
+function GraficoBarra({ etiqueta, valor, max }: { etiqueta:string; valor:number; max:number }) {
+  const porcentaje=Math.max(0,Math.min(100,(valor/max)*100));
+  return <div className="grafico-barra-fila"><span>{etiqueta}</span><div className="grafico-barra-pista"><i style={{width:porcentaje+'%'}} /></div><strong>{valor}</strong></div>;
 }
