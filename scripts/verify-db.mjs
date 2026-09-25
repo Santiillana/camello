@@ -261,19 +261,22 @@ function flujo(db,label){
 }
 
 function pedidosTest(db){
-  const cid=Number(db.exec('SELECT id FROM clientes LIMIT 1')[0]?.values?.[0]?.[0] ?? 0);
-  const pid=Number(db.exec('SELECT id FROM productos LIMIT 1')[0]?.values?.[0]?.[0] ?? 0);
-  if(!cid||!pid)throw new Error('pedidos: faltan cliente/producto base');
+  db.run("INSERT INTO clientes(nombre,fecha_registro) VALUES ('Cliente pruebas pedidos','2026-09-24');");
+  const cid=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
+  db.run("INSERT INTO productos(nombre,precio,costo,activo) VALUES ('Producto pruebas pedidos',13000,7000,1);");
+  const pid=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
+
   db.run("INSERT INTO pedidos(cliente_id,fecha_pedido,fecha_entrega,estado,total_estimado,pago_estado,created_at,updated_at) VALUES (?,'2026-09-24','2026-09-25','PENDIENTE',13000,'PENDIENTE',datetime('now'),datetime('now'));",[cid]);
   const pedido=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
   db.run("INSERT INTO pedido_items(pedido_id,producto_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total) VALUES (?,?,(SELECT nombre FROM productos WHERE id=?),1,13000,7000,13000);",[pedido,pid,pid]);
-  const item=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
   db.run("INSERT INTO ventas(cliente_id,pedido_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,monto_pagado,operacion_id) VALUES (?,?,'Pedido',1,13000,7000,13000,6000,'2026-09-25','09:00','PAGADA',13000,?);",[cid,pedido,'pedido-test-'+pedido]);
   assertEq(Number(db.exec("SELECT COUNT(*) FROM pedido_items WHERE pedido_id="+pedido)[0].values[0][0]),1,'pedido item');
   assertEq(Number(db.exec("SELECT pedido_id FROM ventas WHERE operacion_id='pedido-test-"+pedido+"'")[0].values[0][0]),pedido,'pedido venta enlazada');
   db.run("DELETE FROM ventas WHERE operacion_id='pedido-test-"+pedido+"';");
   db.run("DELETE FROM pedido_items WHERE pedido_id="+pedido+";");
   db.run("DELETE FROM pedidos WHERE id="+pedido+";");
+  db.run("DELETE FROM clientes WHERE id="+cid+";");
+  db.run("DELETE FROM productos WHERE id="+pid+";");
 }
 function gastosTest(db){
   const cat=Number(db.exec("SELECT id FROM categorias_gasto WHERE nombre='Gas'")[0].values[0][0]);
