@@ -30,6 +30,9 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      - name: Preparar dependencias del navegador para Verify
+        run: npx playwright install --with-deps chromium
+
       - name: Verificar proyecto web
         run: npm run verify
 
