@@ -704,6 +704,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max(14px, env(safe-area-inset-left, 0px));
   background: color-mix(in srgb, var(--color-fondo) 96%, #000 4%);
 }
+.asistente-overlay > * { flex: 0 0 auto; }
 .asistente-overlay .asistente-encabezado {
   position: sticky;
   top: 0;
