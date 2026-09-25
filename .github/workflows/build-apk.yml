@@ -34,7 +34,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Verificar proyecto web
-        run: npm run verify
+        run: timeout --signal=TERM --kill-after=30s 15m npm run verify
 
       - name: Sincronizar Capacitor
         run: npx cap sync android
