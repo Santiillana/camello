@@ -78,8 +78,13 @@ async function probarDescartarBorrador(page) {
   await page.getByLabel('Nombre completo').fill('Borrador descartado E2E');
   await siguiente(page);
   await page.getByLabel('Teléfono 1').fill('3009876543');
-  await sleep(600);
-  const creado = await sql(page, "SELECT COUNT(*) AS n FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo';");
+  await page.waitForFunction(async () => false, null, { timeout: 0 }).catch(() => {});
+  let creado = [];
+  for (let intento = 0; intento < 20; intento += 1) {
+    creado = await sql(page, "SELECT COUNT(*) AS n FROM borradores WHERE tipo='cliente-nuevo' AND clave='nuevo';");
+    if (Number(creado[0]?.n) === 1) break;
+    await sleep(250);
+  }
   if (Number(creado[0]?.n) !== 1) throw new Error('E2E: no se creó el borrador de prueba.');
   await page.reload({ waitUntil: 'domcontentloaded' });
   const pendiente = page.getByRole('heading', { name: 'Tienes un formulario sin terminar' });
