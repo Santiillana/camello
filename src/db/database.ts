@@ -2274,7 +2274,7 @@ class Database {
         );
       }
       await this.conn().run(
-        `UPDATE pedidos SET estado='ENTREGADO',pago_estado=?,entregado_at=?,updated_at=? WHERE id=? AND estado='ASIGNADO';`,
+        `UPDATE pedidos SET estado='ENTREGADO',pago_estado=?,entregado_at=?,updated_at=? WHERE id=? AND (estado='ASIGNADO' OR (estado='PENDIENTE' AND ruta_id IS NULL));`,
         [metodoPago==='FIADO'?'FIADO':'COBRADO',ahora.toISOString(),ahora.toISOString(),pedidoId],
         false,
       );
