@@ -23,12 +23,16 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   const decididoRef = useRef(false);
   const finalizadoRef = useRef(false);
   const timerRef = useRef<number | null>(null);
+  const firmaActualRef = useRef('');
+  const ultimaFirmaGuardadaRef = useRef<string | null>(null);
+  const firmaDescartadaRef = useRef<string | null>(null);
   const [pendiente, setPendiente] = useState<BorradorPendiente<T> | null>(null);
   const [listo, setListo] = useState(false);
 
   useEffect(() => {
     datosRef.current = datos;
     pasoRef.current = paso;
+    firmaActualRef.current = JSON.stringify({ datos, paso });
   }, [datos, paso]);
 
   useEffect(() => {
@@ -49,9 +53,15 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
 
   useEffect(() => {
     if (!activo || finalizadoRef.current || !listo || !listoRef.current || !decididoRef.current) return undefined;
+    const firma = JSON.stringify({ datos, paso });
+    if (firma === ultimaFirmaGuardadaRef.current || firma === firmaDescartadaRef.current) return undefined;
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
-      void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current).catch(() => undefined);
+      void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current)
+        .then(() => {
+          if (firmaActualRef.current === firma) ultimaFirmaGuardadaRef.current = firma;
+        })
+        .catch(() => undefined);
     }, 300);
     return () => {
       if (timerRef.current != null) window.clearTimeout(timerRef.current);
@@ -63,7 +73,12 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
 
     const guardarAhora = () => {
       if (!listoRef.current || finalizadoRef.current) return;
-      void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current).catch(() => undefined);
+      const firma = firmaActualRef.current;
+      void database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current)
+        .then(() => {
+          if (firmaActualRef.current === firma) ultimaFirmaGuardadaRef.current = firma;
+        })
+        .catch(() => undefined);
     };
 
     const onVisibility = () => {
@@ -100,7 +115,14 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
   }
 
   async function descartar(): Promise<void> {
+    const firma = firmaActualRef.current;
     await database.eliminarBorrador(tipo, clave);
+    firmaDescartadaRef.current = firma;
+    ultimaFirmaGuardadaRef.current = null;
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setPendiente(null);
     listoRef.current = true;
     decididoRef.current = true;
@@ -109,7 +131,9 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
 
   async function guardarAhora(): Promise<void> {
     if (!activo || finalizadoRef.current || !listoRef.current) return;
+    const firma = firmaActualRef.current;
     await database.guardarBorrador(tipo, clave, datosRef.current, pasoRef.current);
+    if (firmaActualRef.current === firma) ultimaFirmaGuardadaRef.current = firma;
   }
 
   async function limpiar(): Promise<void> {
@@ -119,6 +143,8 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
       timerRef.current = null;
     }
     await database.eliminarBorrador(tipo, clave);
+    ultimaFirmaGuardadaRef.current = firmaActualRef.current;
+    firmaDescartadaRef.current = null;
     setPendiente(null);
     listoRef.current = true;
     decididoRef.current = true;
