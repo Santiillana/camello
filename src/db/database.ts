@@ -2042,7 +2042,7 @@ class Database {
     const filtros: string[] = [];
     const params: unknown[] = [];
     if (opts.estados?.length) {
-      filtros.push(`p.estado IN (\${opts.estados.map(() => '?').join(',')})`);
+      filtros.push(`p.estado IN (${opts.estados.map(() => '?').join(',')})`);
       params.push(...opts.estados);
     }
     if (opts.fechaEntrega) { filtros.push('p.fecha_entrega=?'); params.push(opts.fechaEntrega); }
