@@ -57,9 +57,9 @@ export default function SideNav({ abierto, expandido, onCerrar, onAlternarExpand
           <button
             type="button"
             className="side-nav-toggle"
-            aria-label={expandido ? 'Contraer menú' : 'Expandir menú'}
-            title={expandido ? 'Contraer menú' : 'Expandir menú'}
-            onClick={onAlternarExpandido}
+            aria-label={abierto ? 'Cerrar menú' : (expandido ? 'Contraer menú' : 'Expandir menú')}
+            title={abierto ? 'Cerrar menú' : (expandido ? 'Contraer menú' : 'Expandir menú')}
+            onClick={abierto ? onCerrar : onAlternarExpandido}
           >
             {expandido ? '‹' : '›'}
           </button>
