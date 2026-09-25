@@ -223,8 +223,7 @@ export class WebSqliteConnection {
   }
 
   async persist(): Promise<void> {
-    const snapshot = this.getDb().export();
-    this.persistChain = this.persistChain.then(() => writeStore(STORE_DB, STORE_KEY, snapshot));
+    this.persistChain = this.persistChain.then(() => writeStore(STORE_DB, STORE_KEY, this.getDb().export()));
     await this.persistChain;
   }
 
