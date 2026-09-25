@@ -4,7 +4,7 @@ Rama: `release/v1`
 Base funcional: `fix/sqlite-wasm-web`
 PR #5 / `fix/jeep-sqlite-wasm`: fuera de alcance, no se modifica.
 
-HEAD de trabajo verificado al actualizar este documento: `894b1b0bc4b867830437794a02affae4bfb1bbb8`.
+HEAD de trabajo verificado al actualizar este documento: `208f64b0bea43e980186cd3ac35d9155ba3f7ca8`.
 
 ## Estado por bloques
 
