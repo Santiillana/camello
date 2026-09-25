@@ -89,7 +89,7 @@ export default function Mapa() {
   useEffect(() => {
     let activo = true;
     Promise.all([
-      database.listarClientes({ soloActivos: true }),
+      database.listarClientes({ soloActivos: true, limite: 2000 }),
       database.listarRutas(),
     ]).then(([clientesResultado, rutasResultado]) => {
       if (!activo) return;
