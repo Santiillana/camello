@@ -21,7 +21,7 @@
     "benchmark:scale": "node scripts/benchmark-scale.mjs",
     "typecheck": "tsc -b --pretty false",
     "verify:vitest": "vitest run",
-    "verify:e2e": "playwright install --with-deps chromium && VITE_E2E=1 node scripts/e2e-core.mjs"
+    "verify:e2e": "playwright install chromium && VITE_E2E=1 node scripts/e2e-core.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "8.1.1",
