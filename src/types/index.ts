@@ -247,6 +247,7 @@ export interface ResumenPeriodo {
 export type TipoCategoriaGasto = 'fijo' | 'variable';
 export type NaturalezaGasto = 'operativo' | 'compra_insumos' | 'retiro_dueno';
 export type EstadoGasto = 'pagado' | 'pendiente' | 'anulado';
+export type EstadoGastoPersonal = 'pagado' | 'pendiente';
 
 export interface CategoriaGasto {
   id: number;
@@ -270,6 +271,18 @@ export interface Pago {
   estado_registro: EstadoRegistro;
   motivo_anulacion?: string | null;
   anulada_at?: string | null;
+}
+
+export interface GastoPersonal {
+  id: number;
+  fecha: string;
+  monto: number;
+  categoria: string;
+  tipo: TipoCategoriaGasto;
+  descripcion?: string | null;
+  estado: EstadoGastoPersonal;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Gasto {
