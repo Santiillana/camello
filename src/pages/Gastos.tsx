@@ -5,15 +5,14 @@ import AsistenteTarjetas from '../components/AsistenteTarjetas';
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
 import { formatoMoneda, hoyISO } from '../utils/format';
-import type { CategoriaGasto, Gasto, EstadoGasto, ResultadoMes } from '../types';
+import type { CategoriaGasto, Gasto, EstadoGasto, ResultadoMes, TipoCategoriaGasto, NaturalezaGasto } from '../types';
 import { comprimirArchivo } from '../components/FotosSelector';
 
 function esEstadoGasto(value: string): value is EstadoGasto {
   return value === 'pagado' || value === 'pendiente' || value === 'anulado';
 }
-function esNaturalezaGasto(value: string): value is 'operativo' | 'compra_insumos' | 'retiro_dueno' {
-  return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno';
-}
+function esTipoCategoria(value: string): value is TipoCategoriaGasto { return value === 'fijo' || value === 'variable'; }
+function esNaturalezaCategoria(value: string): value is NaturalezaGasto { return value === 'operativo' || value === 'compra_insumos' || value === 'retiro_dueno'; }
 
 type FiltroPeriodo='hoy'|'semana'|'mes';
 function inicioSemana(fecha:string){ const d=new Date(fecha+'T00:00:00Z'); const n=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()-(n-1)); return d.toISOString().slice(0,10); }
@@ -106,13 +105,28 @@ function descargarCSV(items: Gasto[]) {
 function FormularioGasto({categorias,onCategoriaCreada,onGuardado,onCancelar}:{categorias:CategoriaGasto[];onCategoriaCreada:()=>Promise<void>;onGuardado:()=>void;onCancelar:()=>void}){
   const [monto,setMonto]=useState(''); const [categoria,setCategoria]=useState(''); const [fecha,setFecha]=useState(hoyISO()); const [estado,setEstado]=useState<EstadoGasto | null>(null); const [metodo,setMetodo]=useState('EFECTIVO'); const [fechaLimite,setFechaLimite]=useState(''); const [nota,setNota]=useState(''); const [proveedor,setProveedor]=useState(''); const [foto,setFoto]=useState(''); const [ruta,setRuta]=useState<number|undefined>();
   const [paso,setPaso]=useState(0); const [guardando,setGuardando]=useState(false);
+  const [mostrarNuevaCategoria,setMostrarNuevaCategoria]=useState(false);
+  const [nuevaCategoriaNombre,setNuevaCategoriaNombre]=useState('');
+  const [nuevoTipoCategoria,setNuevoTipoCategoria]=useState<TipoCategoriaGasto>('variable');
+  const [nuevaNaturalezaCategoria,setNuevaNaturalezaCategoria]=useState<NaturalezaGasto>('operativo');
   const datos={monto,categoria,fecha,estado,metodo,fechaLimite,nota,proveedor,foto,ruta};
   const borrador=useBorrador({tipo:'gasto-nuevo',clave:'nuevo',datos,paso});
   const [pendienteRutas,setPendienteRutas]=useState<{id:number;nombre:string}[]>([]);
   useEffect(()=>{void database.obtenerRutaActiva().then(r=>setPendienteRutas(r?[{id:r.id,nombre:r.nombre}]:[]));},[]);
   const tarjetas=[
     {id:'monto',titulo:'Monto',contenido:<label>Monto<input type="number" min={1} step={1} value={monto} onChange={e=>setMonto(e.target.value)} inputMode="numeric"/></label>,validar:()=>Number.isSafeInteger(Number(monto))&&Number(monto)>0?null:'Escribe un monto entero mayor que 0.'},
-    {id:'cat',titulo:'Categoría',contenido:<div className="formulario"><label>Categoría<select value={categoria} onChange={e=>setCategoria(e.target.value)}><option value="">Selecciona</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label><button type="button" className="boton-texto" onClick={async()=>{const nombre=window.prompt('Nombre de la nueva categoría');if(!nombre?.trim())return;const tipo=(window.prompt('Tipo: fijo o variable','variable')==='fijo'?'fijo':'variable');const naturaleza=window.prompt('Naturaleza: operativo, compra_insumos o retiro_dueno','operativo')||'operativo';const id=await database.crearCategoriaGasto({nombre:nombre.trim(),tipo:naturaleza==='operativo'?tipo:(tipo==='fijo'?'fijo':'variable'),naturaleza:esNaturalezaGasto(naturaleza)?naturaleza:'operativo'});await onCategoriaCreada();setCategoria(String(id));}}>+ Nueva categoría</button></div>,validar:()=>categoria?null:'Selecciona una categoría.'},
+    {id:'cat',titulo:'Categoría',contenido:<div className="formulario">
+      <label>Categoría<select value={categoria} onChange={e=>setCategoria(e.target.value)}><option value="">Selecciona</option>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre} · {c.tipo}</option>)}</select></label>
+      <button type="button" className="boton-secundario" onClick={()=>setMostrarNuevaCategoria(v=>!v)}>{mostrarNuevaCategoria?'Cancelar':'Nueva categoría'}</button>
+      {mostrarNuevaCategoria&&<div className="tarjeta-interna">
+        <label>Nombre<input value={nuevaCategoriaNombre} onChange={e=>setNuevaCategoriaNombre(e.target.value)} placeholder="Ej. Arriendo" /></label>
+        <div className="grid-dos-columnas">
+          <label>Tipo<select value={nuevoTipoCategoria} onChange={e=>setNuevoTipoCategoria(esTipoCategoria(e.target.value)?e.target.value:'variable')}><option value="fijo">Fijo</option><option value="variable">Variable</option></select></label>
+          <label>Naturaleza<select value={nuevaNaturalezaCategoria} onChange={e=>setNuevaNaturalezaCategoria(esNaturalezaCategoria(e.target.value)?e.target.value:'operativo')}><option value="operativo">Operativo</option><option value="compra_insumos">Compra de insumos</option><option value="retiro_dueno">Retiro del dueño</option></select></label>
+        </div>
+        <button type="button" className="boton-primario" onClick={async()=>{if(!nuevaCategoriaNombre.trim())return;const id=await database.crearCategoriaGasto({nombre:nuevaCategoriaNombre.trim(),tipo:nuevoTipoCategoria,naturaleza:nuevaNaturalezaCategoria});await onCategoriaCreada();setCategoria(String(id));setNuevaCategoriaNombre('');setMostrarNuevaCategoria(false);}}>Crear categoría</button>
+      </div>}
+    </div>,validar:()=>categoria?null:'Selecciona una categoría.'},
     {id:'fecha',titulo:'Fecha',contenido:<label>Fecha<input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></label>},
     {id:'pago',titulo:'Estado del pago',contenido:<div className="selector-estado-pago" role="group" aria-label="Estado del pago"><button type="button" className={'boton-estado-pago'+(estado==='pagado'?' activo':'')} aria-pressed={estado==='pagado'} onClick={()=>setEstado('pagado')}><strong>Ya pagué</strong><span>El gasto ya salió de caja.</span></button><button type="button" className={'boton-estado-pago'+(estado==='pendiente'?' activo':'')} aria-pressed={estado==='pendiente'} onClick={()=>setEstado('pendiente')}><strong>Por pagar</strong><span>Queda como obligación pendiente.</span></button></div>,validar:()=>estado ? null : 'Selecciona si el gasto ya fue pagado o queda por pagar.'},
     {id:'metodo',titulo:'Método',opcional:estado!=='pagado',contenido:<select value={metodo} onChange={e=>setMetodo(e.target.value)}><option>Efectivo</option><option>Transferencia</option><option>Otro</option></select>},
