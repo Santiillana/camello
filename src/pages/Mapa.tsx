@@ -322,8 +322,10 @@ export default function Mapa() {
       .filter((item): item is { pedido: PedidoConDetalle; lat:number; lng:number } => item !== null);
 
     if (paradas.length < 2) return;
+    const capaRuta = capaRutaRef.current;
+    if (!capaRuta || paradas.length < 2) return;
     const latlngs = paradas.map((item) => [item.lat, item.lng] as [number,number]);
-    L.polyline(latlngs, { weight: 4, opacity: 0.75, dashArray: '8 6' }).addTo(capaRutaRef.current);
+    L.polyline(latlngs, { weight: 4, opacity: 0.75, dashArray: '8 6' }).addTo(capaRuta);
     paradas.forEach((item, index) => {
       L.circleMarker([item.lat,item.lng], {
         radius: 13,
@@ -331,7 +333,7 @@ export default function Mapa() {
         fillColor: '#fff',
         fillOpacity: 0.9,
         weight: 2,
-      }).bindTooltip(String(index + 1), { permanent: true, direction: 'center', className: 'mapa-numero-parada' }).addTo(capaRutaRef.current);
+      }).bindTooltip(String(index + 1), { permanent: true, direction: 'center', className: 'mapa-numero-parada' }).addTo(capaRuta);
     });
   }, [pedidosRuta, clientes, filtros.rutaId]);
 
