@@ -6,7 +6,6 @@ import { inicializarModulos, listarModulos, obtenerModulo } from './modulos/runt
 import ModuloErrorBoundary from './modulos/ModuloErrorBoundary';
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { database } from './db/database';
-import BottomNav from './components/BottomNav';
 import SideNav from './components/SideNav';
 import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import { aplicarTema } from './utils/theme';
