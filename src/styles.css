@@ -556,8 +556,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transition: opacity .18s ease;
 }
 .side-nav-backdrop.visible {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 .side-nav {
   position: fixed;
