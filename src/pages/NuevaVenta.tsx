@@ -96,7 +96,7 @@ export default function NuevaVenta() {
       database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 })
         .then((cs) => {
           if (!activo) return;
-          setClientes((actuales) => {
+          setClientes(() => {
             const seleccionado = clienteSeleccionado && !cs.some((c) => c.id === clienteSeleccionado.id) ? [clienteSeleccionado] : [];
             return [...seleccionado, ...cs];
           });

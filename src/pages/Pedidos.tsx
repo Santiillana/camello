@@ -37,7 +37,7 @@ export default function Pedidos() {
   async function cargarClientes() {
     try {
       const resultado = await database.listarClientes({ soloActivos: true, texto: busquedaCliente, limite: 50, offset: 0 });
-      setClientes((actuales) => {
+      setClientes(() => {
         const seleccionado = clienteSeleccionado && !resultado.some((c) => c.id === clienteSeleccionado.id) ? [clienteSeleccionado] : [];
         return [...seleccionado, ...resultado];
       });
@@ -94,7 +94,7 @@ export default function Pedidos() {
       setClienteSeleccionado(null);
       setBusquedaCliente('');
       setProductoId('');
-      await cargar();
+      await cargarPedidos();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
