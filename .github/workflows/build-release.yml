@@ -25,6 +25,8 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - name: Preparar dependencias del navegador para Verify
+        run: npx playwright install --with-deps chromium
       - run: npm run verify
       - run: npx cap sync android
 
