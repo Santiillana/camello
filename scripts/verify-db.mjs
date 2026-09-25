@@ -119,7 +119,6 @@ function migrate9(db, run = db.run.bind(db)) {
 
     const originalColumns = [...columnNames(db, name)];
     const temporary = name + '_reparacion_v9';
-    await_like_noop();
 
     run('DROP TABLE IF EXISTS ' + temporary);
     run(create.replace('CREATE TABLE IF NOT EXISTS ' + name, 'CREATE TABLE ' + temporary));
@@ -170,10 +169,6 @@ function migrate9(db, run = db.run.bind(db)) {
   }
 
   health(db, 'v9');
-}
-
-function await_like_noop() {
-  // Separador intencional para mantener cada paso de reconstrucción independiente y legible.
 }
 
 function migrate10(db){ db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS borradores')) ?? ''); }
