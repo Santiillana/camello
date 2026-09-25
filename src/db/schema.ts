@@ -49,7 +49,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     activo INTEGER NOT NULL DEFAULT 1
   );`,
 
-  \`CREATE TABLE IF NOT EXISTS pedidos (
+  `CREATE TABLE IF NOT EXISTS pedidos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cliente_id INTEGER NOT NULL,
     fecha_pedido TEXT NOT NULL,
@@ -65,10 +65,10 @@ export const SCHEMA_STATEMENTS: string[] = [
     entregado_at TEXT,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (ruta_id) REFERENCES rutas(id)
-  \`,
+  `,
 
 
-  \`CREATE TABLE IF NOT EXISTS pedido_items (
+  `CREATE TABLE IF NOT EXISTS pedido_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pedido_id INTEGER NOT NULL,
     producto_id INTEGER,
@@ -79,7 +79,7 @@ export const SCHEMA_STATEMENTS: string[] = [
     total INTEGER NOT NULL CHECK (total >= 0),
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
     FOREIGN KEY (producto_id) REFERENCES productos(id)
-  \`,
+  `,
 
 
   `CREATE TABLE IF NOT EXISTS rutas (
