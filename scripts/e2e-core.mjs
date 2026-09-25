@@ -307,6 +307,8 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   }
   const clienteRow = await sql(page, "SELECT id FROM clientes WHERE nombre='Cliente E2E' AND estado='activo' ORDER BY id DESC LIMIT 1;");
   if (clienteRow.length !== 1) throw new Error('E2E: Cliente E2E no existe en SQLite antes de la venta.');
+  await page.locator('input[placeholder="Nombre o mascota…"]').first().fill('Cliente E2E');
+  await clienteSelect.locator(`option[value="${clienteRow[0].id}"]`).waitFor({ state: 'attached', timeout: 60000 });
   await clienteSelect.selectOption(String(clienteRow[0].id));
 
   await siguiente(page);
@@ -330,7 +332,7 @@ async function venta(page, metodo, cantidad = 1, doble = false) {
   }
   await siguiente(page);
 
-  const confirm = page.locator('.asistente-overlay').getByRole('article').getByRole('button', { name: 'CONFIRMAR VENTA', exact: true });
+  const confirm = page.locator('.asistente-overlay').getByRole('button', { name: 'CONFIRMAR VENTA', exact: true });
   if (doble) await confirm.dblclick();
   else await confirm.click();
 
