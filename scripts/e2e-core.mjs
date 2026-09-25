@@ -584,6 +584,7 @@ try {
     }
     const clientePedido = formularioPedido.locator('select').nth(0);
     const productoPedido = formularioPedido.locator('select').nth(1);
+    await formularioPedido.locator('input[placeholder="Nombre o mascota…"]').fill('Cliente E2E');
 
     await page.waitForURL('http://127.0.0.1:5173/#/pedidos', { timeout: 15000 });
     try {
