@@ -191,6 +191,16 @@ function migrate15(db){
   db.run('CREATE INDEX IF NOT EXISTS idx_pedido_items_pedido ON pedido_items(pedido_id);');
   db.run('CREATE INDEX IF NOT EXISTS idx_ventas_pedido ON ventas(pedido_id);');
 }
+function migrate16(db){
+  db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS categorias_gastos_personales')) ?? '');
+  db.run(CURRENT_SCHEMA.find(s=>s.includes('CREATE TABLE IF NOT EXISTS gastos_personales')) ?? '');
+  for(const [nombre,tipo] of [['Alimentación','variable'],['Transporte','variable'],['Vivienda','fijo'],['Servicios','variable'],['Salud','variable'],['Educación','variable'],['Ocio','variable'],['Otros','variable']]) {
+    db.run('INSERT INTO categorias_gastos_personales(nombre,tipo) VALUES (?,?) ON CONFLICT(nombre) DO NOTHING;',[nombre,tipo]);
+  }
+  db.run('CREATE INDEX IF NOT EXISTS idx_gastos_personales_fecha ON gastos_personales(fecha);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_gastos_personales_categoria ON gastos_personales(categoria_id);');
+  db.run('CREATE INDEX IF NOT EXISTS idx_categorias_gastos_personales_activa ON categorias_gastos_personales(activa);');
+}
 
 
 function applySchema(db){
@@ -203,7 +213,7 @@ function initialize(db){
   applySchema(db);
   const current=Number(db.exec('PRAGMA user_version;')[0]?.values?.[0]?.[0]??0);
   if(current>DB_VERSION)throw new Error('Esquema '+current+' incompatible con '+DB_VERSION);
-  const migrations=[[2,migrate2,false],[3,migrate3,true],[4,migrate4,false],[5,migrate5,false],[6,migrate6,false],[7,migrate7,false],[8,migrate8,true],[9,migrate9,true],[10,migrate10,false],[11,migrate11,false],[12,migrate12,false],[13,migrate13,false],[14,migrate14,false],[15,migrate15,false]];
+  const migrations=[[2,migrate2,false],[3,migrate3,true],[4,migrate4,false],[5,migrate5,false],[6,migrate6,false],[7,migrate7,false],[8,migrate8,true],[9,migrate9,true],[10,migrate10,false],[11,migrate11,false],[12,migrate12,false],[13,migrate13,false],[14,migrate14,false],[15,migrate15,false],[16,migrate16,false]];
   for(const [version,fn,foreignKeysOff] of migrations){
     if(current>=version)continue;
     if(foreignKeysOff)db.run('PRAGMA foreign_keys=OFF;');
@@ -322,6 +332,15 @@ function transactionalFailureTest(SQL){
   }
   db.close();
 }
+function personalExpensesTest(db){
+  const cat=Number(db.exec("SELECT id FROM categorias_gastos_personales WHERE nombre='Vivienda'")[0]?.values?.[0]?.[0] ?? 0);
+  if(!cat)throw new Error('personales: falta categoría base');
+  db.run("INSERT INTO gastos_personales(fecha,monto,categoria_id,estado,created_at,updated_at) VALUES ('2026-09-25',500000,?,'pagado',datetime('now'),datetime('now'));",[cat]);
+  assertEq(Number(db.exec("SELECT SUM(monto) FROM gastos_personales")[0].values[0][0]),500000,'personal total');
+  assertEq(Number(db.exec("SELECT COUNT(*) FROM gastos")[0].values[0][0]),0,'personales no contaminan gastos empresa');
+  db.run("DELETE FROM gastos_personales;");
+}
+
 function versionMayorTest(SQL){
   const db=new SQL.Database();
   applySchema(db);
@@ -426,7 +445,7 @@ async function runScenario(scenario) {
     case undefined: {
       const fresh=new SQL.Database(); initialize(fresh); initialize(fresh); flujo(fresh,'fresh');
       transactionalFailureTest(SQL);
-      versionMayorTest(SQL); pedidosTest(fresh); gastosTest(fresh); anulacionesTest(fresh);
+      versionMayorTest(SQL); pedidosTest(fresh); personalExpensesTest(fresh); gastosTest(fresh); anulacionesTest(fresh);
       const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
       const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
       const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
