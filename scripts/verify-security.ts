@@ -51,6 +51,12 @@ if (!/androidIsEncryption\s*:\s*false/.test(configText)) {
   throw new Error('Seguridad: el cifrado nativo de SQLite debe permanecer deshabilitado por configuración del proyecto.');
 }
 const dbText = readFileSync(resolve('src/db/database.ts'), 'utf8');
+if (/no tiene habilitado el cifrado SQLCipher/.test(dbText)) {
+  throw new Error('Seguridad: el arranque Android todavía obliga a usar SQLCipher, contrario a la configuración del proyecto.');
+}
+if (!/no-encryption/.test(dbText)) {
+  throw new Error('Seguridad: la ruta SQLite nativa sin cifrado no está presente.');
+}
 const parametrizedQueryCount = (dbText.match(/(?:SELECT|INSERT|UPDATE|DELETE)[^;]+\?/gi) ?? []).length;
 if (parametrizedQueryCount < 25) throw new Error('Seguridad: el corpus de SQL parametrizado cayó por debajo del umbral esperado.');
 if (/\.query\(\s*['"](?:SELECT|INSERT|UPDATE|DELETE)[^'"]*\$\{/i.test(dbText)) {
