@@ -286,6 +286,20 @@ function gastosTest(db){
   assertEq(Number(db.exec("SELECT SUM(monto) FROM gastos WHERE estado='pendiente'")[0].values[0][0]),9000,'gastos pendientes');
 }
 
+function rutaCuadreAnulacionesTest(db){
+  const cid=Number(db.exec('SELECT id FROM clientes LIMIT 1')[0].values[0][0]);
+  db.run("INSERT INTO rutas(nombre,tipo,estado,fecha,hora_inicio,paquetes_llevados,paquetes_sobrantes) VALUES ('Ruta cuadre','Puerta a puerta','EN_CURSO','2026-09-25','10:00',5,0);");
+  const rid=Number(db.exec('SELECT last_insert_rowid();')[0].values[0][0]);
+  db.run("INSERT INTO ventas(cliente_id,ruta_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,monto_pagado,operacion_id,estado_registro) VALUES (?,?,'Activa',1,10000,4000,10000,6000,'2026-09-25','10:01','PAGADA',10000,'ruta-activa','activa');",[cid,rid]);
+  db.run("INSERT INTO ventas(cliente_id,ruta_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,monto_pagado,operacion_id,estado_registro) VALUES (?,?,'Anulada',1,10000,4000,10000,6000,'2026-09-25','10:02','PAGADA',10000,'ruta-anulada','anulada');",[cid,rid]);
+  const vendidos=Number(db.exec("SELECT COALESCE(SUM(cantidad),0) FROM ventas WHERE ruta_id="+rid+" AND COALESCE(estado_registro,'activa')='activa';")[0].values[0][0]);
+  assertEq(vendidos,1,'ruta no cuenta ventas anuladas en el cuadre');
+  const disponibles=5-vendidos;
+  assertEq(disponibles,4,'ruta disponibles tras anulación');
+  db.run("DELETE FROM ventas WHERE ruta_id=?;",[rid]);
+  db.run("DELETE FROM rutas WHERE id=?;",[rid]);
+}
+
 function anulacionesTest(db){
   const cid=Number(db.exec('SELECT id FROM clientes LIMIT 1')[0].values[0][0]);
   db.run("INSERT INTO ventas(cliente_id,producto_nombre,cantidad,precio_aplicado,costo_aplicado,total,utilidad,fecha,hora,estado_pago,monto_pagado,operacion_id,estado_registro) VALUES (?, 'Anulable',1,10000,5000,10000,5000,'2026-09-24','12:00','PAGADA',10000,'u-test','activa');",[cid]);
@@ -449,7 +463,7 @@ async function runScenario(scenario) {
       assertEq(Number(fresh.exec("SELECT COUNT(*) FROM categorias_gasto;")[0].values[0][0]) >= 10 ? 1 : 0, 1, 'categorias gasto maestras');
       assertEq(Number(fresh.exec("SELECT COUNT(*) FROM categorias_gastos_personales;")[0].values[0][0]) >= 8 ? 1 : 0, 1, 'categorias personales maestras');
       transactionalFailureTest(SQL);
-      versionMayorTest(SQL); pedidosTest(fresh); personalExpensesTest(fresh); gastosTest(fresh); anulacionesTest(fresh);
+      versionMayorTest(SQL); pedidosTest(fresh); personalExpensesTest(fresh); gastosTest(fresh); anulacionesTest(fresh); rutaCuadreAnulacionesTest(fresh);
       const v1=fixture(SQL,'schema-v1.sql'), before1=resumen(v1); initialize(v1); same(before1,resumen(v1),'v1'); if(userVersion(v1)!==DB_VERSION)throw new Error('v1 user_version');
       const v2=fixture(SQL,'schema-v2.sql'), before2=resumen(v2); initialize(v2); same(before2,resumen(v2),'v2'); if(userVersion(v2)!==DB_VERSION)throw new Error('v2 user_version');
       const v7=fixture(SQL,'schema-v7.sql'), before7=resumen(v7); initialize(v7); same(before7,resumen(v7),'v7'); flujo(v7,'v7');
