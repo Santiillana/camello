@@ -275,8 +275,7 @@ function FormNuevaRuta({
           : paquetes,
         lat_inicio: lat,
         lng_inicio: lng,
-      });
-      if (tipo === 'Entrega de pedidos') await database.asignarPedidosARuta(id, pedidosSeleccionados);
+      }, pedidosSeleccionados);
       await borrador.limpiar();
       await onCreada(id);
     } catch (e: unknown) {
