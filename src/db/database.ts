@@ -235,19 +235,66 @@ class Database {
 
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
     this.activeDbName = await this.nombreBaseExistente();
+
+    const encryptionConfigured = (await this.sqlite.isInConfigEncryption()).result;
+    if (Capacitor.getPlatform() === 'android' && !encryptionConfigured) {
+      throw new Error('El proyecto Android no tiene habilitado el cifrado SQLCipher. Ejecuta npx cap sync android antes de abrir CAMELLO.');
+    }
+
+    if (encryptionConfigured) {
+      const secretStored = (await this.sqlite.isSecretStored()).result;
+      if (!secretStored) {
+        const secretBytes = crypto.getRandomValues(new Uint8Array(32));
+        await this.sqlite.setEncryptionSecret(bytesToBase64(secretBytes));
+      }
+
+      const databaseExists = (await this.sqlite.isDatabase(this.activeDbName)).result;
+      if (databaseExists) {
+        const databaseEncrypted = (await this.sqlite.isDatabaseEncrypted(this.activeDbName)).result;
+        if (!databaseEncrypted) {
+          marcarEtapaSqlite('encrypt-existing');
+          const existingConnection = (await this.sqlite.isConnection(this.activeDbName, false)).result;
+          if (existingConnection) await this.sqlite.closeConnection(this.activeDbName, false);
+          const encryptedMigration = await this.sqlite.createConnection(
+            this.activeDbName,
+            true,
+            'encryption',
+            DB_VERSION,
+            false,
+          );
+          await encryptedMigration.open();
+          await encryptedMigration.close();
+          await this.sqlite.closeConnection(this.activeDbName, false).catch(() => undefined);
+          marcarEtapaSqlite('encrypt-existing-ok');
+        }
+      }
+    }
+
     marcarEtapaSqlite('consistency');
     const consistency = await this.sqlite.checkConnectionsConsistency();
     marcarEtapaSqlite('consistency-ok');
     marcarEtapaSqlite('is-connection');
     const isConn = (await this.sqlite.isConnection(this.activeDbName, false)).result;
     marcarEtapaSqlite('is-connection-ok');
+
     this.db = consistency.result && isConn
       ? await this.sqlite.retrieveConnection(this.activeDbName, false)
-      : await this.sqlite.createConnection(this.activeDbName, false, 'no-encryption', DB_VERSION, false);
+      : await this.sqlite.createConnection(
+        this.activeDbName,
+        encryptionConfigured,
+        encryptionConfigured ? 'secret' : 'no-encryption',
+        DB_VERSION,
+        false,
+      );
     marcarEtapaSqlite('connection-object-ok');
     marcarEtapaSqlite('db-open');
     await this.db.open();
     marcarEtapaSqlite('db-open-ok');
+
+    if (encryptionConfigured && !(await this.sqlite.isDatabaseEncrypted(this.activeDbName)).result) {
+      throw new Error('La base de datos nativa no quedó cifrada.');
+    }
+
     await this.db.execute('PRAGMA foreign_keys = ON;');
     marcarEtapaSqlite('foreign-keys-ok');
   }
