@@ -2402,8 +2402,12 @@ class Database {
 
   // RUTAS
 
-  async iniciarRuta(r: { nombre?: string; tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string }): Promise<number> {
+  async iniciarRuta(
+    r: { nombre?: string; tipo: Ruta['tipo']; paquetes_llevados: number; lat_inicio?: number; lng_inicio?: number; notas?: string },
+    pedidoIds: number[] = [],
+  ): Promise<number> {
     const paquetes = enteroPositivo(r.paquetes_llevados, 'Los paquetes llevados');
+    const ids = [...new Set(pedidoIds)].filter((id) => Number.isInteger(id) && id > 0);
 
     const activa = await this.obtenerRutaActiva();
     if (activa) throw new Error('Ya existe una ruta en curso.');
@@ -2411,24 +2415,59 @@ class Database {
     if (!coordenadaValida(r.lat_inicio, -90, 90) || !coordenadaValida(r.lng_inicio, -180, 180)) {
       throw new Error('La ubicación de inicio no es válida.');
     }
+    if (r.tipo === 'Entrega de pedidos' && !ids.length) {
+      throw new Error('Selecciona al menos un pedido para una ruta de entrega.');
+    }
+    if (r.tipo !== 'Entrega de pedidos' && ids.length) {
+      throw new Error('Los pedidos solo pueden asignarse a una ruta de entrega.');
+    }
+
+    if (ids.length) {
+      const disponibles = await this.listarPedidos({ estados: ['PENDIENTE'], sinRuta: true });
+      const disponiblesSet = new Set(disponibles.map((p) => p.id));
+      for (const id of ids) {
+        if (!disponiblesSet.has(id)) throw new Error('Uno de los pedidos ya no está disponible para asignar.');
+      }
+    }
 
     const ahora = new Date();
-    const res = await this.conn().run(
-      `INSERT INTO rutas (nombre, tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, paquetes_sobrantes, notas)
-       VALUES (?, ?, 'EN_CURSO', ?, ?, ?, ?, ?, 0, ?);`,
-      [
-        r.nombre?.trim() || r.tipo,
-        r.tipo,
-        fechaLocalISO(ahora),
-        horaLocalHHMM(ahora),
-        r.lat_inicio ?? null,
-        r.lng_inicio ?? null,
-        paquetes,
-        r.notas?.trim() || null,
-      ]
-    );
-    await this.persist();
-    return Number(res.changes?.lastId ?? 0);
+    await this.conn().beginTransaction();
+    try {
+      const res = await this.conn().run(
+        `INSERT INTO rutas (nombre, tipo, estado, fecha, hora_inicio, lat_inicio, lng_inicio, paquetes_llevados, paquetes_sobrantes, notas)
+         VALUES (?, ?, 'EN_CURSO', ?, ?, ?, ?, ?, 0, ?);`,
+        [
+          r.nombre?.trim() || r.tipo,
+          r.tipo,
+          fechaLocalISO(ahora),
+          horaLocalHHMM(ahora),
+          r.lat_inicio ?? null,
+          r.lng_inicio ?? null,
+          paquetes,
+          r.notas?.trim() || null,
+        ],
+        false,
+      );
+      const rutaId = Number(res.changes?.lastId ?? 0);
+      if (!rutaId) throw new Error('No se pudo crear la ruta.');
+
+      for (let i = 0; i < ids.length; i += 1) {
+        await this.conn().run(
+          `UPDATE pedidos
+           SET ruta_id=?, orden_entrega=?, estado='ASIGNADO', updated_at=?
+           WHERE id=? AND estado='PENDIENTE' AND ruta_id IS NULL;`,
+          [rutaId, i + 1, ahora.toISOString(), ids[i]],
+          false,
+        );
+      }
+
+      await this.conn().commitTransaction();
+      await this.persist();
+      return rutaId;
+    } catch (error) {
+      try { await this.conn().rollbackTransaction(); } catch { /* El rollback es best-effort si SQLite ya revirtió la transacción. */ }
+      throw error;
+    }
   }
 
   async finalizarRuta(
@@ -2440,7 +2479,15 @@ class Database {
     }
     const sobrantes = Math.max(0, Math.floor(Number(fin?.paquetes_sobrantes ?? 0)));
     const actual = await this.conn().query(
-      'SELECT estado, paquetes_llevados, COALESCE((SELECT SUM(cantidad) FROM ventas WHERE ruta_id = rutas.id),0) as vendidos FROM rutas WHERE id = ?;',
+      `SELECT estado, paquetes_llevados,
+              COALESCE((
+                SELECT SUM(cantidad)
+                FROM ventas
+                WHERE ruta_id = rutas.id
+                  AND COALESCE(estado_registro,'activa')='activa'
+              ),0) as vendidos
+       FROM rutas
+       WHERE id = ?;`,
       [id],
     );
     const row = actual.values?.[0];
@@ -3125,19 +3172,28 @@ class Database {
 
     try {
       await this.sqlite.importFromJson(serialized);
-    } catch (error) {
-      try {
-        await this.abrirConexion();
-        await this.sqlite.importFromJson(JSON.stringify({ ...JSON.parse(actualSerialized), database: this.activeDbName, overwrite: true }));
-      } catch {
-        // Si la restauración de emergencia también falla, propagamos el error original.
-      }
-      throw error;
-    } finally {
-      if (!this.db) await this.abrirConexion();
+      await this.abrirConexion();
       await this.prepararEsquema();
+      await this.verificarSalud();
       await this.seedProductosSiVacio();
       await this.persist();
+    } catch (error) {
+      try {
+        await this.cerrarConexion();
+        await this.sqlite.importFromJson(JSON.stringify({ ...JSON.parse(actualSerialized), database: this.activeDbName, overwrite: true }));
+        await this.abrirConexion();
+        await this.prepararEsquema();
+        await this.verificarSalud();
+        await this.seedProductosSiVacio();
+        await this.persist();
+      } catch (rollbackError) {
+        throw new Error(
+          'La restauración falló y el respaldo de seguridad no pudo recuperarse: '
+          + (rollbackError instanceof Error ? rollbackError.message : String(rollbackError)),
+          { cause: error as Error },
+        );
+      }
+      throw error;
     }
   }
 
