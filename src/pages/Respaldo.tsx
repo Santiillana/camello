@@ -242,9 +242,19 @@ export default function Respaldo() {
     const esPortable = esObjeto(parsedCompartir)
       && esObjeto(parsedCompartir.manifest)
       && parsedCompartir.manifest.format === RESPALDO_PORTABLE_FORMAT;
-    const ver = esCifrado ? null : esPortable ? await database.validarRespaldoPortable(texto) : await database.validarRespaldo(texto);
-    const version = esPortable ? (ver?.paquete.manifest.format_version ?? 1) : (ver?.version ?? 0);
-    const checksum = esPortable ? (ver?.paquete.checksums.package ?? '') : (ver?.checksum ?? '');
+    let version = 0;
+    let checksum = '';
+    if (!esCifrado) {
+      if (esPortable) {
+        const ver = await database.validarRespaldoPortable(texto);
+        version = ver.paquete.manifest.format_version;
+        checksum = ver.paquete.checksums.package;
+      } else {
+        const ver = await database.validarRespaldo(texto);
+        version = ver.version;
+        checksum = ver.checksum ?? '';
+      }
+    }
     const fecha = version + '-' + new Date().toISOString().slice(0, 10);
     const archivo = new File([texto], esPortable ? 'camello-portable-v1-' + fecha + '.json' : 'camello-respaldo-' + fecha + '.json', {
       type: 'application/json',
@@ -263,7 +273,7 @@ export default function Respaldo() {
     if (navigator.share) {
       await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : esPortable ? 'Respaldo portable verificado · SHA-256 ' + checksum : 'Respaldo verificado · SHA-256 ' + checksum,
       });
       setMensaje('El dispositivo no permitió adjuntar el archivo; comparte también el archivo descargado.');
       return;
