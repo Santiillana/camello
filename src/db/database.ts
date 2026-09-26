@@ -3349,8 +3349,26 @@ class Database {
 
   async limpiarAplicacion(respaldoVerificado: string): Promise<void> {
     if (!this.db) throw new Error('SQLite no está inicializado.');
-    const valido = await this.validarRespaldo(respaldoVerificado);
-    if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
+    let portable = false;
+    try {
+      const parsed: unknown = JSON.parse(respaldoVerificado);
+      portable = Boolean(
+        parsed
+        && typeof parsed === 'object'
+        && !Array.isArray(parsed)
+        && 'manifest' in parsed
+        && typeof (parsed as Record<string, unknown>).manifest === 'object'
+        && (parsed as { manifest?: { format?: unknown } }).manifest?.format === 'CAMELLO_PORTABLE_BACKUP',
+      );
+    } catch {
+      // validarRespaldo emitirá el error de JSON para el formato clásico.
+    }
+    if (portable) {
+      await validarRespaldoPortable(respaldoVerificado);
+    } else {
+      const valido = await this.validarRespaldo(respaldoVerificado);
+      if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
+    }
 
     if (Capacitor.getPlatform() === 'web') {
       if (!this.webDb) throw new Error('SQLite web no está inicializado.');
