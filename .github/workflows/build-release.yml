@@ -1,0 +1,131 @@
+name: Compilar APK release de CAMELLO
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: camello-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - name: Preparar dependencias del navegador para Verify
+        run: npx playwright install --with-deps chromium
+      - run: npm run verify
+      - name: Construir assets web
+        run: npm run build
+      - run: npx cap sync android
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          accept-android-sdk-licenses: "true"
+
+      - name: Compilar APK debug fallback
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          chmod +x android/gradlew
+          ./gradlew -p android assembleDebug --no-daemon \\
+            -PversionCodeOverride="${{ github.run_number }}" \\
+            -PversionNameOverride="$VERSION_NAME"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "CAMELLO-debug-v${VERSION_NAME}.apk"
+          sha256sum "CAMELLO-debug-v${VERSION_NAME}.apk" | tee "CAMELLO-debug-v${VERSION_NAME}.apk.sha256"
+
+      - name: Publicar APK debug fallback
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMELLO-debug-run-${{ github.run_number }}
+          path: |
+            CAMELLO-debug-v*.apk
+            CAMELLO-debug-v*.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Detectar secretos de firma
+        env:
+          KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+            echo "Secretos de firma disponibles; se continuará con el APK release."
+          else
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "Secretos de firma de release no disponibles."
+          fi
+
+      - name: Exigir firma para una compilación release
+        if: env.SIGNING_READY != 'true'
+        run: |
+          echo "::error::No hay secretos de firma configurados. La compilación release no puede considerarse lista para distribución."
+          exit 1
+
+      - name: Materializar keystore temporal
+        if: env.SIGNING_READY == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.CAMELLO_RELEASE_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > android/camello-release.jks
+
+      - name: Compilar release firmado
+        if: env.SIGNING_READY == 'true'
+        working-directory: android
+        env:
+          STORE_PASSWORD: ${{ secrets.CAMELLO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CAMELLO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CAMELLO_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          VERSION_NAME=$(node -p "require('../package.json').version")
+          ./gradlew assembleRelease --no-daemon \\
+            -PversionCodeOverride="${{ github.run_number }}" \\
+            -PversionNameOverride="$VERSION_NAME" \\
+            -PRELEASE_STORE_FILE="camello-release.jks" \\
+            -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD" \\
+            -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \\
+            -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
+
+      - name: Preparar release firmado y SHA-256
+        if: env.SIGNING_READY == 'true'
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          cp android/app/build/outputs/apk/release/app-release.apk "CAMELLO-release-v${VERSION_NAME}.apk"
+          sha256sum "CAMELLO-release-v${VERSION_NAME}.apk" | tee "CAMELLO-release-v${VERSION_NAME}.apk.sha256"
+
+      - name: Publicar APK release
+        if: env.SIGNING_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMELLO-release-${{ github.run_number }}
+          path: |
+            CAMELLO-release-v*.apk
+            CAMELLO-release-v*.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Limpiar keystore
+        if: always()
+        run: rm -f android/camello-release.jks

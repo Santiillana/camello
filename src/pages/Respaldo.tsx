@@ -1,46 +1,273 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { database } from '../db/database';
+import { calcularChecksum, descargarArchivoTexto, descargarRespaldo, registrarExportacionRespaldo } from '../utils/respaldo';
+import { listarRespaldosAutomaticos, type BackupItem } from '../utils/respaldoAutomatico';
+import { cifrarRespaldo, descifrarRespaldo } from '../utils/respaldoCifrado';
+import { camelloStorage, puedeGuardarEnCarpetaCompartida } from '../utils/almacenamientoNativo';
+
+type MetaRespaldo = {
+  exported_at: string;
+  schema_version: number;
+  checksum: string;
+};
+
+const HISTORIAL_KEY = 'camello.respaldos.historial.v1';
+
+function esObjeto(valor: unknown): valor is Record<string, unknown> {
+  return Boolean(valor) && typeof valor === 'object' && !Array.isArray(valor);
+}
+
+function metaRespaldoDesdeObjeto(valor: unknown): MetaRespaldo | null {
+  if (!esObjeto(valor)) return null;
+  if (typeof valor.exported_at !== 'string' || !Number.isInteger(Number(valor.schema_version)) || typeof valor.checksum !== 'string') return null;
+  return {
+    exported_at: valor.exported_at,
+    schema_version: Number(valor.schema_version),
+    checksum: valor.checksum,
+  };
+}
+
+function metaRespaldoDesdeJson(json: string): MetaRespaldo {
+  const meta = metaRespaldoDesdeObjeto(JSON.parse(json));
+  if (!meta) throw new Error('El respaldo no contiene metadatos válidos.');
+  return meta;
+}
+
+function leerHistorial(): MetaRespaldo[] {
+  try {
+    const raw = localStorage.getItem(HISTORIAL_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(metaRespaldoDesdeObjeto).filter((meta): meta is MetaRespaldo => meta !== null) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function Respaldo() {
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [exportandoClientes, setExportandoClientes] = useState(false);
   const [importando, setImportando] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
+  const [meta, setMeta] = useState<MetaRespaldo | null>(null);
+  const [historial, setHistorial] = useState<MetaRespaldo[]>(leerHistorial);
+  const [automaticos, setAutomaticos] = useState<BackupItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const respaldoRef = useRef<string | null>(null);
+
+  const ultimo = useMemo(() => meta ?? historial[0] ?? null, [meta, historial]);
+
+  useEffect(() => {
+    void listarRespaldosAutomaticos().then(setAutomaticos).catch(() => setAutomaticos([]));
+  }, []);
 
   async function exportar() {
     setExportando(true);
     setMensaje(null);
+    setError(null);
     try {
       const json = await database.exportarRespaldo();
-      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `camello-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMensaje('✓ Respaldo descargado correctamente.');
+      respaldoRef.current = json;
+      const nuevaMeta = metaRespaldoDesdeJson(json);
+      const nuevas = [nuevaMeta, ...historial].slice(0, 8);
+      localStorage.setItem(HISTORIAL_KEY, JSON.stringify(nuevas));
+      setHistorial(nuevas);
+      setMeta(nuevaMeta);
+      descargarRespaldo(json);
+      registrarExportacionRespaldo();
+      setMensaje('✓ Respaldo generado, verificado y descargado.');
     } catch (e: unknown) {
-      setMensaje('No se pudo generar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
+      setError('No se pudo generar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setExportando(false);
     }
   }
 
+  async function guardarEnCarpeta() {
+    setExportando(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarRespaldo();
+      const fecha = new Date().toISOString().replaceAll(':','-').slice(0,19);
+      const result = await camelloStorage.saveBackup({
+        filename: 'camello-respaldo-' + fecha + '.json',
+        data: json,
+      });
+      respaldoRef.current = json;
+      setMensaje('Respaldo guardado en la carpeta que elegiste. Esa carpeta queda fuera del almacenamiento privado de CAMELLO.');
+      void result;
+    } catch (e: unknown) {
+      setError('No se pudo guardar el respaldo en la carpeta elegida: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function exportarClientesJson() {
+    setExportandoClientes(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarClientes();
+      const fecha = new Date().toISOString().slice(0, 10);
+      descargarArchivoTexto(json, 'camello-clientes-completo-' + fecha + '.json', 'application/json;charset=utf-8');
+      setMensaje('Exportación completa de clientes generada en JSON. Conserva este archivo como copia portable de los datos.');
+    } catch (e: unknown) {
+      setError('No se pudo exportar la base de clientes: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportandoClientes(false);
+    }
+  }
+
+  async function guardarClientesJsonEnCarpeta() {
+    setExportandoClientes(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarClientes();
+      const fecha = new Date().toISOString().replaceAll(':', '-').slice(0, 19);
+      await camelloStorage.saveBackup({
+        filename: 'camello-clientes-completo-' + fecha + '.json',
+        data: json,
+        mimeType: 'application/json',
+      });
+      setMensaje('Exportación completa de clientes guardada en la carpeta elegida.');
+    } catch (e: unknown) {
+      setError('No se pudo guardar la exportación de clientes: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportandoClientes(false);
+    }
+  }
+
+  async function exportarClientesCsv() {
+    setExportandoClientes(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const csv = await database.exportarClientesCsv();
+      const fecha = new Date().toISOString().slice(0, 10);
+      descargarArchivoTexto(csv, 'camello-clientes-' + fecha + '.csv', 'text/csv;charset=utf-8');
+      setMensaje('CSV de clientes generado para Excel, Google Sheets y otras herramientas.');
+    } catch (e: unknown) {
+      setError('No se pudo generar el CSV de clientes: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportandoClientes(false);
+    }
+  }
+
+  async function exportarCifrado(){
+    const password=window.prompt('Contraseña para el respaldo cifrado (mínimo 10 caracteres)');
+    if(!password)return;
+    setExportando(true);setMensaje(null);setError(null);
+    try{
+      const json=await database.exportarRespaldo();
+      const cifrado=await cifrarRespaldo(json,password);
+      respaldoRef.current=cifrado;
+      descargarRespaldo(cifrado);
+      setMensaje('Respaldo cifrado descargado. Conserva la contraseña: sin ella no se puede restaurar.');
+    }catch(e:unknown){setError(e instanceof Error?e.message:String(e));}
+    finally{setExportando(false);}
+  }
+  async function compartir() {
+    if (!respaldoRef.current) {
+      await exportar();
+    }
+    const texto = respaldoRef.current;
+    if (!texto) return;
+
+    const esCifrado = (() => {
+      try {
+        const parsed: unknown = JSON.parse(texto);
+        return esObjeto(parsed) && Number(parsed.camello_encrypted_backup_version) === 1;
+      } catch {
+        return false;
+      }
+    })();
+    const ver = esCifrado ? null : await database.validarRespaldo(texto);
+    const fecha = (ver?.version ?? 0) + '-' + new Date().toISOString().slice(0, 10);
+    const archivo = new File([texto], 'camello-respaldo-' + fecha + '.json', {
+      type: 'application/json',
+    });
+
+    if (navigator.share && navigator.canShare?.({ files: [archivo] })) {
+      await navigator.share({
+        title: 'Respaldo CAMELLO',
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
+        files: [archivo],
+      });
+      setMensaje('Respaldo compartido desde el dispositivo.');
+      return;
+    }
+
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Respaldo CAMELLO',
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
+      });
+      setMensaje('El dispositivo no permitió adjuntar el archivo; comparte también el archivo descargado.');
+      return;
+    }
+
+    setMensaje('Este dispositivo no ofrece compartir directo; usa el archivo descargado.');
+  }
+
   async function importar(file: File) {
     setImportando(true);
     setMensaje(null);
+    setError(null);
     try {
       const texto = await file.text();
-      await database.importarRespaldo(texto);
-      setMensaje('✓ Respaldo restaurado correctamente. Reinicia la app para refrescar todas las pantallas.');
+      let plano=texto;
+      const parsed: unknown = JSON.parse(texto);
+      if (esObjeto(parsed) && parsed.camello_encrypted_backup_version === 1) {
+        const password=window.prompt('Contraseña del respaldo cifrado');
+        if(!password) throw new Error('Restauración cancelada.');
+        plano=await descifrarRespaldo(texto,password);
+      }
+      const ver = await database.validarRespaldo(plano);
+      await database.importarRespaldo(plano);
+      respaldoRef.current = plano;
+      setMeta({
+        exported_at: new Date().toISOString(),
+        schema_version: ver.version,
+        checksum: ver.checksum ?? await calcularChecksum(JSON.stringify(ver.exportData)),
+      });
+      setMensaje('✓ Respaldo validado y restaurado. Reinicia la app para refrescar pantallas que ya estaban abiertas.');
     } catch (e: unknown) {
-      setMensaje('No se pudo restaurar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
+      setError('No se pudo restaurar el respaldo: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setImportando(false);
       if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function limpiar() {
+    const respaldo = respaldoRef.current;
+    if (!respaldo) {
+      setError('Antes de limpiar debes generar o seleccionar un respaldo verificado.');
+      return;
+    }
+    setLimpiando(true);
+    setError(null);
+    try {
+      await database.validarRespaldo(respaldo);
+      const primera = window.confirm('Se borrarán los datos locales después de verificar el respaldo. ¿Continuar?');
+      if (!primera) return;
+      const palabra = window.prompt('Escribe BORRAR para confirmar la limpieza.');
+      if (palabra !== 'BORRAR') {
+        setError('Limpieza cancelada: la confirmación exacta es BORRAR.');
+        return;
+      }
+      await database.limpiarAplicacion(respaldo);
+      respaldoRef.current = null;
+      setMensaje('Aplicación limpia. El respaldo verificado quedó fuera del teléfono en el archivo que descargaste.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLimpiando(false);
     }
   }
 
@@ -50,36 +277,123 @@ export default function Respaldo() {
 
       <section className="tarjeta">
         <p>
-          La información de CAMELLO vive localmente en este teléfono. Genera respaldos con
-          frecuencia y guárdalos también en otro lugar.
+          La información de CAMELLO vive localmente en este teléfono. El respaldo cifrado es la opción recomendada; un respaldo sin cifrar contiene datos personales de clientes.
+        </p>
+        <p className="texto-alerta">
+          ⚠️ El respaldo automático interno protege contra errores dentro de CAMELLO, pero NO protege contra la pérdida, robo o daño físico del teléfono. Para protegerte ante esos casos, usa la exportación o backup externo y conserva el archivo fuera del dispositivo.
         </p>
       </section>
 
       <section className="tarjeta">
-        <h2>Exportar respaldo</h2>
-        <p>Genera un archivo JSON con clientes, mascotas, ventas, rutas y productos.</p>
-        <button className="boton-primario" onClick={exportar} disabled={exportando || importando}>
-          {exportando ? 'Generando…' : '⬇️ Descargar respaldo'}
-        </button>
+        <h2>Exportar</h2>
+        <div className="fila-botones">
+          <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            {exportando ? 'Generando…' : '⬇️ Descargar respaldo cifrado (recomendado)'}
+          </button>
+          <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Descargar sin cifrar</button>
+          <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
+          {puedeGuardarEnCarpetaCompartida() && <button className="boton-secundario" onClick={() => void guardarEnCarpeta()} disabled={exportando || importando || limpiando}>Guardar en carpeta…</button>}
+        </div>
+        {ultimo && (
+          <div className="lista-resumen">
+            <div><span>Versión</span><strong>{ultimo.schema_version}</strong></div>
+            <div><span>Fecha</span><strong>{ultimo.exported_at}</strong></div>
+            <div><span>Checksum</span><strong className="texto-pequeno">{ultimo.checksum}</strong></div>
+          </div>
+        )}
       </section>
 
       <section className="tarjeta">
-        <h2>Importar respaldo</h2>
-        <p className="texto-alerta">⚠️ La restauración reemplaza los datos actuales.</p>
+        <h2>Clientes: exportación completa</h2>
+        <p className="texto-vacio">El JSON es la exportación maestra: conserva clientes, mascotas, fotos, seguimiento, ventas, pagos, pedidos, artículos y rutas referenciadas sin depender de cómo se vea la aplicación.</p>
+        <div className="fila-botones">
+          <button className="boton-primario" onClick={() => void exportarClientesJson()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            {exportandoClientes ? 'Generando…' : 'Descargar clientes completos (JSON)'}
+          </button>
+          <button className="boton-secundario" onClick={() => void exportarClientesCsv()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            CSV para Excel
+          </button>
+          {puedeGuardarEnCarpetaCompartida() && (
+            <button className="boton-secundario" onClick={() => void guardarClientesJsonEnCarpeta()} disabled={exportando || exportandoClientes || importando || limpiando}>
+              Guardar JSON en carpeta…
+            </button>
+          )}
+        </div>
+        <p className="detalle-cliente">JSON = copia completa y portable. CSV = tabla sencilla de clientes para herramientas de oficina. La exportación nunca modifica la base de datos.</p>
+      </section>
+
+      <section className="tarjeta">
+        <h2>Restaurar</h2>
+        <p className="texto-alerta">⚠️ El archivo se valida antes de tocar la base. Un archivo nuevo alterado se rechaza por checksum.</p>
         <input
           ref={inputRef}
           type="file"
           accept=".json,application/json"
-          disabled={importando || exportando}
+          disabled={importando || exportando || limpiando}
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f && confirm('¿Restaurar este respaldo? Se reemplazarán los datos actuales.')) void importar(f);
+            const file = e.target.files?.[0];
+            if (file) void importar(file);
           }}
         />
         {importando && <p>Restaurando…</p>}
       </section>
 
+      <section className="tarjeta">
+        <h2>Respaldos automáticos</h2>
+        {automaticos.length === 0 ? (
+          <p className="texto-vacio">Todavía no hay respaldos automáticos guardados.</p>
+        ) : (
+          <ul className="lista-resumen">
+            {automaticos.map((item) => (
+              <li key={item.id} className="fila-recordatorio">
+                <span>{item.kind === 'monthly' ? 'Mensual' : item.kind === 'weekly' ? 'Semanal' : 'Diario'} · {item.date}</span>
+                <button
+                  className="boton-chip"
+                  onClick={() => {
+                    respaldoRef.current = item.json;
+                    const parsed: unknown = JSON.parse(item.json);
+                    setMeta({
+                      exported_at: item.date,
+                      schema_version: esObjeto(parsed) ? Number(parsed.schema_version ?? 0) : 0,
+                      checksum: item.checksum,
+                    });
+                    setMensaje('Respaldo automático seleccionado y verificado. Puedes restaurarlo o descargarlo.');
+                  }}
+                >
+                  Seleccionar
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="tarjeta">
+        <h2>Historial local</h2>
+        {historial.length === 0 ? (
+          <p className="texto-vacio">Todavía no hay respaldos registrados en este dispositivo.</p>
+        ) : (
+          <ul className="lista-resumen">
+            {historial.map((item) => (
+              <li key={item.checksum}>
+                <span>{item.exported_at} · v{item.schema_version}</span>
+                <strong className="texto-pequeno">{item.checksum.slice(0, 16)}…</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="tarjeta">
+        <h2>Limpiar aplicación</h2>
+        <p className="texto-alerta">Solo se habilita con un respaldo verificado y exige dos confirmaciones.</p>
+        <button className="boton-peligro" onClick={() => void limpiar()} disabled={limpiando || exportando || importando}>
+          {limpiando ? 'Limpiando…' : 'Limpiar aplicación'}
+        </button>
+      </section>
+
       {mensaje && <p className="banner-exito">{mensaje}</p>}
+      {error && <p className="texto-error">{error}</p>}
     </div>
   );
 }
