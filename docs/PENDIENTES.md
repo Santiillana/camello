@@ -13,4 +13,6 @@ Este archivo registra únicamente lo que no puede declararse verificado con la i
 
 ## Estado
 
-No se considera cerrado el criterio final mientras cualquiera de los puntos anteriores carezca de evidencia real. No se maquilla como verde.
+El código y la automatización pueden seguir cerrándose de forma verificable desde GitHub. Estos puntos no son fallos de código pendientes; son evidencias externas que requieren recursos que esta sesión no posee.
+
+No se declara un teléfono físico probado, una APK release firmada, dos copias externas del keystore ni protección administrativa de `main` sin evidencia real.
