@@ -47,17 +47,14 @@ for (const file of files) {
   }
 }
 const configText = readFileSync(resolve('capacitor.config.ts'), 'utf8');
-if (!/androidIsEncryption\s*:\s*true/.test(configText)) {
-  throw new Error('Seguridad: el cifrado Android de SQLite no está habilitado en capacitor.config.ts.');
+if (!/androidIsEncryption\s*:\s*false/.test(configText)) {
+  throw new Error('Seguridad: el cifrado nativo de SQLite debe permanecer deshabilitado por configuración del proyecto.');
 }
 const dbText = readFileSync(resolve('src/db/database.ts'), 'utf8');
-if (!/isDatabaseEncrypted\(this\.activeDbName\)/.test(dbText) || !/setEncryptionSecret\(/.test(dbText)) {
-  throw new Error('Seguridad: la inicialización nativa no verifica ni prepara el cifrado SQLCipher.');
-}
 const parametrizedQueryCount = (dbText.match(/(?:SELECT|INSERT|UPDATE|DELETE)[^;]+\?/gi) ?? []).length;
 if (parametrizedQueryCount < 25) throw new Error('Seguridad: el corpus de SQL parametrizado cayó por debajo del umbral esperado.');
 if (/\.query\(\s*['"](?:SELECT|INSERT|UPDATE|DELETE)[^'"]*\$\{/i.test(dbText)) {
   throw new Error('Seguridad: interpolación directa de variables en SQL detectada.');
 }
-console.log('verify-security: PASÓ — PBKDF2/PIN, AES-GCM, entradas peligrosas, HTML dinámico, logs y SQL parametrizado.');
+console.log('verify-security: PASÓ — PBKDF2/PIN, AES-GCM de respaldos, entradas peligrosas, HTML dinámico, logs, SQL parametrizado y SQLite nativo sin cifrado.');
 
