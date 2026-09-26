@@ -237,9 +237,6 @@ class Database {
     this.activeDbName = await this.nombreBaseExistente();
 
     const encryptionConfigured = (await this.sqlite.isInConfigEncryption()).result;
-    if (Capacitor.getPlatform() === 'android' && !encryptionConfigured) {
-      throw new Error('El proyecto Android no tiene habilitado el cifrado SQLCipher. Ejecuta npx cap sync android antes de abrir CAMELLO.');
-    }
 
     if (encryptionConfigured) {
       const secretStored = (await this.sqlite.isSecretStored()).result;
