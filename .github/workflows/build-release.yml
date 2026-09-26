@@ -74,8 +74,14 @@ jobs:
             echo "Secretos de firma disponibles; se continuará con el APK release."
           else
             echo "SIGNING_READY=false" >> "$GITHUB_ENV"
-            echo "Secretos de firma de release no disponibles; se conservará el APK debug."
+            echo "Secretos de firma de release no disponibles."
           fi
+
+      - name: Exigir firma para una compilación release
+        if: env.SIGNING_READY != 'true'
+        run: |
+          echo "::error::No hay secretos de firma configurados. La compilación release no puede considerarse lista para distribución."
+          exit 1
 
       - name: Materializar keystore temporal
         if: env.SIGNING_READY == 'true'
