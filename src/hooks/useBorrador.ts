@@ -61,7 +61,9 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
         .then(() => {
           if (firmaActualRef.current === firma) ultimaFirmaGuardadaRef.current = firma;
         })
-        .catch(() => undefined);
+        .catch((error) => {
+          console.error('CAMELLO: no se pudo guardar el borrador automático.', error);
+        });
     }, 300);
     return () => {
       if (timerRef.current != null) window.clearTimeout(timerRef.current);
@@ -78,7 +80,9 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
         .then(() => {
           if (firmaActualRef.current === firma) ultimaFirmaGuardadaRef.current = firma;
         })
-        .catch(() => undefined);
+        .catch((error) => {
+        console.error('CAMELLO: no se pudo registrar el guardado de borrador al salir de la pantalla.', error);
+      });
     };
 
     const onVisibility = () => {
@@ -95,7 +99,9 @@ export function useBorrador<T>({ tipo, clave, datos, paso, activo = true }: Opti
       if (!isActive) guardarAhora();
     }).then((listener) => {
       removerApp = () => listener.remove();
-    }).catch(() => undefined);
+    }).catch((error) => {
+      console.error('CAMELLO: no se pudo registrar el listener de estado de la aplicación.', error);
+    });
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
