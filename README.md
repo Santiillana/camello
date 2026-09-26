@@ -69,6 +69,7 @@ CAMELLO incorpora controles orientados a evitar errores de operación y pérdida
 - checksum SHA-256 para respaldos;
 - respaldo cifrado mediante AES-GCM/PBKDF2;
 - posibilidad de guardar el respaldo en una carpeta externa de Android;
+- la base de datos local de SQLite no usa cifrado nativo; la protección de copias se realiza mediante respaldo externo y, cuando se necesita, respaldo cifrado;
 - PIN local opcional;
 - controles de integridad y auditoría de anulaciones.
 
