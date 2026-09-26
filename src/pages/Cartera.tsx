@@ -8,12 +8,13 @@ import MetodoPagoSelector, { type MetodoPagoCobro } from '../components/MetodoPa
 import BorradorPendiente from '../components/BorradorPendiente';
 import { useBorrador } from '../hooks/useBorrador';
 
-type Periodo = 'dia' | 'semana' | 'mes';
+type Periodo = 'dia' | 'semana' | 'mes' | 'todo';
 
 const PERIODOS: Array<{ id: Periodo; label: string }> = [
   { id: 'dia', label: 'Día' },
   { id: 'semana', label: 'Semana' },
   { id: 'mes', label: 'Mes' },
+  { id: 'todo', label: 'Todo' },
 ];
 
 export default function Cartera() {
@@ -27,8 +28,12 @@ export default function Cartera() {
     const hoy = hoyISO();
     if (periodo === 'semana') return { desde: inicioSemanaISO(), hasta: hoy };
     if (periodo === 'mes') return { desde: inicioMesISO(), hasta: hoy };
-    return { desde: hoy, hasta: hoy };
+    return { desde: '', hasta: '' };
   }, [periodo]);
+
+  const etiquetaPeriodo = periodo === 'todo'
+    ? 'Total pendiente'
+    : 'Total por cobrar en ventas del periodo';
 
   async function cargar() {
     try {
@@ -75,9 +80,11 @@ export default function Cartera() {
       </section>
 
       <section className="dashboard-total">
-        <span className="texto-kicker">Total por cobrar</span>
+        <span className="texto-kicker">{etiquetaPeriodo}</span>
         <strong>{formatoMoneda(total)}</strong>
-        <span className="detalle-cliente">{items.length} cliente(s) con saldo en este periodo</span>
+        <span className="detalle-cliente">
+          {periodo === 'todo' ? items.length + ' cliente(s) con saldo pendiente' : items.length + ' cliente(s) con saldo originado en este periodo'}
+        </span>
       </section>
 
       {error && <p className="texto-error">{error}</p>}
