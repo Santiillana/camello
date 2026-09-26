@@ -220,7 +220,7 @@ export default function Respaldo() {
     if(!password)return;
     setExportando(true);setMensaje(null);setError(null);
     try{
-      const json=await database.exportarRespaldo();
+      const json=await database.exportarRespaldoPortable();
       const cifrado=await cifrarRespaldo(json,password);
       respaldoRef.current=cifrado;
       descargarRespaldo(cifrado);
@@ -235,24 +235,25 @@ export default function Respaldo() {
     const texto = respaldoRef.current;
     if (!texto) return;
 
-    const esCifrado = (() => {
-      try {
-        const parsed: unknown = JSON.parse(texto);
-        return esObjeto(parsed) && Number(parsed.camello_encrypted_backup_version) === 1;
-      } catch {
-        return false;
-      }
+    const parsedCompartir: unknown = (() => {
+      try { return JSON.parse(texto); } catch { return null; }
     })();
-    const ver = esCifrado ? null : await database.validarRespaldo(texto);
-    const fecha = (ver?.version ?? 0) + '-' + new Date().toISOString().slice(0, 10);
-    const archivo = new File([texto], 'camello-respaldo-' + fecha + '.json', {
+    const esCifrado = esObjeto(parsedCompartir) && Number(parsedCompartir.camello_encrypted_backup_version) === 1;
+    const esPortable = esObjeto(parsedCompartir)
+      && esObjeto(parsedCompartir.manifest)
+      && parsedCompartir.manifest.format === RESPALDO_PORTABLE_FORMAT;
+    const ver = esCifrado ? null : esPortable ? await database.validarRespaldoPortable(texto) : await database.validarRespaldo(texto);
+    const version = esPortable ? (ver?.paquete.manifest.format_version ?? 1) : (ver?.version ?? 0);
+    const checksum = esPortable ? (ver?.paquete.checksums.package ?? '') : (ver?.checksum ?? '');
+    const fecha = version + '-' + new Date().toISOString().slice(0, 10);
+    const archivo = new File([texto], esPortable ? 'camello-portable-v1-' + fecha + '.json' : 'camello-respaldo-' + fecha + '.json', {
       type: 'application/json',
     });
 
     if (navigator.share && navigator.canShare?.({ files: [archivo] })) {
       await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : esPortable ? 'Respaldo portable verificado · SHA-256 ' + checksum : 'Respaldo verificado · SHA-256 ' + checksum,
         files: [archivo],
       });
       setMensaje('Respaldo compartido desde el dispositivo.');
