@@ -35,6 +35,11 @@ import { calcularChecksum } from '../utils/respaldo';
 import { crearContexto } from '../modulos/runtime';
 import { bytesToBase64, base64ToBytes } from '../utils/base64';
 
+export function esBaseRespaldoCompatible(nombre: unknown, dbName: string, activeDbName: string): boolean {
+  const candidato = String(nombre ?? '');
+  return candidato === dbName || candidato === dbName + '.db' || candidato === activeDbName;
+}
+
 type SqliteExportData = Record<string, unknown> & {
   database: string;
   mode: string;
@@ -3176,11 +3181,10 @@ class Database {
   async importarRespaldo(jsonTexto: string): Promise<void> {
     if (!this.db) throw new Error('SQLite no está inicializado.');
     const valido = await this.validarRespaldo(jsonTexto);
-    const data: SqliteExportData = { ...valido.exportData, database: this.activeDbName };
-
-    if (data.database !== DB_NAME && data.database !== DB_NAME + '.db' && data.database !== this.activeDbName) {
+    if (!esBaseRespaldoCompatible(valido.exportData.database, DB_NAME, this.activeDbName)) {
       throw new Error('Este respaldo no pertenece a CAMELLO.');
     }
+    const data: SqliteExportData = { ...valido.exportData, database: this.activeDbName };
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
     if (data.encrypted === true) throw new Error('No se admiten respaldos cifrados en esta versión.');
 
