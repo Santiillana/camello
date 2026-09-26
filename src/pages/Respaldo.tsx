@@ -369,11 +369,11 @@ export default function Respaldo() {
       <section className="tarjeta">
         <h2>Exportar</h2>
         <div className="fila-botones">
-          <button className="boton-primario" onClick={() => void exportarPortable()} disabled={exportando || exportandoClientes || importando || limpiando}>
-            {exportando ? 'Generando…' : '⬇️ Respaldo portable para actualizar/reinstalar'}
+          <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            {exportando ? 'Generando…' : '🔒 Descargar respaldo cifrado (recomendado)'}
           </button>
-          <button className="boton-secundario" onClick={() => void exportarCifrado()} disabled={exportando || exportandoClientes || importando || limpiando}>
-            🔒 Respaldo cifrado
+          <button className="boton-secundario" onClick={() => void exportarPortable()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            ⬇️ Respaldo portable para actualizar/reinstalar
           </button>
           <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Respaldo compatible clásico</button>
           <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
