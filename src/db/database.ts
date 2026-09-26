@@ -236,7 +236,7 @@ class Database {
     if (!this.sqlite) throw new Error('Conexión SQLite no disponible.');
     this.activeDbName = await this.nombreBaseExistente();
 
-    const encryptionConfigured = (await this.sqlite.isInConfigEncryption()).result;
+    const encryptionConfigured = (await this.sqlite.isInConfigEncryption()).result ?? false;
 
     if (encryptionConfigured) {
       const secretStored = (await this.sqlite.isSecretStored()).result;
