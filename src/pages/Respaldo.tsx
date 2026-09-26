@@ -4,6 +4,7 @@ import { calcularChecksum, descargarArchivoTexto, descargarRespaldo, registrarEx
 import { listarRespaldosAutomaticos, type BackupItem } from '../utils/respaldoAutomatico';
 import { cifrarRespaldo, descifrarRespaldo } from '../utils/respaldoCifrado';
 import { camelloStorage, puedeGuardarEnCarpetaCompartida } from '../utils/almacenamientoNativo';
+import { RESPALDO_PORTABLE_FORMAT } from '../utils/respaldoPortable';
 
 type MetaRespaldo = {
   exported_at: string;
@@ -19,11 +20,18 @@ function esObjeto(valor: unknown): valor is Record<string, unknown> {
 
 function metaRespaldoDesdeObjeto(valor: unknown): MetaRespaldo | null {
   if (!esObjeto(valor)) return null;
-  if (typeof valor.exported_at !== 'string' || !Number.isInteger(Number(valor.schema_version)) || typeof valor.checksum !== 'string') return null;
+  const origen = esObjeto(valor.manifest) ? valor.manifest : valor;
+  const checksums = esObjeto(valor.checksums) ? valor.checksums : null;
+  const checksum = typeof origen.checksum === 'string'
+    ? origen.checksum
+    : checksums && typeof checksums.package === 'string'
+      ? checksums.package
+      : '';
+  if (typeof origen.exported_at !== 'string' || !Number.isInteger(Number(origen.schema_version)) || !checksum) return null;
   return {
-    exported_at: valor.exported_at,
-    schema_version: Number(valor.schema_version),
-    checksum: valor.checksum,
+    exported_at: origen.exported_at,
+    schema_version: Number(origen.schema_version),
+    checksum,
   };
 }
 
@@ -62,6 +70,55 @@ export default function Respaldo() {
   useEffect(() => {
     void listarRespaldosAutomaticos().then(setAutomaticos).catch(() => setAutomaticos([]));
   }, []);
+
+  async function exportarPortable() {
+    setExportando(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarRespaldoPortable();
+      respaldoRef.current = json;
+      const nuevaMeta = metaRespaldoDesdeJson(json);
+      const nuevas = nuevaMeta ? [nuevaMeta, ...historial].slice(0, 8) : historial;
+      if (nuevaMeta) {
+        localStorage.setItem(HISTORIAL_KEY, JSON.stringify(nuevas));
+        setHistorial(nuevas);
+        setMeta(nuevaMeta);
+      }
+      descargarArchivoTexto(
+        json,
+        'camello-portable-respaldo-v1-' + new Date().toISOString().slice(0, 10) + '.json',
+        'application/json;charset=utf-8',
+      );
+      registrarExportacionRespaldo();
+      setMensaje('✓ Respaldo portable generado. Es el archivo maestro para actualizar, desinstalar o reinstalar CAMELLO.');
+    } catch (e: unknown) {
+      setError('No se pudo generar el respaldo portable: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function guardarPortableEnCarpeta() {
+    setExportando(true);
+    setMensaje(null);
+    setError(null);
+    try {
+      const json = await database.exportarRespaldoPortable();
+      const fecha = new Date().toISOString().replaceAll(':', '-').slice(0, 19);
+      await camelloStorage.saveBackup({
+        filename: 'camello-portable-respaldo-v1-' + fecha + '.json',
+        data: json,
+        mimeType: 'application/json',
+      });
+      respaldoRef.current = json;
+      setMensaje('Respaldo portable guardado fuera del almacenamiento privado de CAMELLO.');
+    } catch (e: unknown) {
+      setError('No se pudo guardar el respaldo portable: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setExportando(false);
+    }
+  }
 
   async function exportar() {
     setExportando(true);
@@ -163,7 +220,7 @@ export default function Respaldo() {
     if(!password)return;
     setExportando(true);setMensaje(null);setError(null);
     try{
-      const json=await database.exportarRespaldo();
+      const json=await database.exportarRespaldoPortable();
       const cifrado=await cifrarRespaldo(json,password);
       respaldoRef.current=cifrado;
       descargarRespaldo(cifrado);
@@ -178,24 +235,35 @@ export default function Respaldo() {
     const texto = respaldoRef.current;
     if (!texto) return;
 
-    const esCifrado = (() => {
-      try {
-        const parsed: unknown = JSON.parse(texto);
-        return esObjeto(parsed) && Number(parsed.camello_encrypted_backup_version) === 1;
-      } catch {
-        return false;
-      }
+    const parsedCompartir: unknown = (() => {
+      try { return JSON.parse(texto); } catch { return null; }
     })();
-    const ver = esCifrado ? null : await database.validarRespaldo(texto);
-    const fecha = (ver?.version ?? 0) + '-' + new Date().toISOString().slice(0, 10);
-    const archivo = new File([texto], 'camello-respaldo-' + fecha + '.json', {
+    const esCifrado = esObjeto(parsedCompartir) && Number(parsedCompartir.camello_encrypted_backup_version) === 1;
+    const esPortable = esObjeto(parsedCompartir)
+      && esObjeto(parsedCompartir.manifest)
+      && parsedCompartir.manifest.format === RESPALDO_PORTABLE_FORMAT;
+    let version = 0;
+    let checksum = '';
+    if (!esCifrado) {
+      if (esPortable) {
+        const ver = await database.validarRespaldoPortable(texto);
+        version = ver.paquete.manifest.format_version;
+        checksum = ver.paquete.checksums.package;
+      } else {
+        const ver = await database.validarRespaldo(texto);
+        version = ver.version;
+        checksum = ver.checksum ?? '';
+      }
+    }
+    const fecha = version + '-' + new Date().toISOString().slice(0, 10);
+    const archivo = new File([texto], esPortable ? 'camello-portable-v1-' + fecha + '.json' : 'camello-respaldo-' + fecha + '.json', {
       type: 'application/json',
     });
 
     if (navigator.share && navigator.canShare?.({ files: [archivo] })) {
       await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : esPortable ? 'Respaldo portable verificado · SHA-256 ' + checksum : 'Respaldo verificado · SHA-256 ' + checksum,
         files: [archivo],
       });
       setMensaje('Respaldo compartido desde el dispositivo.');
@@ -205,7 +273,7 @@ export default function Respaldo() {
     if (navigator.share) {
       await navigator.share({
         title: 'Respaldo CAMELLO',
-        text: esCifrado ? 'Respaldo cifrado AES-GCM' : 'Respaldo verificado · SHA-256 ' + (ver?.checksum ?? 'sin checksum'),
+        text: esCifrado ? 'Respaldo cifrado AES-GCM' : esPortable ? 'Respaldo portable verificado · SHA-256 ' + checksum : 'Respaldo verificado · SHA-256 ' + checksum,
       });
       setMensaje('El dispositivo no permitió adjuntar el archivo; comparte también el archivo descargado.');
       return;
@@ -227,6 +295,20 @@ export default function Respaldo() {
         if(!password) throw new Error('Restauración cancelada.');
         plano=await descifrarRespaldo(texto,password);
       }
+      const objetoPlano: unknown = JSON.parse(plano);
+      if (esObjeto(objetoPlano) && esObjeto(objetoPlano.manifest) && objetoPlano.manifest.format === RESPALDO_PORTABLE_FORMAT) {
+        const resultado = await database.importarRespaldoPortable(plano);
+        respaldoRef.current = plano;
+        const metaPortable = metaRespaldoDesdeJson(plano);
+        if (metaPortable) setMeta(metaPortable);
+        setMensaje(
+          resultado.tablasOmitidas.length
+            ? '✓ Respaldo portable restaurado. Algunas tablas antiguas no existen en esta versión: ' + resultado.tablasOmitidas.join(', ')
+            : '✓ Respaldo portable restaurado. Reinicia la app para refrescar pantallas que ya estaban abiertas.',
+        );
+        return;
+      }
+
       const ver = await database.validarRespaldo(plano);
       await database.importarRespaldo(plano);
       respaldoRef.current = plano;
@@ -277,7 +359,7 @@ export default function Respaldo() {
 
       <section className="tarjeta">
         <p>
-          La información de CAMELLO vive localmente en este teléfono. El respaldo cifrado es la opción recomendada; un respaldo sin cifrar contiene datos personales de clientes.
+          La información de CAMELLO vive localmente en este teléfono. Para cambiar de versión, desinstalar o reinstalar, conserva el <strong>respaldo portable</strong>: es el formato maestro versionado y verificable para transportar toda la información entre instalaciones.
         </p>
         <p className="texto-alerta">
           ⚠️ El respaldo automático interno protege contra errores dentro de CAMELLO, pero NO protege contra la pérdida, robo o daño físico del teléfono. Para protegerte ante esos casos, usa la exportación o backup externo y conserva el archivo fuera del dispositivo.
@@ -288,11 +370,14 @@ export default function Respaldo() {
         <h2>Exportar</h2>
         <div className="fila-botones">
           <button className="boton-primario" onClick={() => void exportarCifrado()} disabled={exportando || exportandoClientes || importando || limpiando}>
-            {exportando ? 'Generando…' : '⬇️ Descargar respaldo cifrado (recomendado)'}
+            {exportando ? 'Generando…' : '🔒 Descargar respaldo cifrado (recomendado)'}
           </button>
-          <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Descargar sin cifrar</button>
+          <button className="boton-secundario" onClick={() => void exportarPortable()} disabled={exportando || exportandoClientes || importando || limpiando}>
+            ⬇️ Respaldo portable para actualizar/reinstalar
+          </button>
+          <button className="boton-secundario" onClick={() => void exportar()} disabled={exportando || importando || limpiando}>Respaldo compatible clásico</button>
           <button className="boton-secundario" onClick={() => void compartir()} disabled={exportando || importando || limpiando}>Compartir</button>
-          {puedeGuardarEnCarpetaCompartida() && <button className="boton-secundario" onClick={() => void guardarEnCarpeta()} disabled={exportando || importando || limpiando}>Guardar en carpeta…</button>}
+          {puedeGuardarEnCarpetaCompartida() && <button className="boton-secundario" onClick={() => void guardarPortableEnCarpeta()} disabled={exportando || importando || limpiando}>Guardar portable en carpeta…</button>}
         </div>
         {ultimo && (
           <div className="lista-resumen">
@@ -324,7 +409,7 @@ export default function Respaldo() {
 
       <section className="tarjeta">
         <h2>Restaurar</h2>
-        <p className="texto-alerta">⚠️ El archivo se valida antes de tocar la base. Un archivo nuevo alterado se rechaza por checksum.</p>
+        <p className="texto-alerta">⚠️ El archivo se valida antes de tocar la base. El respaldo portable verifica estructura y checksum antes de restaurar; los respaldos clásicos siguen disponibles por compatibilidad.</p>
         <input
           ref={inputRef}
           type="file"

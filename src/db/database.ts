@@ -34,6 +34,12 @@ import { diasDesdeISO, diasEntreISO, fechaLocalISO, horaLocalHHMM, sumarDiasISO 
 import { calcularChecksum } from '../utils/respaldo';
 import { crearContexto } from '../modulos/runtime';
 import { bytesToBase64, base64ToBytes } from '../utils/base64';
+import { crearRespaldoPortable, validarRespaldoPortable, type RespaldoPortableTable } from '../utils/respaldoPortable';
+
+export function esBaseRespaldoCompatible(nombre: unknown, dbName: string, activeDbName: string): boolean {
+  const candidato = String(nombre ?? '');
+  return candidato === dbName || candidato === dbName + '.db' || candidato === activeDbName;
+}
 
 type SqliteExportData = Record<string, unknown> & {
   database: string;
@@ -3102,6 +3108,100 @@ class Database {
 
   // RESPALDO
 
+  async exportarRespaldoPortable(): Promise<string> {
+    const tableList = await this.conn().query(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC;",
+    );
+    const tables: RespaldoPortableTable[] = [];
+    for (const tableRow of tableList.values ?? []) {
+      const name = String(tableRow.name ?? '');
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
+      const quoted = '"' + name.replace(/"/g, '""') + '"';
+      const columnsResult = await this.conn().query('PRAGMA table_info(' + quoted + ');');
+      const columns = (columnsResult.values ?? [])
+        .sort((a, b) => Number(a.cid ?? 0) - Number(b.cid ?? 0))
+        .map((row) => String(row.name ?? ''))
+        .filter((column) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(column));
+      if (columns.length === 0) continue;
+      const rowsResult = await this.conn().query('SELECT * FROM ' + quoted + ';');
+      const rows = (rowsResult.values ?? []).map((row) => columns.map((column) => row[column] ?? null));
+      tables.push({ name, columns, rows });
+    }
+
+    const modules = await crearContexto(this).exportarTodo();
+    return crearRespaldoPortable({
+      appVersion: '1.0.0',
+      database: DB_NAME,
+      schemaVersion: DB_VERSION,
+      tables,
+      modules,
+    });
+  }
+
+  async validarRespaldoPortable(jsonTexto: string) {
+    return validarRespaldoPortable(jsonTexto);
+  }
+
+  async importarRespaldoPortable(jsonTexto: string): Promise<{ tablasOmitidas: string[] }> {
+    if (!this.db) throw new Error('SQLite no está inicializado.');
+    const { paquete } = await validarRespaldoPortable(jsonTexto);
+    if (paquete.manifest.database !== DB_NAME) throw new Error('Este respaldo portable no pertenece a CAMELLO.');
+    if (paquete.manifest.schema_version > DB_VERSION) {
+      throw new Error('El respaldo portable fue creado con una versión de esquema más nueva. Actualiza CAMELLO antes de restaurarlo.');
+    }
+
+    await this.prepararEsquema();
+    const currentTablesResult = await this.conn().query(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC;",
+    );
+    const currentTables = new Set((currentTablesResult.values ?? []).map((row) => String(row.name ?? '')));
+    const tablasOmitidas: string[] = [];
+    const backupNames = new Set<string>();
+
+    for (const table of paquete.files.database.tables) {
+      if (backupNames.has(table.name)) throw new Error('El respaldo portable contiene una tabla duplicada: ' + table.name + '.');
+      backupNames.add(table.name);
+      if (!currentTables.has(table.name)) tablasOmitidas.push(table.name);
+    }
+
+    const conn = this.conn();
+    await conn.execute('PRAGMA foreign_keys = OFF;', false);
+    try {
+      await conn.beginTransaction();
+      for (const tableName of currentTables) {
+        const quoted = '"' + tableName.replace(/"/g, '""') + '"';
+        await conn.run('DELETE FROM ' + quoted + ';', [], false);
+      }
+
+      for (const table of paquete.files.database.tables) {
+        if (!currentTables.has(table.name)) continue;
+        const quoted = '"' + table.name.replace(/"/g, '""') + '"';
+        const currentColumnsResult = await conn.query('PRAGMA table_info(' + quoted + ');');
+        const currentColumns = new Set((currentColumnsResult.values ?? []).map((row) => String(row.name ?? '')));
+        const columns = table.columns.filter((column) => currentColumns.has(column));
+        if (columns.length === 0) continue;
+        const insertColumns = columns.map((column) => '"' + column.replace(/"/g, '""') + '"').join(',');
+        const placeholders = columns.map(() => '?').join(',');
+        const indexByColumn = new Map(table.columns.map((column, index) => [column, index]));
+        for (const row of table.rows) {
+          const values = columns.map((column) => row[indexByColumn.get(column) ?? 0] ?? null);
+          await conn.run('INSERT INTO ' + quoted + ' (' + insertColumns + ') VALUES (' + placeholders + ');', values, false);
+        }
+      }
+      await conn.commitTransaction();
+    } catch (error) {
+      try { await conn.rollbackTransaction(); } catch { /* El rollback es best-effort. */ }
+      throw error;
+    } finally {
+      await conn.execute('PRAGMA foreign_keys = ON;', false);
+    }
+
+    await this.prepararEsquema();
+    await this.verificarSalud();
+    await this.persist();
+    return { tablasOmitidas };
+  }
+
   async exportarRespaldo(): Promise<string> {
     let exportData: SqliteExportData;
     if (Capacitor.getPlatform() === 'web') {
@@ -3176,11 +3276,10 @@ class Database {
   async importarRespaldo(jsonTexto: string): Promise<void> {
     if (!this.db) throw new Error('SQLite no está inicializado.');
     const valido = await this.validarRespaldo(jsonTexto);
-    const data: SqliteExportData = { ...valido.exportData, database: this.activeDbName };
-
-    if (data.database !== DB_NAME && data.database !== DB_NAME + '.db' && data.database !== this.activeDbName) {
+    if (!esBaseRespaldoCompatible(valido.exportData.database, DB_NAME, this.activeDbName)) {
       throw new Error('Este respaldo no pertenece a CAMELLO.');
     }
+    const data: SqliteExportData = { ...valido.exportData, database: this.activeDbName };
     if (data.mode !== 'full') throw new Error('El respaldo debe ser completo.');
     if (data.encrypted === true) throw new Error('No se admiten respaldos cifrados en esta versión.');
 
@@ -3250,8 +3349,26 @@ class Database {
 
   async limpiarAplicacion(respaldoVerificado: string): Promise<void> {
     if (!this.db) throw new Error('SQLite no está inicializado.');
-    const valido = await this.validarRespaldo(respaldoVerificado);
-    if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
+    let portable = false;
+    try {
+      const parsed: unknown = JSON.parse(respaldoVerificado);
+      portable = Boolean(
+        parsed
+        && typeof parsed === 'object'
+        && !Array.isArray(parsed)
+        && 'manifest' in parsed
+        && typeof (parsed as Record<string, unknown>).manifest === 'object'
+        && (parsed as { manifest?: { format?: unknown } }).manifest?.format === 'CAMELLO_PORTABLE_BACKUP',
+      );
+    } catch {
+      // validarRespaldo emitirá el error de JSON para el formato clásico.
+    }
+    if (portable) {
+      await validarRespaldoPortable(respaldoVerificado);
+    } else {
+      const valido = await this.validarRespaldo(respaldoVerificado);
+      if (!valido.checksum) throw new Error('Para limpiar la aplicación debes usar un respaldo nuevo con checksum.');
+    }
 
     if (Capacitor.getPlatform() === 'web') {
       if (!this.webDb) throw new Error('SQLite web no está inicializado.');
