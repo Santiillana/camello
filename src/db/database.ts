@@ -243,14 +243,21 @@ class Database {
 
     if (encryptionConfigured) {
       const secretStored = (await this.sqlite.isSecretStored()).result;
+      const databaseExists = (await this.sqlite.isDatabase(this.activeDbName)).result;
+      const databaseEncrypted = databaseExists
+        ? (await this.sqlite.isDatabaseEncrypted(this.activeDbName)).result
+        : false;
+
+      if (databaseExists && databaseEncrypted && !secretStored) {
+        throw new Error('La base de datos Android está cifrada pero el secreto seguro no está disponible. Restaura un respaldo o recupera el almacenamiento seguro antes de continuar.');
+      }
+
       if (!secretStored) {
         const secretBytes = crypto.getRandomValues(new Uint8Array(32));
         await this.sqlite.setEncryptionSecret(bytesToBase64(secretBytes));
       }
 
-      const databaseExists = (await this.sqlite.isDatabase(this.activeDbName)).result;
       if (databaseExists) {
-        const databaseEncrypted = (await this.sqlite.isDatabaseEncrypted(this.activeDbName)).result;
         if (!databaseEncrypted) {
           marcarEtapaSqlite('encrypt-existing');
           const existingConnection = (await this.sqlite.isConnection(this.activeDbName, false)).result;
