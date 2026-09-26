@@ -57,6 +57,18 @@ jobs:
       - name: Dar permiso de ejecución a Gradle
         run: chmod +x android/gradlew
 
+      - name: Ejecutar pruebas instrumentadas Android en emulador real
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          working-directory: android
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./gradlew connectedDebugAndroidTest --no-daemon
+
       - name: Compilar APK debug
         working-directory: android
         run: |
